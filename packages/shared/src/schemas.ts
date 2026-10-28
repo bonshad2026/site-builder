@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { parseSectionProps } from './sections.js';
-import { LEAD_STATUSES, LEAD_TYPES, LOCALES, MODULES, ORDER_STATUSES, PERMISSIONS, PUBLISH_STATUSES, THEMES } from './constants.js';
+import { LEAD_STATUSES, LEAD_TYPES, LOCALES, MODULES, ORDER_STATUSES, PAYMENT_METHODS, PERMISSIONS, PUBLISH_STATUSES, THEMES } from './constants.js';
 
 export const slugSchema = z
   .string()
@@ -51,6 +51,12 @@ export const siteSettingsSchema = z.object({
   locales: z.array(z.enum(LOCALES)).min(1),
   themeId: z.enum(THEMES),
   logoAssetId: z.string().uuid().nullable().default(null),
+  /** Public URL of the logo image (shown in the header instead of the site name). */
+  logoUrl: z
+    .string()
+    .max(1000)
+    .refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v), 'Use an uploaded image or an https:// URL')
+    .default(''),
   contact: z.object({
     email: z.string().email().or(z.literal('')),
     phone: z.string().max(40),
@@ -62,6 +68,18 @@ export const siteSettingsSchema = z.object({
   nav: z
     .array(z.object({ href: z.string().max(200).regex(/^\/[a-z0-9/-]*$/, 'Use an internal path like /about'), label: localizedSchema }))
     .max(20),
+  /** Product categories with their display names (products refer to them by slug). */
+  productCategories: z
+    .array(z.object({ slug: slugSchema, label: localizedSchema }))
+    .max(40)
+    .default([]),
+  /** Header button (default: a consultation request linking to /contact). */
+  headerCta: z
+    .object({ label: localizedSchema, href: z.string().max(200).regex(/^\/[a-z0-9/-]*$/, 'Use an internal path like /contact') })
+    .nullable()
+    .default(null),
+  /** Heading of the /products page (default: the built-in collection texts). */
+  catalogPage: z.object({ eyebrow: localizedSchema, heading: localizedSchema, intro: localizedSchema }).nullable().default(null),
   /** Optional brand accent overriding the theme's accent (hex). */
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
   modules: z.record(z.enum(MODULES), z.boolean()),
@@ -145,6 +163,15 @@ export const productInputSchema = z.object({
   currency: z.string().length(3).default('IRR'),
   stock: z.number().int().min(0).nullable().default(null),
   isAvailable: z.boolean().default(true),
+  /** Percentage off the price (0 = none); applied by the server when an order is placed. */
+  discountPercent: z.number().int().min(0).max(90).default(0),
+  /** Colours the buyer can choose from (none = no choice). */
+  colors: z
+    .array(z.object({ name: localizedRequiredSchema, hex: z.string().regex(/^#[0-9a-fA-F]{6}$/) }))
+    .max(12)
+    .default([]),
+  /** Most units of this product in one order (empty = the global limit of 50). */
+  maxPerOrder: z.number().int().min(1).max(50).nullable().default(null),
   featured: z.boolean().default(false),
   materials: localizedSchema.default({ en: '', fa: '' }),
   dimensions: z.string().max(80).default(''),
@@ -164,8 +191,17 @@ export const leadInputSchema = z.object({
   phone: z.union([phoneSchema, z.literal('')]).default(''),
   projectType: z.string().max(40).optional(),
   budget: z.string().max(40).optional(),
-  message: z.string().trim().min(20).max(4000),
+  message: z.string().trim().min(2).max(4000),
   sourcePath: z.string().max(300).optional(),
+  /** Reservation / demo answers. */
+  details: z
+    .object({
+      date: z.string().max(40).optional(),
+      time: z.string().max(20).optional(),
+      people: z.number().int().min(1).max(500).optional(),
+      company: z.string().max(120).optional(),
+    })
+    .default({}),
   consent: z.literal(true),
   /** Honeypot: real visitors never fill this hidden field. */
   website: z.string().max(200).optional(),
@@ -188,10 +224,11 @@ export const orderInputSchema = z.object({
   }),
   /** Client sends only product ids and quantities; prices are always read from the database. */
   items: z
-    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(50) }))
+    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(50), option: z.string().trim().max(80).default('') }))
     .min(1)
     .max(50),
   note: z.string().max(1000).optional(),
+  paymentMethod: z.enum(PAYMENT_METHODS).default('online'),
 });
 
 export const orderUpdateSchema = z.object({
@@ -215,5 +252,7 @@ export const paymentSettingsSchema = z.object({
   merchantId: z.string().trim().max(64).default(''),
   /** Use the Zarinpal sandbox host instead of production. */
   useSandboxHost: z.boolean().default(false),
+  /** Let buyers pay on delivery (cash or card at the door). */
+  allowCod: z.boolean().default(false),
 });
 export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;

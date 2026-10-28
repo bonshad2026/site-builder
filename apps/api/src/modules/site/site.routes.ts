@@ -4,7 +4,8 @@ import { ApiRouter } from '../../common/http.js';
 import { requirePermission } from '../../middleware/tenant.js';
 import { auditTenant } from '../audit/audit.js';
 
-export function siteRoutes() {
+/** `clientLocked`: only the operator (platform admin) may change the design settings. */
+export function siteRoutes(clientLocked = false) {
   const r = new ApiRouter('/api/v1/sites/:siteId', 'Site settings', true);
 
   r.route({ method: 'get', path: '/', summary: 'Site summary and the caller’s role in it' }, async ({ req }) => {
@@ -21,6 +22,13 @@ export function siteRoutes() {
   r.route(
     { method: 'put', path: '/settings', summary: 'Replace site settings', body: siteSettingsSchema, middleware: [requirePermission('site:write')] },
     async ({ req, body }) => {
+      if (clientLocked && !req.auth!.user.isPlatformAdmin) {
+        const current = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
+        if (!current.rows[0]) throw notFound('Site settings');
+        // Clients edit their name, tagline, logo, contact details and product categories; the rest is the design.
+        const { name, tagline, logoAssetId, logoUrl, contact, productCategories } = body;
+        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, productCategories };
+      }
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO site_settings (id, settings, updated_by, updated_at) VALUES (1, $1, $2, now())
          ON CONFLICT (id) DO UPDATE SET settings = EXCLUDED.settings, updated_by = EXCLUDED.updated_by, updated_at = now()

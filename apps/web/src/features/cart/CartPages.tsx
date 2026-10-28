@@ -15,7 +15,7 @@ import { usePreferences } from '../../lib/preferences';
 import type { OrderItemDto, OrderStatus, PaymentStatus } from '../../types/api';
 import { normalizeDigits } from '../leads/leadSchema';
 import { usePaymentMethods, useSiteId } from '../public-site/data';
-import { MAX_QUANTITY, useCart } from './cart';
+import { lineKey, MAX_QUANTITY, useCart } from './cart';
 
 export function CartPage() {
   const { m, l, formatMoney } = usePreferences();
@@ -34,21 +34,22 @@ export function CartPage() {
             <div className="grid gap-12 lg:grid-cols-12">
               <ul className="divide-y divide-line border-y border-line lg:col-span-8">
                 {cart.lines.map((line) => (
-                  <li key={line.productId} className="flex gap-5 py-6">
+                  <li key={lineKey(line)} className="flex gap-5 py-6">
                     <Image src={line.imageUrl} alt="" className="aspect-square w-24 shrink-0" />
                     <div className="flex flex-1 flex-col justify-between gap-3 sm:flex-row sm:items-center">
                       <div>
                         <Link to={`/products/${line.slug}`} className="font-display text-2xl text-ink hover:text-accent">
                           {l(line.name)}
                         </Link>
+                        {line.option && <p className="text-sm text-ink-soft">{m.shop.color}: {line.option}</p>}
                         <p className="text-sm text-ink-soft">{formatMoney(line.priceMinor, line.currency)}</p>
                       </div>
                       <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 text-sm text-ink-soft">
                           <span className="sr-only">{m.shop.quantity}</span>
-                          <Select value={line.quantity} onChange={(e) => cart.setQuantity(line.productId, Number(e.target.value))} className="w-20 py-2">
+                          <Select value={line.quantity} onChange={(e) => cart.setQuantity(lineKey(line), Number(e.target.value))} className="w-20 py-2">
                             {Array.from({ length: Math.max(10, line.quantity) }, (_, i) => i + 1)
-                              .filter((n) => n <= MAX_QUANTITY)
+                              .filter((n) => n <= Math.min(MAX_QUANTITY, line.max ?? MAX_QUANTITY))
                               .map((n) => (
                                 <option key={n} value={n}>
                                   {n}
@@ -56,7 +57,7 @@ export function CartPage() {
                               ))}
                           </Select>
                         </label>
-                        <button type="button" onClick={() => cart.setQuantity(line.productId, 0)} className="text-sm text-ink-soft underline underline-offset-4 hover:text-danger">
+                        <button type="button" onClick={() => cart.setQuantity(lineKey(line), 0)} className="text-sm text-ink-soft underline underline-offset-4 hover:text-danger">
                           {m.shop.remove}
                         </button>
                       </div>
@@ -108,6 +109,9 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const { data: payment } = usePaymentMethods(apiAvailable());
   const [error, setError] = useState<string | null>(null);
+  // Online when the gateway is set up, else payment on delivery when the shop offers it.
+  const [method, setMethod] = useState<'online' | 'cod' | null>(null);
+  const payBy = method ?? (payment?.online ? 'online' : payment?.cod ? 'cod' : 'online');
   usePageMeta(m.shop.checkout, undefined, { noIndex: true });
 
   const { register, handleSubmit, formState } = useForm<CheckoutInput, unknown, CheckoutData>({ resolver: zodResolver(checkoutSchema) });
@@ -118,10 +122,11 @@ export function CheckoutPage() {
       const order = await api.post<{ number: string; orderToken: string }>(`/public/sites/${site}/orders`, {
         customer: { name: data.name, email: data.email, phone: data.phone, address: data.address || undefined },
         note: data.note || undefined,
-        items: cart.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        items: cart.lines.map((line) => ({ productId: line.productId, quantity: line.quantity, option: line.option ?? '' })),
+        paymentMethod: payBy,
       });
       cart.clear();
-      if (payment?.online) {
+      if (payBy === 'online' && payment?.online) {
         const pay = await api.post<{ redirectUrl: string }>(`/public/sites/${site}/orders/${order.number}/pay`, { token: order.orderToken, locale });
         window.location.assign(pay.redirectUrl);
         return;
@@ -170,7 +175,21 @@ export function CheckoutPage() {
               </FieldShell>
             </div>
             {!apiAvailable() && <p className="text-sm text-danger sm:col-span-2">{m.shop.needsBackend}</p>}
-            {payment && !payment.online && apiAvailable() && <p className="text-sm text-ink-soft sm:col-span-2">{m.shop.noOnlinePayment}</p>}
+            {payment?.online && payment.cod && (
+              <fieldset className="sm:col-span-2">
+                <legend className="mb-3 text-sm text-ink-soft">{m.shop.paymentMethod}</legend>
+                <div className="flex flex-wrap gap-6">
+                  {(['online', 'cod'] as const).map((value) => (
+                    <label key={value} className="flex items-center gap-2 text-ink">
+                      <input type="radio" name="payment-method" value={value} checked={payBy === value} onChange={() => setMethod(value)} className="accent-[var(--color-accent)]" />
+                      {value === 'online' ? m.shop.payOnline : m.shop.payOnDelivery}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+            {payment && !payment.online && payment.cod && <p className="text-sm text-ink-soft sm:col-span-2">{m.shop.codOnly}</p>}
+            {payment && !payment.online && !payment.cod && apiAvailable() && <p className="text-sm text-ink-soft sm:col-span-2">{m.shop.noOnlinePayment}</p>}
             {payment?.isTest && <p className="border border-dashed border-accent px-4 py-3 text-sm text-ink sm:col-span-2">{m.shop.testGateway}</p>}
             {error && (
               <p role="alert" className="text-sm text-danger sm:col-span-2">
@@ -179,16 +198,17 @@ export function CheckoutPage() {
             )}
             <div className="sm:col-span-2">
               <Button type="submit" disabled={!apiAvailable() || submit.isPending} className="w-full sm:w-auto">
-                {submit.isPending ? m.shop.placing : payment?.online ? m.shop.placeAndPay : m.shop.placeOrder}
+                {submit.isPending ? m.shop.placing : payBy === 'online' && payment?.online ? m.shop.placeAndPay : m.shop.placeOrder}
               </Button>
             </div>
           </form>
           <aside className="h-fit border border-line bg-surface p-8 lg:col-span-4 lg:col-start-9">
             <ul className="space-y-4 text-sm">
               {cart.lines.map((line) => (
-                <li key={line.productId} className="flex justify-between gap-4">
+                <li key={lineKey(line)} className="flex justify-between gap-4">
                   <span className="text-ink">
-                    {l(line.name)} × {line.quantity}
+                    {l(line.name)}
+                    {line.option ? ` (${line.option})` : ''} × {line.quantity}
                   </span>
                   <span className="text-ink-soft">{formatMoney((BigInt(line.priceMinor) * BigInt(line.quantity)).toString(), line.currency)}</span>
                 </li>

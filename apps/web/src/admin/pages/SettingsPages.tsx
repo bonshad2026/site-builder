@@ -5,10 +5,10 @@ import { Button } from '../../components/ui/Button';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { useAdminSettings } from '../AdminRoot';
-import { useMe } from '../auth';
+import { useIsOperator, useMe } from '../auth';
 import { useT } from '../i18n';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
-import { usePages } from './PagesListPage';
+import { ImagePicker } from './FilesPage';
 
 const empty = { en: '', fa: '' };
 
@@ -16,10 +16,16 @@ function SettingsView({ siteId }: { siteId: string }) {
   const t = useT();
   const toast = useToast();
   const qc = useQueryClient();
+  // Clients edit their contact details only; brand, menu, modules and SEO are the operator's.
+  const operator = useIsOperator();
   const { data, isLoading, error } = useAdminSettings(siteId);
-  const { data: pages = [] } = usePages(siteId);
+  const { data: pages = [] } = useQuery({
+    queryKey: ['site', siteId, 'pages'],
+    queryFn: () => api.get<{ slug: string; isHome: boolean }[]>(`/sites/${siteId}/pages`),
+    enabled: operator,
+  });
   const [s, setS] = useState<SiteSettings | null>(null);
-  const [tab, setTab] = useState<'brand' | 'contact' | 'menu' | 'modules' | 'seo'>('brand');
+  const [tab, setTab] = useState<'brand' | 'contact' | 'categories' | 'menu' | 'modules' | 'seo'>('brand');
   useEffect(() => setS(data ?? null), [data]);
 
   const save = useMutation({
@@ -38,13 +44,16 @@ function SettingsView({ siteId }: { siteId: string }) {
     { value: '/products', label: '/products' },
     ...pages.filter((p) => !p.isHome).map((p) => ({ value: `/${p.slug}`, label: `/${p.slug}` })),
   ];
-  const tabs = [
-    ['brand', t.brandTab],
-    ['contact', t.contact],
-    ['menu', t.menu],
-    ['modules', t.modules],
-    ['seo', t.seo],
-  ] as const;
+  const tabs = (
+    [
+      ['brand', t.brandTab],
+      ['contact', t.contact],
+      ['categories', t.productCategories],
+      ['menu', t.menu],
+      ['modules', t.modules],
+      ['seo', t.seo],
+    ] as const
+  ).filter(([id]) => operator || id === 'brand' || id === 'contact' || id === 'categories');
 
   return (
     <>
@@ -69,6 +78,9 @@ function SettingsView({ siteId }: { siteId: string }) {
           <>
             <LocalizedField label={t.siteName} value={s.name} onChange={(v) => set('name', v)} />
             <LocalizedField label={t.tagline} value={s.tagline} onChange={(v) => set('tagline', v)} />
+            <ImagePicker siteId={siteId} label={t.logo} value={s.logoUrl ?? ''} onChange={(url, asset) => setS({ ...s, logoUrl: url, logoAssetId: url ? (asset?.id ?? s.logoAssetId) : null })} />
+            {operator && (
+            <>
             <div className="grid gap-4 sm:grid-cols-2">
               <SelectField
                 label={t.theme}
@@ -104,6 +116,8 @@ function SettingsView({ siteId }: { siteId: string }) {
               </fieldset>
               <SelectField label={t.defaultLanguage} value={s.defaultLocale} onChange={(v) => set('defaultLocale', v)} options={s.locales.map((c) => ({ value: c, label: c === 'en' ? t.english : t.persian }))} />
             </div>
+            </>
+            )}
           </>
         )}
         {tab === 'contact' && (
@@ -144,6 +158,48 @@ function SettingsView({ siteId }: { siteId: string }) {
             )}
           />
         )}
+        {tab === 'menu' && (
+          <Card title={t.headerButton}>
+            <div className="flex flex-col gap-4">
+              <LocalizedField label={t.label} value={s.headerCta?.label ?? { ...empty }} onChange={(label) => set('headerCta', { href: s.headerCta?.href ?? '/contact', label })} />
+              <SelectField
+                label={t.link}
+                value={s.headerCta?.href ?? '/contact'}
+                onChange={(href) => set('headerCta', { label: s.headerCta?.label ?? { ...empty }, href })}
+                options={[{ value: '/contact', label: '/contact' }, ...linkOptions.filter((o) => o.value !== '/contact')]}
+              />
+            </div>
+          </Card>
+        )}
+        {tab === 'menu' && (
+          <Card title={t.shopHeading}>
+            <div className="flex flex-col gap-4">
+              {(['eyebrow', 'heading', 'intro'] as const).map((k) => (
+                <LocalizedField
+                  key={k}
+                  label={k === 'eyebrow' ? t.eyebrowLabel : k === 'heading' ? t.title : t.intro}
+                  value={s.catalogPage?.[k] ?? { ...empty }}
+                  onChange={(v) => set('catalogPage', { eyebrow: { ...empty }, heading: { ...empty }, intro: { ...empty }, ...s.catalogPage, [k]: v })}
+                />
+              ))}
+            </div>
+          </Card>
+        )}
+        {tab === 'categories' && (
+          <ListEditor
+            label={t.productCategories}
+            items={s.productCategories ?? []}
+            onChange={(productCategories) => set('productCategories', productCategories)}
+            create={() => ({ slug: '', label: { en: '', fa: '' } })}
+            max={40}
+            render={(c, update) => (
+              <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                <TextField label={t.categorySlug} dir="ltr" value={c.slug} onChange={(slug) => update({ ...c, slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '') })} hint="cakes, drinks…" />
+                <LocalizedField label={t.categoryName} value={c.label} onChange={(label) => update({ ...c, label })} />
+              </div>
+            )}
+          />
+        )}
         {tab === 'modules' && (
           <Card>
             <p className="mb-4 text-sm text-ink-soft">{t.modulesHint}</p>
@@ -169,6 +225,7 @@ interface PaymentSettings {
   provider: 'none' | 'zarinpal' | 'sandbox';
   merchantId: string;
   useSandboxHost: boolean;
+  allowCod: boolean;
   sandboxAvailable: boolean;
 }
 
@@ -179,7 +236,7 @@ function PaymentsView({ siteId }: { siteId: string }) {
   const [form, setForm] = useState<PaymentSettings | null>(null);
   useEffect(() => setForm(data ?? null), [data]);
   const save = useMutation({
-    mutationFn: () => api.put<PaymentSettings>(`/sites/${siteId}/payment-settings`, { provider: form!.provider, merchantId: form!.merchantId, useSandboxHost: form!.useSandboxHost }),
+    mutationFn: () => api.put<PaymentSettings>(`/sites/${siteId}/payment-settings`, { provider: form!.provider, merchantId: form!.merchantId, useSandboxHost: form!.useSandboxHost, allowCod: form!.allowCod }),
     onSuccess: (r) => {
       setForm(r);
       toast(t.saved);
@@ -213,6 +270,7 @@ function PaymentsView({ siteId }: { siteId: string }) {
           </>
         )}
         {form.provider === 'sandbox' && <p className="border border-dashed border-accent px-4 py-3 text-sm">{t.providerSandbox}</p>}
+        <Checkbox label={t.allowCod} checked={!!form.allowCod} onChange={(allowCod) => setForm({ ...form, allowCod })} />
         {!form.sandboxAvailable && <p className="text-xs text-ink-soft">{t.sandboxUnavailable}</p>}
         <ErrorNote error={save.error} />
         <div>

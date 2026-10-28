@@ -54,6 +54,13 @@ const schema = z
     UPLOAD_MAX_BYTES: z.coerce.number().int().default(10 * 1024 * 1024),
     /** Local test gateway (no real money). Defaults to on outside production; refused in production. */
     PAYMENT_SANDBOX_ENABLED: bool.optional(),
+
+    /** Cell mode: this API serves exactly one client site, in its own isolated stack. */
+    CELL_SLUG: z.string().regex(/^[a-z0-9][a-z0-9-]{1,40}$/).optional(),
+    /** Shared only with the control panel; signs its one-time sign-in links. */
+    CELL_SSO_SECRET: z.string().min(32).optional(),
+    /** Express "trust proxy" setting (e.g. "uniquelocal" behind the edge proxy). */
+    TRUST_PROXY: z.string().default('loopback'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;

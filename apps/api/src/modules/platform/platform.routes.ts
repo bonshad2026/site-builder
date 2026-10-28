@@ -6,6 +6,9 @@ import type { AppContext } from '../../context.js';
 import { auditPlatform } from '../audit/audit.js';
 import { createUser, requestPasswordReset, revokeAllSessions } from '../auth/auth.service.js';
 import { provisionTenant } from './provisioning.js';
+import { applyTemplate } from './templates/apply.js';
+import { refreshTemplatePhotos } from './templates/images.js';
+import { SITE_TEMPLATES, templateByKey } from './templates/catalog.js';
 
 // Never select db_password_enc here: connection secrets are not returned by any API.
 const TENANT_COLUMNS = `t.id, t.slug, t.name, t.status, t.db_name AS "dbName", t.provisioning_step AS "provisioningStep",
@@ -49,13 +52,39 @@ export function platformRoutes(ctx: AppContext) {
       path: '/tenants',
       summary: 'Create a client site with its own database',
       status: 201,
-      body: z.object({ slug: slugSchema, name: z.string().trim().min(2).max(120), ownerEmail: emailSchema, domain: domainSchema.optional() }),
+      body: z.object({
+        slug: slugSchema,
+        name: z.string().trim().min(2).max(120),
+        ownerEmail: emailSchema,
+        domain: domainSchema.optional(),
+        /** Kind of business: fills the new site with matching pages, products and photos. */
+        template: z.string().max(40).optional(),
+      }),
     },
     async ({ req, body }) => {
-      const tenant = await provisionTenant(ctx, { ...body, actorUserId: req.auth!.user.id });
+      const template = body.template ? templateByKey(body.template) : undefined;
+      if (body.template && !template) throw badRequest('Unknown business type');
+      // A cell holds exactly one client; new clients get their own cell from the control panel.
+      if (ctx.env.CELL_SLUG) throw badRequest('This stack serves a single client; create new clients from the control panel');
+      const { template: _t, ...input } = body;
+      const tenant = await provisionTenant(ctx, { ...input, actorUserId: req.auth!.user.id });
+      if (template && tenant.status === 'active') await applyTemplate(ctx, tenant, template, body.name);
       return { data: await getTenant(tenant.id) };
     },
   );
+
+  r.route({ method: 'post', path: '/tenants/:id/refresh-photos', summary: 'Replace placeholder template photos with files now in var/demo-images', params: idParam }, async ({ params }) => {
+    const { rows } = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc, status FROM tenants WHERE id = $1', [params.id]);
+    const t = rows[0];
+    if (!t) throw notFound('Site');
+    if (t.status !== 'active') throw badRequest('Site is not active');
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    return { data: await refreshTemplatePhotos(ctx, db) };
+  });
+
+  r.route({ method: 'get', path: '/templates', summary: 'Business types a new site can start from' }, async () => ({
+    data: SITE_TEMPLATES.map((t) => ({ key: t.key, label: t.label })),
+  }));
 
   r.route({ method: 'get', path: '/tenants/:id', summary: 'Get a client site', params: idParam }, async ({ params }) => ({ data: await getTenant(params.id) }));
 

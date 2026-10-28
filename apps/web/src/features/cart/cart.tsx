@@ -9,20 +9,31 @@ export interface CartLine {
   currency: string;
   imageUrl: string | null;
   quantity: number;
+  /** Chosen colour (name as shown), or '' when the product has no colours. */
+  option?: string;
+  /** Most units allowed for this product in one order. */
+  max?: number;
 }
+
+/** One cart line per product and colour. */
+export const lineKey = (l: { productId: string; option?: string }) => `${l.productId}|${l.option ?? ''}`;
 
 export const MAX_QUANTITY = 50;
 
 /** Pure cart operations (kept separate so they are easy to test). */
 export const cartOps = {
   add(lines: CartLine[], line: Omit<CartLine, 'quantity'>, quantity = 1): CartLine[] {
-    const existing = lines.find((l) => l.productId === line.productId);
-    if (existing) return lines.map((l) => (l.productId === line.productId ? { ...l, quantity: Math.min(MAX_QUANTITY, l.quantity + quantity) } : l));
-    return [...lines, { ...line, quantity: Math.min(MAX_QUANTITY, quantity) }];
+    const key = lineKey(line);
+    const cap = Math.min(MAX_QUANTITY, line.max ?? MAX_QUANTITY);
+    const existing = lines.find((l) => lineKey(l) === key);
+    if (existing) return lines.map((l) => (lineKey(l) === key ? { ...l, quantity: Math.min(cap, l.quantity + quantity) } : l));
+    return [...lines, { ...line, quantity: Math.min(cap, quantity) }];
   },
-  setQuantity(lines: CartLine[], productId: string, quantity: number): CartLine[] {
-    if (quantity <= 0) return lines.filter((l) => l.productId !== productId);
-    return lines.map((l) => (l.productId === productId ? { ...l, quantity: Math.min(MAX_QUANTITY, Math.floor(quantity)) } : l));
+  /** `key` is a line key (see lineKey); a plain product id also works for lines without a colour. */
+  setQuantity(lines: CartLine[], key: string, quantity: number): CartLine[] {
+    const match = (l: CartLine) => lineKey(l) === key || lineKey(l) === `${key}|`;
+    if (quantity <= 0) return lines.filter((l) => !match(l));
+    return lines.map((l) => (match(l) ? { ...l, quantity: Math.min(MAX_QUANTITY, l.max ?? MAX_QUANTITY, Math.floor(quantity)) } : l));
   },
   /** Display estimate only: the server recomputes every price when the order is placed. */
   subtotal(lines: CartLine[]): bigint {
@@ -35,7 +46,7 @@ interface CartContextValue {
   count: number;
   subtotalMinor: string;
   add: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
-  setQuantity: (productId: string, quantity: number) => void;
+  setQuantity: (key: string, quantity: number) => void;
   clear: () => void;
 }
 
@@ -62,7 +73,7 @@ export function CartProvider({ siteId, children }: { siteId: string; children: R
   }, [key, lines]);
 
   const add = useCallback((line: Omit<CartLine, 'quantity'>, quantity = 1) => setLines((ls) => cartOps.add(ls, line, quantity)), []);
-  const setQuantity = useCallback((productId: string, quantity: number) => setLines((ls) => cartOps.setQuantity(ls, productId, quantity)), []);
+  const setQuantity = useCallback((key: string, quantity: number) => setLines((ls) => cartOps.setQuantity(ls, key, quantity)), []);
   const clear = useCallback(() => setLines([]), []);
 
   const value = useMemo(

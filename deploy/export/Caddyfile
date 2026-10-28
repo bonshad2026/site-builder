@@ -1,0 +1,15 @@
+# DOMAIN=example.com gets an automatic HTTPS certificate; DOMAIN=:80 serves plain HTTP (testing).
+{$DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /files/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		root * /srv/site
+		try_files {path} {path}/index.html /index.html
+		file_server
+	}
+}

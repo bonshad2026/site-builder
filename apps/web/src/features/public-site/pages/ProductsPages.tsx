@@ -8,16 +8,22 @@ import { Container, PageHeader, Section } from '../../../components/ui/Layout';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { usePreferences } from '../../../lib/preferences';
 import { useCart } from '../../cart/cart';
-import { ProductCard } from '../components/Cards';
+import { ProductCard, useCategoryLabel } from '../components/Cards';
+import { finalPrice, isSoldOut } from '../components/price';
 import { isNotFound, useProduct, useProducts, useSiteSettings } from '../data';
 import { NotFoundPage } from './NotFoundPage';
 
 type Sort = 'featured' | 'price-asc' | 'price-desc';
 
 export function ProductsPage() {
-  const { m, format } = usePreferences();
+  const { m, l, format } = usePreferences();
   const { data: products = [], isLoading } = useProducts();
-  usePageMeta(m.products.title, m.products.intro);
+  const { data: settings } = useSiteSettings();
+  // A site's own shop heading, else the built-in collection texts.
+  const head = settings?.catalogPage
+    ? { eyebrow: l(settings.catalogPage.eyebrow), title: l(settings.catalogPage.heading), intro: l(settings.catalogPage.intro) }
+    : { eyebrow: m.products.eyebrow, title: m.products.title, intro: m.products.intro };
+  usePageMeta(head.title, head.intro);
 
   // Filters live in the URL so a filtered view can be shared or bookmarked.
   const [params, setParams] = useSearchParams();
@@ -46,11 +52,11 @@ export function ProductsPage() {
     return [...list].sort((a, b) => Number(b.featured) - Number(a.featured) || a.position - b.position);
   }, [products, category, query, sort]);
 
-  const label = (c: string) => m.products.categories[c as keyof typeof m.products.categories] ?? c;
+  const label = useCategoryLabel();
 
   return (
     <>
-      <PageHeader eyebrow={m.products.eyebrow} title={m.products.title} intro={m.products.intro} />
+      <PageHeader eyebrow={head.eyebrow} title={head.title} intro={head.intro} />
       <Section className="pt-10 sm:pt-12">
         <Container>
           <div className="mb-12 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -94,13 +100,15 @@ export function ProductsPage() {
 
 export function ProductDetailPage() {
   const { slug = '' } = useParams();
-  const { m, l, formatMoney, format } = usePreferences();
+  const { m, l, formatMoney, format, formatNumber } = usePreferences();
+  const categoryLabel = useCategoryLabel();
   const { data: product, error, isLoading } = useProduct(slug);
   const { data: products = [] } = useProducts();
   const { data: settings } = useSiteSettings();
   const cart = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [color, setColor] = useState('');
 
   usePageMeta(product ? l(product.name) : '', product ? l(product.description) : undefined, {
     image: product?.imageUrl,
@@ -122,22 +130,35 @@ export function ProductDetailPage() {
   if (isNotFound(error) || !product) return <NotFoundPage />;
 
   const related = products.filter((p) => p.category === product.category && p.slug !== product.slug).concat(products.filter((p) => p.category !== product.category)).slice(0, 4);
-  const canOrder = !!settings?.modules.orders && product.isAvailable && product.priceMinor !== null && product.stock !== 0;
-  const maxQty = Math.min(50, product.stock ?? 50);
+  const soldOut = isSoldOut(product);
+  const canOrder = !!settings?.modules.orders && !soldOut && product.priceMinor !== null;
+  const maxQty = Math.min(50, product.stock ?? 50, product.maxPerOrder ?? 50);
+  const discount = product.discountPercent ?? 0;
+  const colors = product.colors ?? [];
+  const chosen = color || (colors[0] ? l(colors[0].name) : '');
 
   return (
     <>
       <div className="pt-28 sm:pt-36">
         <Container>
           <Link to="/products" className="inline-flex items-center gap-2 text-sm text-ink-soft hover:text-ink">
-            <Arrow className="rotate-180" /> {m.common.backTo} {m.nav.products}
+            <Arrow className="rotate-180" /> {m.common.backTo} {(settings?.catalogPage && l(settings.catalogPage.heading)) || m.nav.products}
           </Link>
           <div className="mt-8 grid gap-12 lg:grid-cols-12 lg:gap-16">
             <Image src={product.imageUrl} alt={l(product.name)} priority className="aspect-[4/5] lg:col-span-7" />
             <div className="reveal flex flex-col lg:col-span-5 lg:pt-10">
-              {product.category && <p className="eyebrow">{m.products.categories[product.category as keyof typeof m.products.categories] ?? product.category}</p>}
+              {product.category && <p className="eyebrow">{categoryLabel(product.category)}</p>}
               <h1 className="mt-4 font-display text-5xl leading-tight text-ink sm:text-6xl">{l(product.name)}</h1>
-              <p className="mt-6 text-2xl text-ink">{formatMoney(product.priceMinor, product.currency)}</p>
+              <p className="mt-6 flex flex-wrap items-baseline gap-3 text-2xl text-ink">
+                {formatMoney(discount ? finalPrice(product) : product.priceMinor, product.currency)}
+                {discount > 0 && (
+                  <>
+                    <span className="text-base text-ink-soft line-through">{formatMoney(product.priceMinor, product.currency)}</span>
+                    <span className="bg-accent px-2 py-0.5 text-sm text-accent-ink">{format(m.shop.discountBadge, { percent: formatNumber(discount) })}</span>
+                  </>
+                )}
+                {soldOut && <span className="bg-ink px-2 py-0.5 text-sm text-bg">{m.shop.soldOut}</span>}
+              </p>
               <p className="mt-8 text-lg leading-relaxed text-ink-soft">{l(product.description)}</p>
               <dl className="mt-10 divide-y divide-line border-y border-line text-sm">
                 {[
@@ -156,6 +177,28 @@ export function ProductDetailPage() {
                   ))}
               </dl>
 
+              {colors.length > 0 && (
+                <fieldset className="mt-8">
+                  <legend className="mb-3 text-sm text-ink-soft">
+                    {m.shop.color}: <span className="text-ink">{chosen}</span>
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {colors.map((c) => (
+                      <button
+                        key={c.hex + l(c.name)}
+                        type="button"
+                        aria-pressed={chosen === l(c.name)}
+                        title={l(c.name)}
+                        onClick={() => setColor(l(c.name))}
+                        className={`size-9 rounded-full border-2 ${chosen === l(c.name) ? 'border-ink' : 'border-line'}`}
+                        style={{ backgroundColor: c.hex }}
+                      >
+                        <span className="sr-only">{l(c.name)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
               {canOrder ? (
                 <div className="mt-10 flex flex-wrap items-center gap-4">
                   <label className="flex items-center gap-3 text-sm text-ink-soft">
@@ -170,7 +213,10 @@ export function ProductDetailPage() {
                   </label>
                   <Button
                     onClick={() => {
-                      cart.add({ productId: product.id, slug: product.slug, name: product.name, priceMinor: product.priceMinor!, currency: product.currency, imageUrl: product.imageUrl }, quantity);
+                      cart.add(
+                        { productId: product.id, slug: product.slug, name: product.name, priceMinor: finalPrice(product)!, currency: product.currency, imageUrl: product.imageUrl, option: chosen, max: maxQty },
+                        quantity,
+                      );
                       setAdded(true);
                     }}
                   >

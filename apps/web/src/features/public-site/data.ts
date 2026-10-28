@@ -5,8 +5,11 @@ import { fallbackPages, fallbackProducts, fallbackServices, fallbackSettings } f
 import { api, apiAvailable, ApiError } from '../../lib/api';
 import type { ProductDto, PublishedPage, ServiceDto, SiteSettings } from '../../types/api';
 
-/** Which client site this front end shows. One build can serve any site by setting VITE_SITE_ID. */
-export const DEFAULT_SITE_ID = (import.meta.env.VITE_SITE_ID as string | undefined) || siteConfig.id;
+/** Studio previews: <site>.preview.<host> shows that site from one shared build. */
+const previewSite = typeof window !== 'undefined' ? /^([a-z0-9][a-z0-9-]*)\.preview\./.exec(window.location.hostname)?.[1] : undefined;
+
+/** Which client site this front end shows: the preview host, else VITE_SITE_ID (one build per client domain). */
+export const DEFAULT_SITE_ID = previewSite || (import.meta.env.VITE_SITE_ID as string | undefined) || siteConfig.id;
 
 export const SiteIdContext = createContext<string>(DEFAULT_SITE_ID);
 export const useSiteId = () => useContext(SiteIdContext);
@@ -89,8 +92,8 @@ export function usePaymentMethods(enabled: boolean) {
     queryKey: ['public', site, 'payment-methods'],
     queryFn: () =>
       apiAvailable()
-        ? api.get<{ online: boolean; provider: string | null; isTest: boolean }>(`/public/sites/${site}/payment-methods`)
-        : Promise.resolve({ online: false, provider: null, isTest: false }),
+        ? api.get<{ online: boolean; cod: boolean; provider: string | null; isTest: boolean }>(`/public/sites/${site}/payment-methods`)
+        : Promise.resolve({ online: false, cod: false, provider: null, isTest: false }),
     enabled,
   });
 }

@@ -23,16 +23,43 @@ function blankItem(fields: FieldDef[]): Props {
   return item;
 }
 
-/** Renders editors for a set of fields; used for sections and, recursively, for list items. */
-export function FieldsEditor({ fields, value, onChange, siteId }: { fields: FieldDef[]; value: Props; onChange: (v: Props) => void; siteId: string }) {
+/** Kinds a client may edit on their own site: text and images, never links, layout or list length. */
+const CONTENT_KINDS = new Set<FieldDef['kind']>(['loc', 'text', 'image', 'cta', 'strings', 'locList', 'list']);
+
+/**
+ * Renders editors for a set of fields; used for sections and, recursively, for list items.
+ * `contentOnly`: only text and images, with lists edited in place (no adding, removing or moving).
+ */
+export function FieldsEditor({ fields, value, onChange, siteId, contentOnly = false }: { fields: FieldDef[]; value: Props; onChange: (v: Props) => void; siteId: string; contentOnly?: boolean }) {
   const { locale } = usePreferences();
   const t = useT();
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
 
   return (
     <div className="flex flex-col gap-4">
-      {fields.map((f) => {
+      {fields.filter((f) => !contentOnly || CONTENT_KINDS.has(f.kind)).map((f) => {
         const label = f.label[locale];
+        if (contentOnly && (f.kind === 'strings' || f.kind === 'locList' || f.kind === 'list')) {
+          const items = (value[f.key] as unknown[]) ?? [];
+          if (!items.length) return null;
+          const update = (i: number, x: unknown) => set(f.key, items.map((it, j) => (j === i ? x : it)));
+          return (
+            <fieldset key={f.key} className="flex flex-col gap-3">
+              <legend className="mb-1 text-xs font-medium text-ink-soft">{label}</legend>
+              {items.map((item, i) => (
+                <div key={i} className="rounded-md border border-line bg-bg p-3">
+                  {f.kind === 'strings' ? (
+                    <TextField label={`${label} #${i + 1}`} value={item as string} onChange={(x) => update(i, x)} />
+                  ) : f.kind === 'locList' ? (
+                    <LocalizedField label={`${label} #${i + 1}`} value={item as Localized} onChange={(x) => update(i, x)} />
+                  ) : (
+                    <FieldsEditor fields={f.item} value={item as Props} onChange={(x) => update(i, x)} siteId={siteId} contentOnly />
+                  )}
+                </div>
+              ))}
+            </fieldset>
+          );
+        }
         const v = value[f.key];
         switch (f.kind) {
           case 'loc':
@@ -55,7 +82,7 @@ export function FieldsEditor({ fields, value, onChange, siteId }: { fields: Fiel
               <fieldset key={f.key} className="flex flex-col gap-2 rounded-md border border-line p-3">
                 <legend className="px-1 text-xs font-medium text-ink-soft">{label}</legend>
                 <LocalizedField label={t.label} value={cta.label} onChange={(x) => set(f.key, { ...cta, label: x })} />
-                <TextField label={t.link} dir="ltr" value={cta.href} onChange={(x) => set(f.key, { ...cta, href: x })} hint="/contact · https://…" />
+                {!contentOnly && <TextField label={t.link} dir="ltr" value={cta.href} onChange={(x) => set(f.key, { ...cta, href: x })} hint="/contact · https://…" />}
               </fieldset>
             );
           }

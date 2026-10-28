@@ -2,7 +2,7 @@ import { leadInputSchema, orderInputSchema } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { sha256 } from '../../common/crypto.js';
-import { notFound } from '../../common/errors.js';
+import { badRequest, notFound } from '../../common/errors.js';
 import { ApiRouter, pageMeta, paginationQuery } from '../../common/http.js';
 import { selectList } from '../../common/sql.js';
 import type { AppContext } from '../../context.js';
@@ -110,9 +110,9 @@ export function publicRoutes(ctx: AppContext) {
       // Honeypot filled in: accept silently so bots learn nothing, but store nothing.
       if (body.website) return { data: { received: true } };
       const { rows } = await req.tenant!.db.query(
-        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at AS "createdAt"`,
-        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null],
+        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at AS "createdAt"`,
+        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null, body.details],
       );
       return { data: { received: true, id: rows[0].id, createdAt: rows[0].createdAt } };
     },
@@ -128,6 +128,7 @@ export function publicRoutes(ctx: AppContext) {
       middleware: [submitLimiter, requireModule('products'), requireModule('orders')],
     },
     async ({ req, body }) => {
+      if (body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
       const order = await createOrder(req.tenant!.db, body);
       return {
         data: {
@@ -135,6 +136,7 @@ export function publicRoutes(ctx: AppContext) {
           orderToken: order.orderToken,
           status: order.status,
           paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
           currency: order.currency,
           totalMinor: order.totalMinor,
           items: order.items,
@@ -144,8 +146,9 @@ export function publicRoutes(ctx: AppContext) {
   );
 
   r.route({ method: 'get', path: '/payment-methods', summary: 'Whether online payment is available, and whether it is a test gateway', middleware: [requireModule('orders')] }, async ({ req }) => {
-    const gateway = gatewayFor(ctx, await getPaymentSettings(req.tenant!.db), req.tenant!.slug);
-    return { data: { online: !!gateway, provider: gateway?.name ?? null, isTest: gateway?.isTest ?? false } };
+    const settings = await getPaymentSettings(req.tenant!.db);
+    const gateway = gatewayFor(ctx, settings, req.tenant!.slug);
+    return { data: { online: !!gateway, cod: settings.allowCod, provider: gateway?.name ?? null, isTest: gateway?.isTest ?? false } };
   });
 
   const orderLookup = z.object({ number: z.string().regex(/^\d{1,12}$/) });

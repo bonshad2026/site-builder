@@ -25,6 +25,9 @@ function blank(kind: Kind): Partial<ServiceDto> | Partial<ProductDto> {
         currency: 'IRR',
         stock: null,
         isAvailable: true,
+        discountPercent: 0,
+        colors: [],
+        maxPerOrder: null,
         featured: false,
         materials: empty,
         dimensions: '',
@@ -52,6 +55,9 @@ function payload(kind: Kind, item: Partial<Item>) {
     currency: p.currency ?? 'IRR',
     stock: p.stock ?? null,
     isAvailable: p.isAvailable,
+    discountPercent: p.discountPercent ?? 0,
+    colors: (p.colors ?? []).filter((c) => c.name.en.trim() && c.name.fa.trim()),
+    maxPerOrder: p.maxPerOrder ?? null,
     featured: p.featured,
     materials: p.materials,
     dimensions: p.dimensions ?? '',
@@ -146,6 +152,23 @@ function Editor({ siteId, kind, item, onClose }: { siteId: string; kind: Kind; i
               <NumberField label={t.price} value={p.priceMinor ? Number(p.priceMinor) : null} onChange={(v) => set('priceMinor', v === null ? null : String(v))} min={0} />
               <NumberField label={t.stock} value={p.stock ?? null} onChange={(v) => set('stock', v)} min={0} />
             </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <NumberField label={t.discountPercent} value={p.discountPercent ?? 0} onChange={(v) => set('discountPercent', Math.max(0, Math.min(90, v ?? 0)))} min={0} />
+              <NumberField label={t.maxPerOrder} value={p.maxPerOrder ?? null} onChange={(v) => set('maxPerOrder', v === null ? null : Math.max(1, Math.min(50, v)))} min={1} />
+            </div>
+            <ListEditor
+              label={t.colors}
+              items={p.colors ?? []}
+              onChange={(v) => set('colors', v)}
+              create={() => ({ name: { en: '', fa: '' }, hex: '#000000' })}
+              max={12}
+              render={(c, update) => (
+                <div className="flex items-end gap-3">
+                  <LocalizedField label={t.colorName} value={c.name} onChange={(name) => update({ ...c, name })} />
+                  <input type="color" aria-label={t.colorName} value={c.hex} onChange={(e) => update({ ...c, hex: e.target.value })} className="mb-0.5 h-9 w-12 shrink-0 rounded border border-line" />
+                </div>
+              )}
+            />
             <div className="flex flex-wrap gap-6">
               <Checkbox label={t.available} checked={p.isAvailable ?? true} onChange={(v) => set('isAvailable', v)} />
               <Checkbox label={t.featured} checked={p.featured ?? false} onChange={(v) => set('featured', v)} />

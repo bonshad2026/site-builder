@@ -60,7 +60,7 @@ export function Header() {
     >
       <Container className="flex items-center justify-between gap-6">
         <Link to="/" className="font-display text-2xl tracking-wide whitespace-nowrap" aria-label={`${l(settings?.name)} — ${m.nav.home}`}>
-          {l(settings?.name)}
+          {settings?.logoUrl ? <img src={settings.logoUrl} alt="" className="h-9 w-auto max-w-[180px] object-contain" /> : l(settings?.name)}
         </Link>
 
         <nav aria-label={m.nav.primary} className="hidden lg:block">
@@ -85,8 +85,8 @@ export function Header() {
           <LanguageSwitch className="hidden sm:flex" />
           {shop && <CartLink />}
           <span className="hidden md:block">
-            <ButtonLink to="/contact" size="sm" variant={overHero ? 'light' : 'primary'}>
-              {m.common.bookConsultation}
+            <ButtonLink to={settings?.headerCta?.href ?? '/contact'} size="sm" variant={overHero ? 'light' : 'primary'}>
+              {settings?.headerCta ? l(settings.headerCta.label) : m.common.bookConsultation}
             </ButtonLink>
           </span>
           <button ref={menuButton} type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="mobile-menu" className="flex items-center gap-2 py-2 text-sm lg:hidden">

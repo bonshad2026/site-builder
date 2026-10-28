@@ -8,7 +8,7 @@ import { auditTenant } from '../audit/audit.js';
 import { SandboxGateway, ZarinpalGateway, type PaymentGateway } from './gateways.js';
 
 export async function getPaymentSettings(db: pg.Pool): Promise<PaymentSettings> {
-  const { rows } = await db.query('SELECT provider, merchant_id AS "merchantId", use_sandbox_host AS "useSandboxHost" FROM payment_settings WHERE id = 1');
+  const { rows } = await db.query('SELECT provider, merchant_id AS "merchantId", use_sandbox_host AS "useSandboxHost", allow_cod AS "allowCod" FROM payment_settings WHERE id = 1');
   return paymentSettingsSchema.parse(rows[0] ?? { provider: 'none' });
 }
 

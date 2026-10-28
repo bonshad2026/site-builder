@@ -38,6 +38,9 @@ export const productsTable: TableDef = {
     currency: 'currency',
     stock: 'stock',
     isAvailable: 'is_available',
+    discountPercent: 'discount_percent',
+    colors: 'colors',
+    maxPerOrder: 'max_per_order',
     featured: 'featured',
     materials: 'materials',
     dimensions: 'dimensions',
@@ -47,7 +50,7 @@ export const productsTable: TableDef = {
     position: 'position',
     seo: 'seo',
   },
-  json: new Set(['name', 'description', 'materials', 'leadTime', 'seo']),
+  json: new Set(['name', 'description', 'materials', 'leadTime', 'colors', 'seo']),
 };
 
 interface CatalogConfig {

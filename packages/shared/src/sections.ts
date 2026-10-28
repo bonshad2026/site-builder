@@ -57,6 +57,12 @@ export const sectionDefinitions = {
     filter: z.enum(['featured', 'all']).default('featured'),
     limit: z.number().int().min(1).max(48).default(4),
     showFilters: z.boolean().default(false),
+    /** Only this category (slug); empty = every category. */
+    category: z.string().max(64).default(''),
+    showDiscount: z.boolean().default(true),
+    showColors: z.boolean().default(true),
+    showStock: z.boolean().default(false),
+    hideOutOfStock: z.boolean().default(false),
   }),
   gallery: z.object({
     ...eyebrowHeading,
@@ -93,7 +99,14 @@ export const sectionDefinitions = {
       .default([]),
   }),
   cta: z.object({ heading: loc(200), text: loc(400), cta, tone: z.enum(['dark', 'accent']).default('dark') }),
-  'contact-form': z.object({ ...eyebrowHeading, intro: loc(600), showDetails: z.boolean().default(true) }),
+  'contact-form': z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    showDetails: z.boolean().default(true),
+    /** Which request this form sends: contact, consultation, reservation or demo. */
+    formType: z.enum(['contact', 'consultation', 'reservation', 'demo']).default('consultation'),
+    submitLabel: loc(60),
+  }),
 } as const;
 
 export type SectionType = keyof typeof sectionDefinitions;
@@ -104,6 +117,49 @@ export const isSectionType = (type: string): type is SectionType => type in sect
 
 export function defaultProps<T extends SectionType>(type: T): SectionProps<T> {
   return sectionDefinitions[type].parse({}) as SectionProps<T>;
+}
+
+/**
+ * Props that shape layout or behaviour rather than content. A content-only edit (what a
+ * client may do on their own site) can change any other text or image, but not these,
+ * nor numbers, switches, list lengths or the sections themselves.
+ */
+const STRUCTURE_KEYS = new Set(['href', 'height', 'width', 'imageSide', 'layout', 'tone', 'filter', 'category', 'formType', 'paymentMode', 'columns']);
+
+/** Returns why `after` is more than a text/image change of `before`, or null when it is not. */
+export function contentOnlyChange(
+  before: { sections: { id: string; type: string; hidden?: boolean; props: Record<string, unknown> }[] },
+  after: { sections: { id: string; type: string; hidden?: boolean; props: Record<string, unknown> }[] },
+): string | null {
+  if (before.sections.length !== after.sections.length) return 'Sections cannot be added or removed';
+  const same = (a: unknown, b: unknown, key: string, path: string): string | null => {
+    if (typeof a === 'string' && typeof b === 'string') return a === b || !STRUCTURE_KEYS.has(key) ? null : `${path} cannot be changed`;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return `${path}: items cannot be added or removed`;
+      for (let i = 0; i < a.length; i++) {
+        const r = same(a[i], b[i], key, `${path}.${i}`);
+        if (r) return r;
+      }
+      return null;
+    }
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      for (const k of keys) {
+        const r = same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], k, `${path}.${k}`);
+        if (r) return r;
+      }
+      return null;
+    }
+    return Object.is(a, b) ? null : `${path} cannot be changed`;
+  };
+  for (let i = 0; i < before.sections.length; i++) {
+    const a = before.sections[i];
+    const b = after.sections[i];
+    if (a.id !== b.id || a.type !== b.type || !!a.hidden !== !!b.hidden) return 'Sections cannot be moved, hidden or replaced';
+    const r = same(a.props, b.props, '', a.type);
+    if (r) return r;
+  }
+  return null;
 }
 
 /** Validates (and fills defaults for) one section's props. */

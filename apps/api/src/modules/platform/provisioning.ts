@@ -118,6 +118,17 @@ export async function provisionTenant(ctx: AppContext, input: ProvisionInput): P
         `INSERT INTO pages (slug, title, is_home, draft) VALUES ('home', $1, true, $2) ON CONFLICT (slug) DO NOTHING`,
         [{ en: 'Home', fa: 'خانه' }, { schemaVersion: 1, sections: [] }],
       );
+      // An About page to start from (draft until the operator fills and publishes it).
+      await tenantClient.query(`INSERT INTO pages (slug, title, is_home, position, draft) VALUES ('about', $1, false, 1, $2) ON CONFLICT (slug) DO NOTHING`, [
+        { en: 'About us', fa: 'درباره ما' },
+        {
+          schemaVersion: 1,
+          sections: [
+            { id: 's1', type: 'page-header', props: { eyebrow: { en: input.name, fa: input.name }, heading: { en: 'About us', fa: 'درباره ما' }, intro: { en: '', fa: '' } } },
+            { id: 's2', type: 'image-text', props: { heading: { en: 'Our story', fa: 'داستان ما' }, body: { en: 'Tell visitors who you are and what you do.', fa: 'به بازدیدکنندگان بگویید چه کسی هستید و چه کاری انجام می‌دهید.' } } },
+          ],
+        },
+      ]);
     } finally {
       await tenantClient.end();
     }

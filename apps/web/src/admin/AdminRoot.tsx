@@ -6,13 +6,14 @@ import { LanguageSwitch } from '../components/layout/PreferenceControls';
 import { api } from '../lib/api';
 import { cn } from '../lib/cn';
 import { usePreferences } from '../lib/preferences';
-import { ForgotPasswordPage, LoginPage, RequireAuth, useLogout, useMe, type Me } from './auth';
+import { ForgotPasswordPage, isOperator, LoginPage, OPERATOR_UI, RequireAuth, useLogout, useMe, type Me } from './auth';
 import { useT } from './i18n';
 import { Spinner, ToastProvider } from './ui';
 
-const Platform = lazy(() => import('./pages/PlatformPages'));
+// Operator-only code is not even bundled into client builds.
+const Platform = OPERATOR_UI ? lazy(() => import('./pages/PlatformPages')) : null;
 const SitePages = lazy(() => import('./pages/SitePages'));
-const Builder = lazy(() => import('./builder/BuilderPage'));
+const Builder = OPERATOR_UI ? lazy(() => import('./builder/BuilderPage')) : null;
 
 export interface SiteInfo {
   siteId: string;
@@ -51,13 +52,15 @@ export default function AdminRoot() {
         <Routes>
           <Route path="login" element={<LoginPage />} />
           <Route path="forgot" element={<ForgotPasswordPage />} />
-          <Route
-            path="sites/:siteId/pages/:pageId/builder"
-            element={<RequireAuth>{() => <Builder />}</RequireAuth>}
-          />
+          {Builder && (
+            <Route
+              path="sites/:siteId/pages/:pageId/builder"
+              element={<RequireAuth>{(me) => (isOperator(me) ? <Builder /> : <Navigate to="/admin" replace />)}</RequireAuth>}
+            />
+          )}
           <Route element={<RequireAuth>{(me) => <AdminLayout me={me} />}</RequireAuth>}>
             <Route index element={<AdminHome />} />
-            <Route path="platform/*" element={<Platform />} />
+            {Platform && <Route path="platform/*" element={<RequireAuth>{(me) => (isOperator(me) ? <Platform /> : <Navigate to="/admin" replace />)}</RequireAuth>} />}
             <Route path="sites/:siteId/*" element={<SitePages />} />
             <Route path="account" element={<SitePages account />} />
           </Route>
@@ -72,7 +75,7 @@ function AdminHome() {
   const { data: me } = useMe();
   const t = useT();
   if (!me) return null;
-  if (me.user.isPlatformAdmin) return <Navigate to="/admin/platform/sites" replace />;
+  if (isOperator(me)) return <Navigate to="/admin/platform/sites" replace />;
   if (me.sites.length === 1) return <Navigate to={`/admin/sites/${me.sites[0].siteId}`} replace />;
   return (
     <div className="max-w-xl">
@@ -107,15 +110,22 @@ function SiteNav({ siteId }: { siteId: string }) {
   const t = useT();
   const { data: info } = useSiteInfo(siteId);
   const { data: settings } = useAdminSettings(siteId);
+  const operator = isOperator(useMe().data);
   const can = (p: string) => !!info?.permissions.includes(p);
   const mod = (m: keyof SiteSettings['modules']) => !!settings?.modules[m];
   const base = `/admin/sites/${siteId}`;
   return (
     <nav aria-label={info?.name ?? siteId} className="flex flex-col gap-0.5">
-      <NavItem to={base} end>
-        {t.dashboard}
-      </NavItem>
-      <NavItem to={`${base}/pages`}>{t.pages}</NavItem>
+      {operator && (
+        <>
+          <NavItem to={base} end>
+            {t.dashboard}
+          </NavItem>
+          <NavItem to={`${base}/pages`}>{t.pages}</NavItem>
+        </>
+      )}
+      {/* Clients edit the text and images of their pages; operators use the builder. */}
+      {!operator && can('pages:write') && <NavItem to={`${base}/content`}>{t.content}</NavItem>}
       {mod('services') && <NavItem to={`${base}/services`}>{t.services}</NavItem>}
       {mod('products') && <NavItem to={`${base}/products`}>{t.products}</NavItem>}
       {mod('leads') && can('leads:read') && <NavItem to={`${base}/leads`}>{t.leads}</NavItem>}
@@ -143,17 +153,21 @@ function AdminLayout({ me }: { me: Me }) {
       <Link to="/admin" className="px-3 font-display text-2xl text-ink">
         {t.brand}
       </Link>
-      {me.user.isPlatformAdmin && (
+      {isOperator(me) && (
         <div>
           <p className="mb-1 px-3 text-xs font-medium text-ink-soft uppercase rtl:normal-case">{t.platform}</p>
           <nav aria-label={t.platform} className="flex flex-col gap-0.5">
             <NavItem to="/admin/platform/sites">{t.sites}</NavItem>
             <NavItem to="/admin/platform/users">{t.users}</NavItem>
             <NavItem to="/admin/platform/audit">{t.audit}</NavItem>
+            {/* Studio deploy service (served next to the admin by the edge proxy). */}
+            <a href="/deploy/" className="block rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
+              {t.deploy}
+            </a>
           </nav>
         </div>
       )}
-      {(sites.length > 1 || me.user.isPlatformAdmin || siteId) && (
+      {(sites.length > 1 || isOperator(me)) && (
         <label className="flex flex-col gap-1 px-3 text-xs text-ink-soft">
           {t.chooseSite}
           <SiteSwitcher current={siteId} me={me} onChange={(id) => navigate(`/admin/sites/${id}`)} />

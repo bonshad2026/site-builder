@@ -9,7 +9,8 @@ import { SitePage } from '../features/public-site/pages/SitePage';
 
 // The admin panel and builder are loaded only when visited, keeping the public site light.
 const AdminRoot = lazy(() => import('../admin/AdminRoot'));
-const PreviewFrame = lazy(() => import('../admin/builder/PreviewFrame'));
+// The builder's preview frame; client builds (VITE_ADMIN_SCOPE=client) have no builder.
+const PreviewFrame = import.meta.env.VITE_ADMIN_SCOPE !== 'client' ? lazy(() => import('../admin/builder/PreviewFrame')) : null;
 const ResetPassword = lazy(() => import('../admin/auth').then((m) => ({ default: m.ResetPasswordPage })));
 const VerifyEmail = lazy(() => import('../admin/auth').then((m) => ({ default: m.VerifyEmailPage })));
 
@@ -21,7 +22,7 @@ export const routes: RouteObject[] = [
   // Links in account emails point here.
   { path: 'reset-password', element: lazyEl(<ResetPassword />) },
   { path: 'verify-email', element: lazyEl(<VerifyEmail />) },
-  { path: '__preview', element: lazyEl(<PreviewFrame />) },
+  ...(PreviewFrame ? [{ path: '__preview', element: lazyEl(<PreviewFrame />) }] : []),
   {
     element: <SiteLayout />,
     children: [

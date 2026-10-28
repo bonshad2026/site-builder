@@ -1,0 +1,126 @@
+# Studio: where every client site is built, all from http://admin.localhost.
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   admin http://admin.localhost/admin · deploy http://admin.localhost/deploy/
+#   preview of a site http://<slug>.preview.localhost
+# One API, one database server (a database per site) and one web app serve every site.
+# A site gets its own isolated stack only when it is exported for a client's server.
+# Secrets: deploy/.env (see deploy/.env.example).
+name: site-builder
+
+services:
+  edge:
+    image: nginx:1.27-alpine
+    container_name: sb-edge
+    ports:
+      - "80:80"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [platform]
+    depends_on: [studio-api, studio-web, control]
+    restart: unless-stopped
+
+  studio-db:
+    image: postgres:16-alpine
+    container_name: sb-studio-db
+    environment:
+      POSTGRES_USER: sb_admin
+      POSTGRES_PASSWORD: ${STUDIO_DB_PASSWORD:?}
+      POSTGRES_DB: postgres
+    volumes:
+      - studio-pgdata:/var/lib/postgresql/data
+    networks: [studio]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb_admin"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  studio-api:
+    image: sb-api:latest
+    container_name: sb-studio-api
+    build:
+      context: ..
+      target: api
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+    command: ["sh", "/app/deploy/studio/api-start.sh"]
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      TRUST_PROXY: uniquelocal
+      STUDIO_ADMIN_EMAIL: ${CONTROL_ADMIN_EMAIL:?}
+      STUDIO_ADMIN_PASSWORD: ${CONTROL_ADMIN_PASSWORD:?}
+      CONTROL_DATABASE_URL: postgres://sb_api:${STUDIO_API_DB_PASSWORD:?}@studio-db:5432/sb_control
+      PG_ADMIN_URL: postgres://sb_admin:${STUDIO_DB_PASSWORD}@studio-db:5432/postgres
+      TENANT_DB_HOST: studio-db
+      TENANT_DB_PORT: "5432"
+      TENANT_SECRETS_KEY: ${STUDIO_TENANT_SECRETS_KEY:?}
+      STORAGE_SIGNING_KEY: ${STUDIO_STORAGE_SIGNING_KEY:?}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /data/uploads
+      PUBLIC_API_URL: http://admin.localhost
+      WEB_APP_URL: http://admin.localhost
+      CORS_ORIGINS: http://admin.localhost
+      EMAIL_PROVIDER: console
+      SMS_PROVIDER: console
+    volumes:
+      - studio-uploads:/data/uploads
+      # Template photos added by hand (when Unsplash cannot be reached): <photo-id>.jpg
+      - ../var/demo-images:/app/var/demo-images:ro
+    networks:
+      studio: {}
+      platform:
+        aliases: [studio-api]
+    depends_on:
+      studio-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One build for the admin and every preview; the site is picked from the host name.
+  studio-web:
+    image: sb-web-studio:latest
+    container_name: sb-studio-web
+    build:
+      context: ..
+      target: web
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        VITE_API_URL: same-origin
+        VITE_SITE_ID: ""
+    networks:
+      platform:
+        aliases: [studio-web]
+    restart: unless-stopped
+
+  # Preview & deploy: exports isolated, build-only packages for clients' servers.
+  control:
+    build: ./control
+    container_name: sb-control
+    env_file: .env
+    environment:
+      REPO_DIR: /repo
+      DATA_DIR: /data
+      STUDIO_API: http://studio-api:4000
+    volumes:
+      # Docker access is needed to build and package sites; only operators can use the page.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/repo:ro
+      - control-data:/data
+      # Packages are written here (EXPORT_DIR in deploy/.env).
+      - ${EXPORT_DIR:-../exports}:/exports
+    networks:
+      platform:
+        aliases: [control]
+    restart: unless-stopped
+
+networks:
+  platform: {}
+  studio:
+    internal: true
+
+volumes:
+  studio-pgdata:
+  studio-uploads:
+  # Per-site deployment secrets and package history.
+  control-data:

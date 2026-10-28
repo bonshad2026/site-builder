@@ -15,20 +15,30 @@ interface ProductRow {
   price_minor: string | null;
   currency: string;
   stock: number | null;
+  discount_percent: number;
+  colors: { name: Record<string, string>; hex: string }[];
+  max_per_order: number | null;
 }
 
-export const ORDER_COLUMNS = `id, number::text AS number, status, payment_status AS "paymentStatus", customer, note, currency,
+export const ORDER_COLUMNS = `id, number::text AS number, status, payment_status AS "paymentStatus", payment_method AS "paymentMethod", customer, note, currency,
   subtotal_minor::text AS "subtotalMinor", total_minor::text AS "totalMinor", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 /**
  * Creates an order using prices and availability from the database only.
  * Stock is reserved atomically; if any item cannot be satisfied, nothing is written.
- * Payment is never marked as done here (no gateway is connected yet).
+ * Payment is never marked as done here. Discounts come from the product, never from the buyer.
  */
 export async function createOrder(db: pg.Pool, input: OrderInput) {
-  // Merge duplicate lines so quantity limits and stock checks see the real total.
+  // Merge duplicate lines (same product and colour); limits and stock use each product's total.
+  const merged = new Map<string, { productId: string; option: string; quantity: number }>();
+  for (const item of input.items) {
+    const key = `${item.productId}|${item.option}`;
+    const line = merged.get(key) ?? { productId: item.productId, option: item.option, quantity: 0 };
+    line.quantity += item.quantity;
+    merged.set(key, line);
+  }
   const quantities = new Map<string, number>();
-  for (const item of input.items) quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+  for (const l of merged.values()) quantities.set(l.productId, (quantities.get(l.productId) ?? 0) + l.quantity);
 
   // Lets the buyer (and only the buyer) look up and pay for this order.
   const orderToken = randomToken(24);
@@ -36,7 +46,7 @@ export async function createOrder(db: pg.Pool, input: OrderInput) {
   return withTransaction(db, async (tx) => {
     const ids = [...quantities.keys()];
     const { rows: products } = await tx.query<ProductRow>(
-      `SELECT id, slug, name, price_minor::text AS price_minor, currency, stock FROM products
+      `SELECT id, slug, name, price_minor::text AS price_minor, currency, stock, discount_percent, colors, max_per_order FROM products
         WHERE id = ANY($1::uuid[]) AND status = 'published' AND is_available AND price_minor IS NOT NULL
         FOR UPDATE`,
       [ids],
@@ -48,33 +58,41 @@ export async function createOrder(db: pg.Pool, input: OrderInput) {
     const currencies = new Set(products.map((p) => p.currency));
     if (currencies.size > 1) throw badRequest('All items in one order must use the same currency');
 
-    let subtotal = 0n;
-    const lines = ids.map((id) => {
+    for (const id of ids) {
       const product = byId.get(id)!;
-      const quantity = quantities.get(id)!;
-      if (quantity > 50) throw badRequest('Quantity per product is limited to 50');
-      const unit = BigInt(product.price_minor!);
+      const limit = Math.min(50, product.max_per_order ?? 50);
+      if (quantities.get(id)! > limit) throw badRequest(`Quantity of ${product.slug} is limited to ${limit} per order`);
+    }
+
+    let subtotal = 0n;
+    const lines = [...merged.values()].map(({ productId, option, quantity }) => {
+      const product = byId.get(productId)!;
+      // A colour must be one of the product's own; products without colours take none.
+      const colors = product.colors ?? [];
+      if (colors.length ? !colors.some((c) => Object.values(c.name).includes(option)) : option !== '') throw badRequest(`Choose a valid colour for ${product.slug}`);
+      const unit = (BigInt(product.price_minor!) * BigInt(100 - (product.discount_percent ?? 0))) / 100n;
       const lineTotal = unit * BigInt(quantity);
       subtotal += lineTotal;
-      return { product, quantity, unit, lineTotal };
+      return { product, option, quantity, unit, lineTotal };
     });
 
-    for (const line of lines) {
-      if (line.product.stock === null) continue;
-      const res = await tx.query('UPDATE products SET stock = stock - $2, updated_at = now() WHERE id = $1 AND stock >= $2', [line.product.id, line.quantity]);
-      if (!res.rowCount) throw conflict(`Not enough stock for ${line.product.slug}`);
+    for (const id of ids) {
+      const product = byId.get(id)!;
+      if (product.stock === null) continue;
+      const res = await tx.query('UPDATE products SET stock = stock - $2, updated_at = now() WHERE id = $1 AND stock >= $2', [id, quantities.get(id)]);
+      if (!res.rowCount) throw conflict(`Not enough stock for ${product.slug}`);
     }
 
     const { rows } = await tx.query(
-      `INSERT INTO orders (customer, note, currency, subtotal_minor, total_minor, public_token_hash) VALUES ($1, $2, $3, $4, $4, $5) RETURNING ${ORDER_COLUMNS}`,
-      [input.customer, input.note ?? null, [...currencies][0], subtotal.toString(), sha256(orderToken)],
+      `INSERT INTO orders (customer, note, currency, subtotal_minor, total_minor, public_token_hash, payment_method) VALUES ($1, $2, $3, $4, $4, $5, $6) RETURNING ${ORDER_COLUMNS}`,
+      [input.customer, input.note ?? null, [...currencies][0], subtotal.toString(), sha256(orderToken), input.paymentMethod],
     );
     const order = rows[0];
     for (const line of lines) {
       await tx.query(
-        `INSERT INTO order_items (order_id, product_id, product_slug, product_name, unit_price_minor, quantity, line_total_minor)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [order.id, line.product.id, line.product.slug, line.product.name, line.unit.toString(), line.quantity, line.lineTotal.toString()],
+        `INSERT INTO order_items (order_id, product_id, product_slug, product_name, unit_price_minor, quantity, line_total_minor, option)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [order.id, line.product.id, line.product.slug, line.product.name, line.unit.toString(), line.quantity, line.lineTotal.toString(), line.option],
       );
     }
     await auditTenant(tx, { action: 'order.created', target: order.id, metadata: { number: order.number } });
@@ -85,7 +103,7 @@ export async function createOrder(db: pg.Pool, input: OrderInput) {
 export async function orderItems(db: pg.Pool | pg.PoolClient, orderId: string) {
   const { rows } = await db.query(
     `SELECT product_id AS "productId", product_slug AS "productSlug", product_name AS "productName",
-            unit_price_minor::text AS "unitPriceMinor", quantity, line_total_minor::text AS "lineTotalMinor"
+            unit_price_minor::text AS "unitPriceMinor", quantity, line_total_minor::text AS "lineTotalMinor", option
        FROM order_items WHERE order_id = $1 ORDER BY id`,
     [orderId],
   );

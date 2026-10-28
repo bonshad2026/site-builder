@@ -21,8 +21,8 @@ export function paymentSettingsRoutes(ctx: AppContext) {
     if (body.provider === 'zarinpal' && !/^[0-9a-f-]{36}$/i.test(body.merchantId)) throw badRequest('Enter a valid Zarinpal merchant id (36 characters)');
     if (body.provider === 'sandbox' && !ctx.env.paymentSandboxEnabled) throw badRequest('The test gateway is disabled on this server');
     await req.tenant!.db.query(
-      'UPDATE payment_settings SET provider = $1, merchant_id = $2, use_sandbox_host = $3, updated_by = $4, updated_at = now() WHERE id = 1',
-      [body.provider, body.merchantId, body.useSandboxHost, req.auth!.user.id],
+      'UPDATE payment_settings SET provider = $1, merchant_id = $2, use_sandbox_host = $3, allow_cod = $5, updated_by = $4, updated_at = now() WHERE id = 1',
+      [body.provider, body.merchantId, body.useSandboxHost, req.auth!.user.id, body.allowCod],
     );
     await auditTenant(req.tenant!.db, { actorUserId: req.auth!.user.id, action: 'payments.settings_updated', metadata: { provider: body.provider } });
     return { data: { ...(await getPaymentSettings(req.tenant!.db)), sandboxAvailable: ctx.env.paymentSandboxEnabled } };

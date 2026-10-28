@@ -21,6 +21,8 @@ interface Lead {
   sourcePath: string | null;
   status: 'new' | 'contacted' | 'qualified' | 'closed';
   notes: { text: string; at: string }[];
+  /** Reservation / demo answers. */
+  details?: { date?: string; time?: string; people?: number; company?: string };
   createdAt: string;
 }
 
@@ -29,6 +31,7 @@ interface Order {
   number: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  paymentMethod?: 'online' | 'cod';
   customer: { name: string; email: string; phone: string; address?: string };
   note: string | null;
   currency: string;
@@ -84,6 +87,14 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
                 {l.budget ? ` · ${l.budget}` : ''}
               </dd>
             </div>
+            {l.details && Object.values(l.details).some(Boolean) && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-ink-soft">{t.requestDetails}</dt>
+                <dd>
+                  {[l.details.date, l.details.time, l.details.people ? `${l.details.people} ${t.people}` : '', l.details.company].filter(Boolean).join(' · ')}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs text-ink-soft">{t.created}</dt>
               <dd>
@@ -153,6 +164,7 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
           <div className="flex flex-wrap gap-2">
             <Badge>{o.status}</Badge>
             <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>
+            {o.paymentMethod === 'cod' && <Badge tone="neutral">{t.cod}</Badge>}
             <span className="text-ink-soft">{formatDate(o.createdAt)}</span>
           </div>
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -175,7 +187,8 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
             {o.items?.map((it, i) => (
               <tr key={i}>
                 <Td>
-                  {l(it.productName)} × {it.quantity}
+                  {l(it.productName)}
+                  {it.option ? ` (${it.option})` : ''} × {it.quantity}
                 </Td>
                 <Td className="text-xs">{formatMoney(it.unitPriceMinor, o.currency)}</Td>
                 <Td className="text-xs">{formatMoney(it.lineTotalMinor, o.currency)}</Td>

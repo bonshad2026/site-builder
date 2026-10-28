@@ -28,7 +28,12 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const TENANT_STATUSES = ['provisioning', 'active', 'suspended', 'failed'] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
-export const LEAD_TYPES = ['contact', 'consultation', 'service_request'] as const;
+export const LEAD_TYPES = ['contact', 'consultation', 'service_request', 'reservation', 'demo'] as const;
+/** Request forms a page can show (the contact-form section's `formType`). */
+export const FORM_TYPES = ['contact', 'consultation', 'reservation', 'demo'] as const;
+
+/** How a buyer pays: online through the gateway, or on delivery. */
+export const PAYMENT_METHODS = ['online', 'cod'] as const;
 export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'closed'] as const;
 
 export const ORDER_STATUSES = ['pending', 'confirmed', 'fulfilled', 'cancelled'] as const;

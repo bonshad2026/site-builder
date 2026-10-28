@@ -1,4 +1,6 @@
-export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
+const configuredApi = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+/** VITE_API_URL=same-origin: the API is served from the page's own origin (studio and previews). */
+export const API_URL = (configuredApi === 'same-origin' && typeof window !== 'undefined' ? window.location.origin : configuredApi).replace(/\/$/, '');
 
 /** Without an API the public site runs on bundled demo content and the admin panel is unavailable. */
 export const apiAvailable = () => API_URL !== '';

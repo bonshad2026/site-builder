@@ -1,0 +1,104 @@
+# One client's site on its own server: database, API and an HTTPS proxy (Caddy) serving the
+# built site. Exported from the control panel; contains build output only, no source code.
+#   docker load -i images/api.tar.gz
+#   docker compose up -d
+# On the first start the database and uploaded files are restored from ./data.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sb_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: postgres
+      OLD_SITE_URL: ${OLD_SITE_URL}
+      SITE_URL: ${SITE_URL:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./data/db.sql:/restore/db.sql:ro
+      - ./data/restore-db.sh:/docker-entrypoint-initdb.d/restore-db.sh:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb_admin"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    image: ${API_IMAGE:?}
+    # Uploaded files are unpacked once, into an empty volume.
+    command: ["sh", "-c", "[ -z \"$$(ls -A /data/uploads)\" ] && tar -xzf /restore/uploads.tar.gz -C /data/uploads; exec sh /app/deploy/cell/api-start.sh"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: "4000"
+      TRUST_PROXY: uniquelocal
+      CELL_SLUG: ${CELL_SLUG:?}
+      CELL_NAME: ${CELL_NAME:-}
+      CELL_DEMO: "false"
+      CELL_SSO_SECRET: ${CELL_SSO_SECRET:?}
+      CELL_OPERATOR_EMAIL: ${CELL_OPERATOR_EMAIL:?}
+      CELL_OPERATOR_PASSWORD: ${CELL_OPERATOR_PASSWORD:?}
+      CELL_OWNER_EMAIL: ${CELL_OWNER_EMAIL:?}
+      CELL_OWNER_PASSWORD: ${CELL_OWNER_PASSWORD:?}
+      CONTROL_DATABASE_URL: postgres://sb_api:${SB_API_DB_PASSWORD:?}@db:5432/sb_control
+      PG_ADMIN_URL: postgres://sb_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      TENANT_DB_HOST: db
+      TENANT_DB_PORT: "5432"
+      TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:?}
+      STORAGE_SIGNING_KEY: ${STORAGE_SIGNING_KEY:?}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /data/uploads
+      PUBLIC_API_URL: ${SITE_URL}
+      WEB_APP_URL: ${SITE_URL}
+      CORS_ORIGINS: ${SITE_URL}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      SMTP_URL: ${SMTP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      KAVENEGAR_API_KEY: ${KAVENEGAR_API_KEY:-}
+      KAVENEGAR_OTP_TEMPLATE: ${KAVENEGAR_OTP_TEMPLATE:-}
+    volumes:
+      - uploads:/data/uploads
+      - ./data/uploads.tar.gz:/restore/uploads.tar.gz:ro
+    networks: [internal, public]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?}
+      SITE_URL: ${SITE_URL}
+      OLD_SITE_URL: ${OLD_SITE_URL}
+    # The built site has placeholder addresses; serve a copy with the real one filled in.
+    command:
+      - sh
+      - -c
+      - >-
+        rm -rf /srv/site && cp -r /site /srv/site &&
+        find /srv/site -type f \( -name '*.js' -o -name '*.html' -o -name '*.xml' -o -name '*.txt' \)
+        -exec sed -i -e "s#http://sb-site-url.invalid#$$SITE_URL#g" -e "s#$$OLD_SITE_URL#$$SITE_URL#g" {} + &&
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/site:ro
+      - caddy-data:/data
+    networks: [public]
+    depends_on: [api]
+    restart: unless-stopped
+
+networks:
+  internal:
+    internal: true
+  public: {}
+
+volumes:
+  pgdata:
+  uploads:
+  caddy-data:

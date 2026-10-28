@@ -1,6 +1,7 @@
-import { pageInputSchema } from '@site-builder/shared';
+import { contentOnlyChange, pageInputSchema } from '@site-builder/shared';
+import type { RequestHandler } from 'express';
 import { z } from 'zod';
-import { badRequest, notFound } from '../../common/errors.js';
+import { badRequest, forbidden, notFound } from '../../common/errors.js';
 import { ApiRouter, idParam } from '../../common/http.js';
 import { withTransaction } from '../../database/tenant/pools.js';
 import { requirePermission } from '../../middleware/tenant.js';
@@ -17,17 +18,22 @@ const DETAIL = `${SUMMARY}, seo, draft AS document, published AS "publishedDocum
  * Pages hold a draft and a published copy. Editors change the draft; visitors
  * only ever receive the published copy (see the public routes). Each publish is
  * stored as a version that can be restored into the draft.
+ *
+ * `clientLocked` (a client's own server): the client may change the text and images of
+ * existing sections and publish; pages and their structure are the operator's.
  */
-export function pagesRoutes() {
+export function pagesRoutes(clientLocked = false) {
   const r = new ApiRouter('/api/v1/sites/:siteId/pages', 'Pages', true);
   const canWrite = requirePermission('pages:write');
+  const isClient = (req: Parameters<RequestHandler>[0]) => clientLocked && !req.auth!.user.isPlatformAdmin;
+  const operatorOnly: RequestHandler = (req, _res, next) => next(isClient(req) ? forbidden('Only the site operator can change the pages themselves') : undefined);
 
   r.route({ method: 'get', path: '/', summary: 'List pages with publish state' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(`SELECT ${SUMMARY} FROM pages ORDER BY is_home DESC, position, created_at`);
     return { data: rows };
   });
 
-  r.route({ method: 'post', path: '/', summary: 'Create a page (as draft)', status: 201, body: pageInputSchema, middleware: [canWrite] }, async ({ req, body }) => {
+  r.route({ method: 'post', path: '/', summary: 'Create a page (as draft)', status: 201, body: pageInputSchema, middleware: [canWrite, operatorOnly] }, async ({ req, body }) => {
     const page = await withTransaction(req.tenant!.db, async (db) => {
       if (body.isHome) await db.query('UPDATE pages SET is_home = false WHERE is_home');
       const { rows } = await db.query(
@@ -41,7 +47,7 @@ export function pagesRoutes() {
   });
 
   r.route(
-    { method: 'put', path: '/order', summary: 'Reorder pages', body: z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }), middleware: [canWrite] },
+    { method: 'put', path: '/order', summary: 'Reorder pages', body: z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }), middleware: [canWrite, operatorOnly] },
     async ({ req, body }) => {
       await withTransaction(req.tenant!.db, async (db) => {
         for (const [position, id] of body.ids.entries()) await db.query('UPDATE pages SET position = $2 WHERE id = $1', [id, position]);
@@ -60,6 +66,15 @@ export function pagesRoutes() {
   r.route(
     { method: 'patch', path: '/:id', summary: 'Update the draft (title, slug, SEO, document) or home flag', params: idParam, body: pageInputSchema.partial(), middleware: [canWrite] },
     async ({ req, params, body }) => {
+      if (isClient(req)) {
+        // Content only: the document, with the same sections and only text and images changed.
+        const { document, ...rest } = body;
+        if (!document || Object.values(rest).some((v) => v !== undefined)) throw forbidden('Only the text and images of a page can be changed');
+        const current = await req.tenant!.db.query('SELECT draft FROM pages WHERE id = $1', [params.id]);
+        if (!current.rows[0]) throw notFound('Page');
+        const why = contentOnlyChange(current.rows[0].draft, document);
+        if (why) throw forbidden(why);
+      }
       const page = await withTransaction(req.tenant!.db, async (db) => {
         if (body.isHome === false) {
           const current = await db.query('SELECT is_home FROM pages WHERE id = $1', [params.id]);
@@ -105,7 +120,7 @@ export function pagesRoutes() {
     return { data: page };
   });
 
-  r.route({ method: 'post', path: '/:id/unpublish', summary: 'Hide the page from visitors (draft is kept)', params: idParam, middleware: [canWrite] }, async ({ req, params }) => {
+  r.route({ method: 'post', path: '/:id/unpublish', summary: 'Hide the page from visitors (draft is kept)', params: idParam, middleware: [canWrite, operatorOnly] }, async ({ req, params }) => {
     const { rows } = await req.tenant!.db.query(
       `UPDATE pages SET published = NULL, published_title = NULL, published_seo = NULL, published_at = NULL, updated_at = now()
         WHERE id = $1 AND NOT is_home RETURNING ${DETAIL}`,
@@ -130,7 +145,7 @@ export function pagesRoutes() {
       path: '/:id/versions/:version/restore',
       summary: 'Copy a published version back into the draft',
       params: idParam.extend({ version: z.coerce.number().int().min(1) }),
-      middleware: [canWrite],
+      middleware: [canWrite, operatorOnly],
     },
     async ({ req, params }) => {
       const { rows } = await req.tenant!.db.query(
@@ -144,7 +159,7 @@ export function pagesRoutes() {
     },
   );
 
-  r.route({ method: 'delete', path: '/:id', summary: 'Delete a page (not the home page)', params: idParam, middleware: [canWrite] }, async ({ req, params }) => {
+  r.route({ method: 'delete', path: '/:id', summary: 'Delete a page (not the home page)', params: idParam, middleware: [canWrite, operatorOnly] }, async ({ req, params }) => {
     const { rows } = await req.tenant!.db.query('SELECT is_home FROM pages WHERE id = $1', [params.id]);
     if (!rows[0]) throw notFound('Page');
     if (rows[0].is_home) throw badRequest('The home page cannot be deleted');

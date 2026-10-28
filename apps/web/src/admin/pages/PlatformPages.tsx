@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { api, apiRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import { useT } from '../i18n';
-import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, Spinner, Table, Td, TextField, useToast } from '../ui';
+import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 
 interface Tenant {
   id: string;
@@ -44,6 +44,12 @@ function SitesPage() {
       toast(t.saved);
       refresh();
     },
+    onError: () => toast(t.error, 'bad'),
+  });
+  // Template photos that were placeholders (no internet) are swapped for files now in var/demo-images.
+  const photos = useMutation({
+    mutationFn: (tenant: Tenant) => api.post<{ replaced: number; missing: string[] }>(`/platform/tenants/${tenant.id}/refresh-photos`, {}),
+    onSuccess: (r) => toast(`${t.photosReplaced}: ${r.replaced}${r.missing.length ? ` · ${t.photosMissing}: ${r.missing.length}` : ''}`, r.missing.length ? 'bad' : 'good'),
     onError: () => toast(t.error, 'bad'),
   });
   const retry = useMutation({
@@ -106,6 +112,11 @@ function SitesPage() {
                     <Button size="sm" variant="ghost" onClick={() => setOwner(s)}>
                       {t.changeOwner}
                     </Button>
+                    {s.status === 'active' && (
+                      <Button size="sm" variant="ghost" disabled={photos.isPending} onClick={() => photos.mutate(s)}>
+                        {t.refreshPhotos}
+                      </Button>
+                    )}
                   </div>
                 </Td>
               </tr>
@@ -123,12 +134,15 @@ function SitesPage() {
 function CreateSiteModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const t = useT();
   const toast = useToast();
-  const [form, setForm] = useState({ slug: '', name: '', ownerEmail: '', domain: '' });
+  const { locale } = usePreferences();
+  const [form, setForm] = useState({ slug: '', name: '', ownerEmail: '', domain: '', template: '' });
+  // Business types: a new site starts with matching pages, products and photos.
+  const { data: templates = [] } = useQuery({ queryKey: ['platform', 'templates'], queryFn: () => api.get<{ key: string; label: { en: string; fa: string } }[]>('/platform/templates'), enabled: open });
   const create = useMutation({
-    mutationFn: () => api.post<Tenant>('/platform/tenants', { ...form, domain: form.domain || undefined }),
+    mutationFn: () => api.post<Tenant>('/platform/tenants', { ...form, domain: form.domain || undefined, template: form.template || undefined }),
     onSuccess: (tenant) => {
       toast(`${tenant.name}: ${tenant.status}`);
-      setForm({ slug: '', name: '', ownerEmail: '', domain: '' });
+      setForm({ slug: '', name: '', ownerEmail: '', domain: '', template: '' });
       onCreated();
       onClose();
     },
@@ -147,6 +161,12 @@ function CreateSiteModal({ open, onClose, onCreated }: { open: boolean; onClose:
         <TextField label={t.siteId} dir="ltr" hint="lowercase-with-hyphens" value={form.slug} onChange={(slug) => setForm((f) => ({ ...f, slug: slug.toLowerCase() }))} required />
         <TextField label={t.ownerEmail} type="email" dir="ltr" value={form.ownerEmail} onChange={(ownerEmail) => setForm((f) => ({ ...f, ownerEmail }))} required />
         <TextField label={t.domain} dir="ltr" value={form.domain} onChange={(domain) => setForm((f) => ({ ...f, domain }))} />
+        <SelectField
+          label={t.businessType}
+          value={form.template}
+          onChange={(template) => setForm((f) => ({ ...f, template }))}
+          options={[{ value: '', label: t.emptySite }, ...templates.map((tp) => ({ value: tp.key, label: tp.label[locale] }))]}
+        />
         <p className="text-xs text-ink-soft">{t.provisionNote}</p>
         <ErrorNote error={create.error} />
         <div className="flex justify-end gap-3">

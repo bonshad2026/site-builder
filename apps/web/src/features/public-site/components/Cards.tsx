@@ -4,6 +4,25 @@ import { Image } from '../../../components/ui/Image';
 import { usePreferences } from '../../../lib/preferences';
 import type { ProductDto, ServiceDto } from '../../../types/api';
 import type { Localized } from '../../../types/site';
+import { useSiteSettings } from '../data';
+import { finalPrice, isSoldOut } from './price';
+
+/** Display name of a product category: the site's own list first, then the built-in names. */
+export function useCategoryLabel() {
+  const { l, m } = usePreferences();
+  const { data: settings } = useSiteSettings();
+  return (slug: string) => {
+    const own = settings?.productCategories?.find((c) => c.slug === slug);
+    return own ? l(own.label) : ((m.products.categories as Record<string, string>)[slug] ?? slug);
+  };
+}
+
+/** What a product card shows; set per products section in the builder. */
+export interface ProductCardOptions {
+  showDiscount?: boolean;
+  showColors?: boolean;
+  showStock?: boolean;
+}
 
 export function ServiceCard({ service, index }: { service: ServiceDto; index: number }) {
   const { l, formatNumber } = usePreferences();
@@ -17,18 +36,39 @@ export function ServiceCard({ service, index }: { service: ServiceDto; index: nu
   );
 }
 
-export function ProductCard({ product }: { product: ProductDto }) {
-  const { l, m, formatMoney } = usePreferences();
-  const category = product.category as keyof typeof m.products.categories | null;
+export function ProductCard({ product, options = {} }: { product: ProductDto; options?: ProductCardOptions }) {
+  const { l, m, formatMoney, format, formatNumber } = usePreferences();
+  const categoryLabel = useCategoryLabel();
+  const { showDiscount = true, showColors = true, showStock = false } = options;
+  const discount = showDiscount ? (product.discountPercent ?? 0) : 0;
+  const soldOut = isSoldOut(product);
+  const colors = showColors ? (product.colors ?? []) : [];
   return (
     <Link to={`/products/${product.slug}`} className="group block">
-      <Image src={product.imageUrl} alt={l(product.name)} className="aspect-[4/5] [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.04]" />
+      <div className="relative">
+        <Image src={product.imageUrl} alt={l(product.name)} className={`aspect-[4/5] [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.04] ${soldOut ? 'opacity-60' : ''}`} />
+        <div className="absolute inset-x-3 top-3 flex justify-between gap-2 text-xs">
+          {discount > 0 && !soldOut ? <span className="bg-accent px-2 py-1 text-accent-ink">{format(m.shop.discountBadge, { percent: formatNumber(discount) })}</span> : <span />}
+          {soldOut && <span className="bg-ink px-2 py-1 text-bg">{m.shop.soldOut}</span>}
+        </div>
+      </div>
       <div className="mt-5 flex items-start justify-between gap-4">
         <div>
-          {category && <p className="text-xs tracking-wide text-ink-soft uppercase rtl:normal-case">{m.products.categories[category] ?? category}</p>}
+          {product.category && <p className="text-xs tracking-wide text-ink-soft uppercase rtl:normal-case">{categoryLabel(product.category)}</p>}
           <h3 className="mt-1.5 font-display text-2xl text-ink">{l(product.name)}</h3>
+          {colors.length > 0 && (
+            <div className="mt-2 flex gap-1.5" aria-label={m.shop.color}>
+              {colors.map((c) => (
+                <span key={c.hex + l(c.name)} title={l(c.name)} className="size-3.5 rounded-full border border-line" style={{ backgroundColor: c.hex }} />
+              ))}
+            </div>
+          )}
+          {showStock && !soldOut && product.stock !== null && <p className="mt-2 text-xs text-ink-soft">{format(m.shop.inStock, { count: formatNumber(product.stock) })}</p>}
         </div>
-        <p className="shrink-0 pt-5 text-sm text-ink-soft tabular-nums">{formatMoney(product.priceMinor, product.currency)}</p>
+        <p className="shrink-0 pt-5 text-end text-sm text-ink-soft tabular-nums">
+          {discount > 0 && <span className="block text-xs line-through opacity-70">{formatMoney(product.priceMinor, product.currency)}</span>}
+          {formatMoney(discount > 0 ? finalPrice(product) : product.priceMinor, product.currency)}
+        </p>
       </div>
     </Link>
   );

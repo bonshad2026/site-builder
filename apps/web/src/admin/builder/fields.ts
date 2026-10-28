@@ -102,6 +102,11 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       intro,
       { key: 'filter', kind: 'select', label: L('Show', 'نمایش'), options: [{ value: 'featured', label: L('Featured only', 'فقط منتخب') }, { value: 'all', label: L('All', 'همه') }] },
       { key: 'limit', kind: 'number', label: L('How many', 'تعداد'), min: 1, max: 48 },
+      { key: 'category', kind: 'text', label: L('Only this category (slug, empty = all)', 'فقط این دسته (شناسه، خالی = همه)') },
+      { key: 'showDiscount', kind: 'bool', label: L('Show discounts', 'نمایش تخفیف') },
+      { key: 'showColors', kind: 'bool', label: L('Show colours', 'نمایش رنگ‌ها') },
+      { key: 'showStock', kind: 'bool', label: L('Show how many are left', 'نمایش تعداد موجودی') },
+      { key: 'hideOutOfStock', kind: 'bool', label: L('Hide sold-out products', 'پنهان کردن محصولات ناموجود') },
     ],
   },
   gallery: {
@@ -186,9 +191,26 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
     ],
   },
   'contact-form': {
-    label: L('Contact form', 'فرم تماس'),
-    description: L('Enquiry form saved to your inbox', 'فرم درخواست که در صندوق شما ذخیره می‌شود'),
+    label: L('Request form', 'فرم درخواست'),
+    description: L('Contact, consultation, reservation or demo request, saved to your inbox', 'تماس، مشاوره، رزرو یا درخواست دمو؛ در صندوق شما ذخیره می‌شود'),
     dynamic: true,
-    fields: [eyebrow, heading, intro, { key: 'showDetails', kind: 'bool', label: L('Show contact details', 'نمایش اطلاعات تماس') }],
+    fields: [
+      eyebrow,
+      heading,
+      intro,
+      {
+        key: 'formType',
+        kind: 'select',
+        label: L('Form', 'نوع فرم'),
+        options: [
+          { value: 'consultation', label: L('Consultation request', 'درخواست مشاوره') },
+          { value: 'contact', label: L('Contact message', 'پیام تماس') },
+          { value: 'reservation', label: L('Reservation (date, time, guests)', 'رزرو (تاریخ، ساعت، تعداد نفرات)') },
+          { value: 'demo', label: L('Demo request', 'درخواست دمو') },
+        ],
+      },
+      { key: 'submitLabel', kind: 'loc', label: L('Button text (empty = default)', 'متن دکمه (خالی = پیش‌فرض)') },
+      { key: 'showDetails', kind: 'bool', label: L('Show contact details', 'نمایش اطلاعات تماس') },
+    ],
   },
 };

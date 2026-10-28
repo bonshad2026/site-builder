@@ -31,6 +31,10 @@ export interface ProductDto {
   currency: string;
   stock: number | null;
   isAvailable: boolean;
+  /** Percentage off; the server applies it to orders. */
+  discountPercent?: number;
+  colors?: { name: Localized; hex: string }[];
+  maxPerOrder?: number | null;
   featured: boolean;
   materials: Localized;
   dimensions: string;
@@ -57,6 +61,7 @@ export interface OrderItemDto {
   unitPriceMinor: string;
   quantity: number;
   lineTotalMinor: string;
+  option?: string;
 }
 
 export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'test_paid' | 'failed' | 'refunded';

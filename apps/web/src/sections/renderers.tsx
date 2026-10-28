@@ -9,6 +9,7 @@ import { Container, Section, SectionHeading } from '../components/ui/Layout';
 import { RichText, SmartLink } from '../components/ui/SmartLink';
 import { ContactForm } from '../features/leads/ContactForm';
 import { GalleryCard, ProductCard, ServiceCard } from '../features/public-site/components/Cards';
+import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
 import { cn } from '../lib/cn';
 import { usePreferences } from '../lib/preferences';
@@ -210,7 +211,12 @@ function ServicesSection({ props }: Props<'services'>) {
 function ProductsSection({ props }: Props<'products'>) {
   const { l, m } = usePreferences();
   const { data: products = [], isLoading } = useProducts();
-  const items = (props.filter === 'featured' ? products.filter((p) => p.featured) : products).slice(0, props.limit);
+  const items = products
+    .filter((p) => (props.filter === 'featured' ? p.featured : true))
+    .filter((p) => !props.category || p.category === props.category)
+    .filter((p) => !props.hideOutOfStock || !isSoldOut(p))
+    .slice(0, props.limit);
+  const options = { showDiscount: props.showDiscount, showColors: props.showColors, showStock: props.showStock };
   return (
     <Section className="bg-surface">
       <Container>
@@ -229,7 +235,7 @@ function ProductsSection({ props }: Props<'products'>) {
         ) : (
           <div className="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={p.id} product={p} options={options} />
             ))}
           </div>
         )}
@@ -426,7 +432,7 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
       <Section className="pt-12 sm:pt-16">
         <Container className="grid gap-16 lg:grid-cols-12">
           <div className={props.showDetails ? 'lg:col-span-7' : 'lg:col-span-8'}>
-            <ContactForm />
+            <ContactForm formType={props.formType} submitLabel={l(props.submitLabel)} />
           </div>
           {props.showDetails && contact && (
             <aside className="space-y-10 lg:col-span-4 lg:col-start-9">

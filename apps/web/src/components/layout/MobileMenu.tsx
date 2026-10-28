@@ -65,7 +65,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
       <nav aria-label={m.nav.primary} className="flex-1 overflow-y-auto px-5 pt-6 sm:px-8">
         <ul className="flex flex-col">
-          {[{ to: '/', label: m.nav.home }, ...nav, { to: '/contact', label: m.nav.contact }].map((item, i) => (
+          {[{ to: '/', label: m.nav.home }, ...nav, ...(nav.some((n) => n.to === '/contact') ? [] : [{ to: '/contact', label: m.nav.contact }])].map((item, i) => (
             <li key={item.to} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
               <NavLink
                 to={item.to}
