@@ -1,5 +1,20 @@
 # Setup, operations and deployment
 
+## Docker (whole stack)
+`docker compose up -d --build` starts three containers from the root `Dockerfile` and `.env`:
+
+| Service | Port | What it runs |
+|---|---|---|
+| `postgres` | 5433 | PostgreSQL 16 (volume `pgdata`) |
+| `api` | 4000 | Built API. On each start: `migrate`, then the demo seed (skipped if the demo site exists; `SEED_DEMO=false` turns it off, `SEED_FORCE=true` re-seeds), then the server. `var/uploads` is mounted. |
+| `web` | 5173 | Production build of the site, served by `vite preview` with SPA fallback. `VITE_API_URL` is set at build time (default `http://localhost:4000`). |
+
+- `docker/api-start.sh` rewrites the database host from `localhost:5433` (as in `.env`) to
+  `postgres:5432` inside the compose network.
+- The dev servers (`npm run dev`, `npm run dev:api`) use the same ports. Stop one setup
+  before starting the other.
+- Logs: `docker compose logs -f api`.
+
 ## Local development
 
 Requires Node.js 20+ and Docker (for PostgreSQL only; the web app runs without Docker).

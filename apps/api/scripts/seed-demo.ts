@@ -35,6 +35,12 @@ try {
   if (!admin) admin = await createUser(ctx, { email: adminEmail, password: required('DEV_ADMIN_PASSWORD'), isPlatformAdmin: true, displayName: 'Platform Admin' });
 
   const existing = await ctx.control.query<{ status: string }>(`SELECT status FROM tenants WHERE slug = 'atelier-navar'`);
+  // Runs on every container start: never overwrite a demo site that already exists (and may have been edited).
+  if (existing.rows[0]?.status === 'active' && process.env.SEED_FORCE !== 'true') {
+    console.log('demo site already exists; seed skipped (set SEED_FORCE=true to re-seed)');
+    await closeContext(ctx);
+    process.exit(0);
+  }
   if (existing.rows[0]?.status !== 'active') {
     await provisionTenant(ctx, { slug: 'atelier-navar', name: 'Atelier Navar', ownerEmail, domain: 'ateliernavar.localhost', actorUserId: admin.id });
   }

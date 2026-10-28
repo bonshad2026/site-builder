@@ -1,7 +1,39 @@
-# Local development services. The web app does not need Docker; only the API does.
+# Whole stack for local use: `docker compose up -d --build`
+#   site http://localhost:5173 · admin http://localhost:5173/admin · API http://localhost:4000
+# Secrets come from the root .env (copy .env.example). After code changes, run with --build again.
 name: site-builder
 
 services:
+  api:
+    build: { context: ., target: api }
+    env_file: .env
+    environment:
+      # Inside the compose network the database is `postgres`, not localhost:5433.
+      TENANT_DB_HOST: postgres
+      TENANT_DB_PORT: "5432"
+    ports:
+      - "4000:4000"
+    volumes:
+      # Uploaded files (local storage driver) stay on the host.
+      - ./var/uploads:/app/var/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_URL: http://localhost:4000
+        VITE_SITE_ID: atelier-navar
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -17,6 +49,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   # Optional S3-compatible storage: docker compose --profile s3 up -d
   minio:

@@ -16,7 +16,17 @@ their own PostgreSQL database.
 
 Demo client: **Atelier Navar**, a made-up interior design studio. It's sample content only.
 
-## Quick start
+## Run everything with Docker
+```bash
+cp .env.example .env              # once: fill in the secrets (see docs/operations.md)
+docker compose up -d --build      # database + API + site
+```
+Site http://localhost:5173 · admin http://localhost:5173/admin · API http://localhost:4000.
+On first start the API migrates the databases and creates the demo site. Run with `--build`
+again after changing code. Stop everything with `docker compose down`; data stays in the
+`pgdata` volume and in `var/uploads`.
+
+## Quick start (development, hot reload)
 ```bash
 npm install
 cp .env.example .env     # fill in the secrets (see docs/operations.md)
