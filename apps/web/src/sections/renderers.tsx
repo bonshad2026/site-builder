@@ -1,5 +1,6 @@
-import type { SectionProps, SectionType } from '@site-builder/shared';
-import { useMemo, useState, type ComponentType } from 'react';
+import { DEFAULT_REQUEST_TYPES, type SectionButton, type SectionProps, type SectionType } from '@site-builder/shared';
+import { useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react';
+import { useSearchParams } from 'react-router';
 import { Accordion } from '../components/ui/Accordion';
 import { Arrow } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -7,7 +8,9 @@ import { FilterChips, SearchInput } from '../components/ui/Field';
 import { Image } from '../components/ui/Image';
 import { Container, Section, SectionHeading } from '../components/ui/Layout';
 import { RichText, SmartLink } from '../components/ui/SmartLink';
+import { AddToCartBySlug } from '../features/cart/AddToCart';
 import { ContactForm } from '../features/leads/ContactForm';
+import { CustomRequestForm } from '../features/leads/CustomRequestForm';
 import { GalleryCard, ProductCard, ServiceCard } from '../features/public-site/components/Cards';
 import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
@@ -18,20 +21,44 @@ type Props<T extends SectionType> = { props: SectionProps<T> };
 
 const btn = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-6 py-3 text-sm font-medium tracking-wide transition duration-300';
 
-function CtaLink({ cta, variant }: { cta: { label: { en: string; fa: string }; href: string }; variant: 'light' | 'outline-light' | 'primary' | 'inverse' | 'ghost' }) {
-  const { l } = usePreferences();
-  if (!l(cta.label) || !cta.href) return null;
-  const styles = {
-    light: 'bg-white/95 text-neutral-900 hover:bg-white',
-    'outline-light': 'border border-white/50 text-white hover:border-white hover:bg-white hover:text-neutral-900',
+type Surface = 'light' | 'dark' | 'image';
+
+const buttonStyles: Record<Surface, Record<SectionButton['style'], string>> = {
+  light: {
     primary: 'bg-ink text-bg hover:bg-accent hover:text-accent-ink',
-    inverse: 'bg-bg text-ink hover:bg-accent hover:text-accent-ink',
-    ghost: 'px-0 py-1 rounded-none text-ink underline-offset-8 decoration-accent hover:underline',
-  }[variant];
+    secondary: 'border border-ink/40 text-ink hover:border-ink hover:bg-ink hover:text-bg',
+    link: 'px-0 py-1 rounded-none text-ink underline-offset-8 decoration-accent hover:underline',
+  },
+  dark: {
+    primary: 'bg-bg text-ink hover:bg-accent hover:text-accent-ink',
+    secondary: 'border border-current/50 hover:bg-bg hover:text-ink',
+    link: 'px-0 py-1 rounded-none underline-offset-8 hover:underline',
+  },
+  image: {
+    primary: 'bg-white/95 text-neutral-900 hover:bg-white',
+    secondary: 'border border-white/50 text-white hover:border-white hover:bg-white hover:text-neutral-900',
+    link: 'px-0 py-1 rounded-none text-white underline-offset-8 hover:underline',
+  },
+};
+
+/** A section's buttons and links, in order; ones without a label or a link are skipped. */
+function Buttons({ buttons, surface = 'light', className }: { buttons: SectionButton[]; surface?: Surface; className?: string }) {
+  const { l } = usePreferences();
+  // Cart buttons need a product; links need a label and an address.
+  const shown = buttons.filter((b) => (b.action === 'cart' ? b.product : l(b.label) && b.href));
+  if (!shown.length) return null;
   return (
-    <SmartLink href={cta.href} className={cn(btn, styles)}>
-      {l(cta.label)} {variant !== 'outline-light' && <Arrow />}
-    </SmartLink>
+    <div className={cn('flex flex-wrap items-center gap-4', className)}>
+      {shown.map((b, i) =>
+        b.action === 'cart' ? (
+          <AddToCartBySlug key={i} slug={b.product} label={l(b.label)} className={cn(btn, buttonStyles[surface][b.style])} />
+        ) : (
+          <SmartLink key={i} href={b.href} newTab={b.newTab} className={cn(btn, buttonStyles[surface][b.style])}>
+            {l(b.label)} {b.style !== 'secondary' && <Arrow />}
+          </SmartLink>
+        ),
+      )}
+    </div>
   );
 }
 
@@ -42,6 +69,7 @@ function PageHeaderSection({ props }: Props<'page-header'>) {
       <Container>
         <div className="reveal">
           <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
+          <Buttons buttons={props.buttons} className="mb-8" />
         </div>
       </Container>
     </div>
@@ -49,29 +77,88 @@ function PageHeaderSection({ props }: Props<'page-header'>) {
 }
 
 function HeroSection({ props }: Props<'hero'>) {
-  const { l } = usePreferences();
+  const { l, m, formatNumber } = usePreferences();
+  const slides = props.display === 'slider' ? props.slides : props.slides.slice(0, 1);
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const count = slides.length;
+  const go = (delta: number) => setIndex((i) => (i + delta + count) % count);
+  useEffect(() => {
+    if (count < 2 || !props.autoplay || paused) return;
+    const timer = setInterval(() => setIndex((i) => (i + 1) % count), props.autoplay * 1000);
+    return () => clearInterval(timer);
+  }, [count, props.autoplay, paused]);
+  if (!count) return null;
+  const current = Math.min(index, count - 1);
+  const height = { small: 'min-h-[50svh]', medium: 'min-h-[70svh]', large: 'min-h-[85svh]', full: 'min-h-[100svh]', custom: '' }[props.height];
+  const custom = props.height === 'custom';
+  const heightStyle = custom ? { height: Math.max(200, props.customHeight) } : undefined;
+  const contained = props.frame === 'contained';
+
   return (
-    <section className={cn('relative flex items-end overflow-hidden text-white', props.height === 'full' ? 'min-h-[100svh]' : 'min-h-[70svh]')}>
-      <div className="absolute inset-0 bg-neutral-800">
-        {props.imageUrl && <Image src={props.imageUrl} alt="" priority className="h-full w-full bg-neutral-800 [&_img]:animate-[heroZoom_18s_ease-out_both]" />}
-      </div>
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, var(--hero-overlay) 50%, rgba(0,0,0,0.75) 100%)' }} />
-      <div className="absolute inset-0 bg-linear-to-r from-black/55 via-black/20 to-transparent rtl:bg-linear-to-l" />
-      <Container className="relative pb-16 pt-32 sm:pb-24">
-        <div className="reveal max-w-3xl">
-          {l(props.eyebrow) && (
-            <p className="eyebrow mb-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
-              {l(props.eyebrow)}
-            </p>
-          )}
-          <h1 className="font-display text-5xl leading-[1.02] sm:text-7xl lg:text-8xl">{l(props.heading)}</h1>
-          {l(props.text) && <p className="mt-8 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">{l(props.text)}</p>}
-          <div className="mt-10 flex flex-wrap gap-4">
-            <CtaLink cta={props.primaryCta} variant="light" />
-            <CtaLink cta={props.secondaryCta} variant="outline-light" />
+    <section
+      aria-roledescription={count > 1 ? 'carousel' : undefined}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+      className={cn('relative grid overflow-hidden text-white', contained && 'mx-auto mt-28 w-[calc(100%-2.5rem)] max-w-7xl rounded-2xl sm:mt-32 sm:w-[calc(100%-4rem)]')}
+    >
+      {/* Every slide sits in the same grid cell, so the section is as tall as its tallest slide. */}
+      {slides.map((slide, i) => (
+        <div
+          key={i}
+          aria-hidden={i !== current}
+          aria-roledescription={count > 1 ? 'slide' : undefined}
+          inert={i !== current}
+          style={heightStyle}
+          className={cn('relative col-start-1 row-start-1 flex items-end transition-opacity duration-700', height, i === current ? 'opacity-100' : 'pointer-events-none opacity-0')}
+        >
+          <div className="absolute inset-0 bg-neutral-800">
+            {slide.imageUrl && <Image src={slide.imageUrl} alt="" priority={i === 0} className="h-full w-full bg-neutral-800 [&_img]:animate-[heroZoom_18s_ease-out_both]" />}
           </div>
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, var(--hero-overlay) 50%, rgba(0,0,0,0.75) 100%)' }} />
+          <div className="absolute inset-0 bg-linear-to-r from-black/55 via-black/20 to-transparent rtl:bg-linear-to-l" />
+          <Container className={cn('relative', contained || custom ? 'pt-10' : 'pt-32', count > 1 ? 'pb-24 sm:pb-28' : custom ? 'pb-10' : 'pb-16 sm:pb-24')}>
+            <div className="reveal max-w-3xl">
+              {l(slide.eyebrow) && (
+                <p className="eyebrow mb-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                  {l(slide.eyebrow)}
+                </p>
+              )}
+              {i === 0 ? (
+                <h1 className="font-display text-5xl leading-[1.02] sm:text-7xl lg:text-8xl">{l(slide.heading)}</h1>
+              ) : (
+                <h2 className="font-display text-5xl leading-[1.02] sm:text-7xl lg:text-8xl">{l(slide.heading)}</h2>
+              )}
+              {l(slide.text) && <p className="mt-8 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">{l(slide.text)}</p>}
+              <Buttons buttons={slide.buttons} surface="image" className="mt-10" />
+            </div>
+          </Container>
         </div>
-      </Container>
+      ))}
+      {count > 1 && (
+        <Container className="absolute inset-x-0 bottom-6 flex items-center gap-4 sm:bottom-10">
+          <button type="button" onClick={() => go(-1)} aria-label={m.common.previous} className="rounded-full border border-white/50 p-3 transition-colors hover:bg-white hover:text-neutral-900">
+            <Arrow className="rotate-180" />
+          </button>
+          <div className="flex gap-2">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`${formatNumber(i + 1)} / ${formatNumber(count)}`}
+                aria-current={i === current}
+                onClick={() => setIndex(i)}
+                className={cn('h-1.5 rounded-full transition-all', i === current ? 'w-8 bg-white' : 'w-3 bg-white/50 hover:bg-white/80')}
+              />
+            ))}
+          </div>
+          <button type="button" onClick={() => go(1)} aria-label={m.common.next} className="rounded-full border border-white/50 p-3 transition-colors hover:bg-white hover:text-neutral-900">
+            <Arrow />
+          </button>
+        </Container>
+      )}
     </section>
   );
 }
@@ -83,6 +170,7 @@ function RichTextSection({ props }: Props<'rich-text'>) {
       <Container className={props.width === 'narrow' ? 'max-w-3xl' : ''}>
         {l(props.heading) && <h2 className="mb-8 font-display text-4xl text-ink sm:text-5xl">{l(props.heading)}</h2>}
         <RichText text={l(props.body)} className="text-lg leading-relaxed text-ink-soft" />
+        <Buttons buttons={props.buttons} className="mt-10" />
       </Container>
     </Section>
   );
@@ -93,14 +181,12 @@ function ImageTextSection({ props }: Props<'image-text'>) {
   return (
     <Section>
       <Container className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
-        <Image src={props.imageUrl} alt="" className={cn('aspect-[4/3]', props.imageSide === 'end' && 'lg:order-2')} />
+        <Image src={props.imageUrl} alt="" size={props.imageSize} className={cn('aspect-[4/3]', props.imageSide === 'end' && 'lg:order-2')} />
         <div>
           {l(props.eyebrow) && <p className="eyebrow mb-4">{l(props.eyebrow)}</p>}
           <h2 className="font-display text-3xl leading-snug text-ink sm:text-4xl">{l(props.heading)}</h2>
           <RichText text={l(props.body)} className="mt-6 text-lg leading-relaxed text-ink-soft" />
-          <div className="mt-8">
-            <CtaLink cta={props.cta} variant="ghost" />
-          </div>
+          <Buttons buttons={props.buttons} className="mt-8" />
         </div>
       </Container>
     </Section>
@@ -108,20 +194,36 @@ function ImageTextSection({ props }: Props<'image-text'>) {
 }
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const TITLE_SIZE = { sm: 'text-base', md: 'text-lg', lg: 'text-xl sm:text-2xl', xl: 'text-2xl sm:text-3xl' };
+const TEXT_SIZE = { sm: 'text-sm', md: 'text-base', lg: 'text-lg', xl: 'text-xl' };
 
 function FeaturesSection({ props }: Props<'features'>) {
-  const { l } = usePreferences();
+  const { l, formatNumber } = usePreferences();
+  const marker = (i: number) => (props.marker === 'roman' ? ROMAN[i] : props.marker === 'number' ? formatNumber(i + 1) : props.marker === 'bullet' ? '•' : '');
+  const inline = props.markerPosition === 'inline';
+  const titleStyle: CSSProperties | undefined = props.titleColor ? { color: props.titleColor } : undefined;
+  const textStyle: CSSProperties | undefined = props.textColor ? { color: props.textColor } : undefined;
   const list = (
     <ul className={cn('grid gap-10 sm:grid-cols-2', !props.imageUrl && 'lg:grid-cols-3')}>
-      {props.items.map((a, i) => (
-        <li key={i} className="border-t border-line pt-6">
-          <span className="font-display text-xl text-accent" aria-hidden="true">
-            {ROMAN[i]}
+      {props.items.map((a, i) => {
+        const mark = marker(i) ? (
+          <span className={cn('shrink-0 font-display text-accent', inline ? 'leading-none' : 'block text-xl')} aria-hidden="true">
+            {marker(i)}
           </span>
-          <h3 className="mt-3 text-lg font-medium text-ink">{l(a.title)}</h3>
-          <p className="mt-2 leading-relaxed text-ink-soft">{l(a.text)}</p>
-        </li>
-      ))}
+        ) : null;
+        return (
+          <li key={i} className="border-t border-line pt-6">
+            {!inline && mark}
+            <h3 className={cn('flex items-baseline gap-3 font-medium text-ink', !inline && mark && 'mt-3', TITLE_SIZE[props.titleSize])} style={titleStyle}>
+              {inline && mark}
+              <span>{l(a.title)}</span>
+            </h3>
+            <p className={cn('mt-2 leading-relaxed text-ink-soft', TEXT_SIZE[props.textSize])} style={textStyle}>
+              {l(a.text)}
+            </p>
+          </li>
+        );
+      })}
     </ul>
   );
   if (!props.imageUrl) {
@@ -130,6 +232,7 @@ function FeaturesSection({ props }: Props<'features'>) {
         <Container>
           <SectionHeading eyebrow={l(props.eyebrow)} title={l(props.heading)} />
           {list}
+          <Buttons buttons={props.buttons} className="mt-12" />
         </Container>
       </Section>
     );
@@ -137,10 +240,11 @@ function FeaturesSection({ props }: Props<'features'>) {
   return (
     <Section>
       <Container className="grid gap-14 lg:grid-cols-2 lg:gap-20">
-        <Image src={props.imageUrl} alt="" className="aspect-[4/5] lg:aspect-auto lg:h-full" />
+        <Image src={props.imageUrl} alt="" size={props.imageSize} className="aspect-[4/5] lg:aspect-auto lg:h-full" />
         <div className="flex flex-col justify-center">
           <SectionHeading eyebrow={l(props.eyebrow)} title={l(props.heading)} />
           {list}
+          <Buttons buttons={props.buttons} className="mt-12" />
         </div>
       </Container>
     </Section>
@@ -172,6 +276,7 @@ function StatsSection({ props }: Props<'stats'>) {
             </ul>
           </div>
         )}
+        <Buttons buttons={props.buttons} className="lg:col-span-12" />
       </Container>
     </section>
   );
@@ -203,6 +308,7 @@ function ServicesSection({ props }: Props<'services'>) {
             ))}
           </div>
         )}
+        <Buttons buttons={props.buttons} className="mt-12" />
       </Container>
     </Section>
   );
@@ -216,7 +322,7 @@ function ProductsSection({ props }: Props<'products'>) {
     .filter((p) => !props.category || p.category === props.category)
     .filter((p) => !props.hideOutOfStock || !isSoldOut(p))
     .slice(0, props.limit);
-  const options = { showDiscount: props.showDiscount, showColors: props.showColors, showStock: props.showStock };
+  const options = { showDiscount: props.showDiscount, showColors: props.showColors, showStock: props.showStock, showAddToCart: props.showAddToCart };
   return (
     <Section className="bg-surface">
       <Container>
@@ -225,7 +331,7 @@ function ProductsSection({ props }: Props<'products'>) {
           title={l(props.heading)}
           intro={l(props.intro)}
           action={
-            <SmartLink href="/products" className={cn(btn, 'px-0 py-1 rounded-none text-ink underline-offset-8 decoration-accent hover:underline')}>
+            <SmartLink href={props.category ? `/products?category=${props.category}` : '/products'} className={cn(btn, 'px-0 py-1 rounded-none text-ink underline-offset-8 decoration-accent hover:underline')}>
               {m.common.viewAll} <Arrow />
             </SmartLink>
           }
@@ -233,12 +339,13 @@ function ProductsSection({ props }: Props<'products'>) {
         {isLoading ? (
           <LoadingGrid />
         ) : (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={cn('grid grid-cols-1 gap-x-6 gap-y-12', productColumns(props.columns))}>
             {items.map((p) => (
               <ProductCard key={p.id} product={p} options={options} />
             ))}
           </div>
         )}
+        <Buttons buttons={props.buttons} className="mt-12" />
       </Container>
     </Section>
   );
@@ -264,21 +371,22 @@ function GallerySection({ props }: Props<'gallery'>) {
         {showcase ? (
           <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
             <div className="lg:col-span-7">
-              <GalleryCard item={items[0]} aspect="aspect-[7/5]" />
+              <GalleryCard item={items[0]} size={props.imageSize} aspect="aspect-[7/5]" />
             </div>
             <div className="grid gap-12 sm:grid-cols-2 lg:col-span-5 lg:grid-cols-1 lg:gap-8">
               {items.slice(1).map((it, i) => (
-                <GalleryCard key={i} item={{ ...it, caption: { en: '', fa: '' } }} aspect="aspect-[4/3]" />
+                <GalleryCard key={i} item={{ ...it, caption: { en: '', fa: '' } }} size={props.imageSize} aspect="aspect-[4/3]" />
               ))}
             </div>
           </div>
         ) : (
           <div className={cn('grid gap-x-8 gap-y-16', items.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')}>
             {items.map((it, i) => (
-              <GalleryCard key={i} item={it} aspect={props.filterable ? 'aspect-[4/3]' : 'aspect-[4/5]'} />
+              <GalleryCard key={i} item={it} size={props.imageSize} aspect={props.filterable ? 'aspect-[4/3]' : 'aspect-[4/5]'} />
             ))}
           </div>
         )}
+        <Buttons buttons={props.buttons} className="mt-12" />
       </Container>
     </Section>
   );
@@ -305,6 +413,7 @@ function TestimonialsSection({ props }: Props<'testimonials'>) {
               </figure>
             ))}
           </div>
+          <Buttons buttons={props.buttons} className="mt-12" />
         </Container>
       </Section>
     );
@@ -335,6 +444,7 @@ function TestimonialsSection({ props }: Props<'testimonials'>) {
             </button>
           </div>
         )}
+        <Buttons buttons={props.buttons} className="mt-12 justify-center" />
       </Container>
     </Section>
   );
@@ -354,6 +464,7 @@ function FaqSection({ props }: Props<'faq'>) {
         <div className="flex flex-col gap-8 lg:col-span-4">
           {(l(props.heading) || l(props.eyebrow)) && <SectionHeading eyebrow={l(props.eyebrow)} title={l(props.heading)} />}
           {props.searchable && <SearchInput label={m.common.search} value={query} onChange={setQuery} placeholder={m.faq.searchPlaceholder} />}
+          <Buttons buttons={props.buttons} />
           {!props.searchable && (
             <SmartLink href="/faq" className={cn(btn, '-mt-6 self-start px-0 py-1 rounded-none text-ink underline-offset-8 decoration-accent hover:underline')}>
               {m.common.viewAll} <Arrow />
@@ -392,12 +503,11 @@ function PricingSection({ props }: Props<'pricing'>) {
                   </li>
                 ))}
               </ul>
-              <div className="mt-8">
-                <CtaLink cta={plan.cta} variant={plan.highlighted ? 'inverse' : 'primary'} />
-              </div>
+              <Buttons buttons={plan.buttons} surface={plan.highlighted ? 'dark' : 'light'} className="mt-8" />
             </div>
           ))}
         </div>
+        <Buttons buttons={props.buttons} className="mt-12 justify-center" />
       </Container>
     </Section>
   );
@@ -412,7 +522,7 @@ function CtaSection({ props }: Props<'cta'>) {
           <h2 className="font-display text-4xl leading-tight sm:text-6xl">{l(props.heading)}</h2>
           {l(props.text) && <p className="mt-6 text-lg opacity-75">{l(props.text)}</p>}
         </div>
-        <CtaLink cta={props.cta} variant="inverse" />
+        <Buttons buttons={props.buttons} surface="dark" />
       </Container>
     </section>
   );
@@ -422,17 +532,38 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
   const { l, m } = usePreferences();
   const { data: settings } = useSiteSettings();
   const contact = settings?.contact;
+  // A link like /contact?type=demo picks the request type; else the section's own choice.
+  const [params] = useSearchParams();
+  const types = settings?.requestTypes ?? DEFAULT_REQUEST_TYPES;
+  const requestType = types.find((t) => t.slug === params.get('type')) ?? types.find((t) => t.slug === props.requestType);
   return (
     <>
       <div className="border-b border-line pt-36 pb-4 sm:pt-44">
         <Container>
           <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
+          <Buttons buttons={props.buttons} className="mb-8" />
         </Container>
       </div>
       <Section className="pt-12 sm:pt-16">
         <Container className="grid gap-16 lg:grid-cols-12">
           <div className={props.showDetails ? 'lg:col-span-7' : 'lg:col-span-8'}>
-            <ContactForm formType={props.formType} submitLabel={l(props.submitLabel)} />
+            {requestType?.fields?.length ? (
+              <CustomRequestForm
+                key={requestType.slug}
+                requestType={requestType.slug}
+                fields={requestType.fields}
+                requestLabel={params.get('type') ? l(requestType.label) : undefined}
+                submitLabel={l(props.submitLabel)}
+              />
+            ) : (
+            <ContactForm
+              key={requestType?.slug ?? props.formType}
+              formType={requestType?.form ?? props.formType}
+              requestType={requestType?.slug}
+              requestLabel={requestType && params.get('type') ? l(requestType.label) : undefined}
+              submitLabel={l(props.submitLabel)}
+            />
+            )}
           </div>
           {props.showDetails && contact && (
             <aside className="space-y-10 lg:col-span-4 lg:col-start-9">
@@ -471,6 +602,20 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
       </Section>
     </>
   );
+}
+
+/** Grid classes for products per row on large screens (fewer on small screens). */
+export function productColumns(n: number) {
+  return (
+    {
+      1: 'sm:grid-cols-1',
+      2: 'sm:grid-cols-2',
+      3: 'sm:grid-cols-2 lg:grid-cols-3',
+      4: 'sm:grid-cols-2 lg:grid-cols-4',
+      5: 'sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5',
+      6: 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+    } as Record<number, string>
+  )[n] ?? 'sm:grid-cols-2 lg:grid-cols-4';
 }
 
 function LoadingGrid() {

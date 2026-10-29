@@ -1,3 +1,4 @@
+import { CURRENCIES, currencyDecimals } from '@site-builder/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
@@ -5,9 +6,11 @@ import { api, apiRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { ProductDto, ServiceDto } from '../../types/api';
 import type { Localized } from '../../types/site';
+import { useAdminSettings } from '../AdminRoot';
 import { useT } from '../i18n';
 import { Badge, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, NumberField, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { ImagePicker } from './FilesPage';
+import { ProductExport } from './ProductExport';
 
 type Kind = 'services' | 'products';
 type Item = ServiceDto | ProductDto;
@@ -35,6 +38,8 @@ function blank(kind: Kind): Partial<ServiceDto> | Partial<ProductDto> {
         status: 'draft',
         position: 0,
         imageAssetId: null,
+        gallery: [],
+        attributes: [],
       };
 }
 
@@ -62,6 +67,8 @@ function payload(kind: Kind, item: Partial<Item>) {
     materials: p.materials,
     dimensions: p.dimensions ?? '',
     leadTime: p.leadTime,
+    images: (p.gallery ?? []).map((g) => g.id).filter(Boolean),
+    attributes: (p.attributes ?? []).filter((a) => (a.name.en.trim() || a.name.fa.trim()) && (a.value.en.trim() || a.value.fa.trim())),
   };
 }
 
@@ -69,8 +76,12 @@ function Editor({ siteId, kind, item, onClose }: { siteId: string; kind: Kind; i
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const { l } = usePreferences();
+  const { data: settings } = useAdminSettings(siteId);
+  const categories = settings?.productCategories ?? [];
   const [draft, setDraft] = useState<Partial<Item>>({});
-  useEffect(() => setDraft(item ?? {}), [item]);
+  // New products use the shop's currency.
+  useEffect(() => setDraft(item ? (item.id ? item : { ...item, currency: settings?.shop?.currency ?? 'IRR' }) : {}), [item, settings?.shop?.currency]);
   const set = <K extends string>(key: K, value: unknown) => setDraft((d) => ({ ...d, [key]: value }));
   const isNew = !item?.id;
   const s = draft as Partial<ServiceDto>;
@@ -148,14 +159,51 @@ function Editor({ siteId, kind, item, onClose }: { siteId: string; kind: Kind; i
             <LocalizedField label={t.name} value={p.name} onChange={(v) => set('name', v)} />
             <LocalizedField label={t.body} value={p.description} onChange={(v) => set('description', v)} multiline rows={4} />
             <div className="grid gap-4 sm:grid-cols-3">
-              <TextField label={t.category} dir="ltr" value={p.category ?? ''} onChange={(v) => set('category', v.toLowerCase())} hint="seating, lighting…" />
-              <NumberField label={t.price} value={p.priceMinor ? Number(p.priceMinor) : null} onChange={(v) => set('priceMinor', v === null ? null : String(v))} min={0} />
+              <SelectField
+                label={t.category}
+                value={p.category ?? ''}
+                onChange={(v) => set('category', v || null)}
+                options={[
+                  { value: '', label: t.noCategory },
+                  ...categories.map((c) => ({ value: c.slug, label: l(c.label) || c.slug })),
+                  // A category the product still uses but the settings no longer list.
+                  ...(p.category && !categories.some((c) => c.slug === p.category) ? [{ value: p.category, label: p.category }] : []),
+                ]}
+              />
+              <NumberField
+                label={`${t.price} (${p.currency ?? 'IRR'})`}
+                value={p.priceMinor ? Number(p.priceMinor) / 10 ** currencyDecimals(p.currency ?? 'IRR') : null}
+                onChange={(v) => set('priceMinor', v === null ? null : String(Math.round(v * 10 ** currencyDecimals(p.currency ?? 'IRR'))))}
+                min={0}
+              />
               <NumberField label={t.stock} value={p.stock ?? null} onChange={(v) => set('stock', v)} min={0} />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <NumberField label={t.discountPercent} value={p.discountPercent ?? 0} onChange={(v) => set('discountPercent', Math.max(0, Math.min(90, v ?? 0)))} min={0} />
-              <NumberField label={t.maxPerOrder} value={p.maxPerOrder ?? null} onChange={(v) => set('maxPerOrder', v === null ? null : Math.max(1, Math.min(50, v)))} min={1} />
+              <NumberField label={t.maxPerOrder} value={p.maxPerOrder ?? null} onChange={(v) => set('maxPerOrder', v === null ? null : Math.max(1, Math.min(999, v)))} min={1} />
+              <SelectField label={t.currency} value={(p.currency ?? 'IRR') as (typeof CURRENCIES)[number]} onChange={(v) => set('currency', v)} options={CURRENCIES.map((c) => ({ value: c, label: c }))} />
             </div>
+            <ListEditor
+              label={t.moreImages}
+              items={p.gallery ?? []}
+              onChange={(v) => set('gallery', v)}
+              create={() => ({ id: '', url: '' })}
+              max={12}
+              render={(g, update) => <ImagePicker siteId={siteId} label={t.image} value={g.url} onChange={(url, asset) => update({ id: asset?.id ?? (url ? g.id : ''), url })} />}
+            />
+            <ListEditor
+              label={t.attributes}
+              items={p.attributes ?? []}
+              onChange={(v) => set('attributes', v)}
+              create={() => ({ name: { ...empty }, value: { ...empty } })}
+              max={40}
+              render={(a, update) => (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <LocalizedField label={t.attributeName} value={a.name} onChange={(name) => update({ ...a, name })} />
+                  <LocalizedField label={t.attributeValue} value={a.value} onChange={(value) => update({ ...a, value })} />
+                </div>
+              )}
+            />
             <ListEditor
               label={t.colors}
               items={p.colors ?? []}
@@ -217,7 +265,15 @@ export default function CatalogPages({ siteId, kind }: { siteId: string; kind: K
 
   return (
     <>
-      <PageTitle title={title} actions={<Button onClick={() => setEditing(blank(kind))}>{kind === 'services' ? t.newService : t.newProduct}</Button>} />
+      <PageTitle
+        title={title}
+        actions={
+          <>
+            {kind === 'products' && <ProductExport siteId={siteId} />}
+            <Button onClick={() => setEditing(blank(kind))}>{kind === 'services' ? t.newService : t.newProduct}</Button>
+          </>
+        }
+      />
       <div className="mb-4 max-w-xs">
         <TextField label={t.search} value={q} onChange={(v) => { setQ(v); setPage(1); }} />
       </div>

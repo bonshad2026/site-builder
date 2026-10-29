@@ -1,4 +1,4 @@
-import { isSectionType } from '@site-builder/shared';
+import { isSectionType, normalizedProps } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, Route, Routes, useParams } from 'react-router';
@@ -71,7 +71,7 @@ function ContentEditor({ siteId }: { siteId: string }) {
   const { locale, l } = usePreferences();
   const { data: page, isLoading, error } = useQuery({ queryKey: [...pagesKey(siteId), pageId], queryFn: () => api.get<PageDetail>(`/sites/${siteId}/pages/${pageId}`) });
   const [sections, setSections] = useState<Section[] | null>(null);
-  useEffect(() => setSections(page?.document.sections ?? null), [page]);
+  useEffect(() => setSections(page ? page.document.sections.map((s) => ({ ...s, props: normalizedProps(s.type, s.props) })) : null), [page]);
 
   const save = useMutation({
     mutationFn: async (publish: boolean) => {

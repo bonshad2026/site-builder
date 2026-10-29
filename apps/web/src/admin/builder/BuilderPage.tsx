@@ -26,7 +26,8 @@ import { useT } from '../i18n';
 import { pagesKey, usePages } from '../pages/PagesListPage';
 import { Badge, Checkbox, ErrorNote, IconButton, LocalizedField, Modal, Spinner, TextField, useToast } from '../ui';
 import { sectionMeta } from './fields';
-import { FieldsEditor } from './Inspector';
+import type { SectionAppearance } from '@site-builder/shared';
+import { AppearanceEditor, FieldsEditor } from './Inspector';
 import type { PreviewMessage } from './PreviewFrame';
 import { builderReducer, initialBuilderState, type Section } from './state';
 
@@ -489,6 +490,12 @@ export default function BuilderPage() {
                 {selected.hidden && <Badge>{b('hide')}</Badge>}
               </div>
               <FieldsEditor fields={sectionMeta[selected.type].fields} value={selected.props} onChange={(props) => dispatch({ type: 'update', id: selected.id, props })} siteId={siteId} />
+              <div className="mt-6">
+                <AppearanceEditor
+                  value={selected.props.appearance as SectionAppearance | undefined}
+                  onChange={(appearance) => dispatch({ type: 'update', id: selected.id, props: { ...selected.props, appearance } })}
+                />
+              </div>
             </>
           ) : (
             <p className="text-sm text-ink-soft">{selected ? `Unknown section type “${selected.type}”` : b('noSelection')}</p>

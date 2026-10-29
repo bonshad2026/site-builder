@@ -1,3 +1,4 @@
+import { currencyDecimals } from '@site-builder/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { en, type Messages } from '../locales/en';
 import { fa } from '../locales/fa';
@@ -5,7 +6,8 @@ import type { Locale, Localized, ThemeId } from '../types/site';
 
 const messages: Record<Locale, Messages> = { en, fa };
 const THEME_KEY = 'site-builder:theme';
-const THEMES: ThemeId[] = ['ivory', 'noir', 'sage'];
+const CURRENCY_FA: Record<string, string> = { IRR: 'ریال', IRT: 'تومان', USD: 'دلار', EUR: 'یورو', GBP: 'پوند', AED: 'درهم', TRY: 'لیر', IQD: 'دینار', AFN: 'افغانی' };
+const CURRENCY_EN: Record<string, string> = { IRT: 'Toman', USD: '$', EUR: '€', GBP: '£' };
 
 /** The URL decides the language: /fa/... is Persian, everything else English. */
 export function localeFromPath(pathname: string): Locale {
@@ -34,12 +36,14 @@ interface PreferencesContextValue {
   setTheme: (theme: ThemeId | null) => void;
 }
 
-const PreferencesContext = createContext<PreferencesContextValue | null>(null);
+/** Exported so a site can give its own wording for built-in texts (see SiteTexts). */
+export const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
 function storedTheme(): ThemeId | null {
   try {
-    const v = localStorage.getItem(THEME_KEY) as ThemeId | null;
-    return v && THEMES.includes(v) ? v : null;
+    // Any theme id; one the site no longer has falls back to the site's theme (useEffectiveTheme).
+    const v = localStorage.getItem(THEME_KEY);
+    return v && /^[a-z0-9][a-z0-9_-]{1,39}$/.test(v) ? v : null;
   } catch {
     return null;
   }
@@ -86,9 +90,12 @@ export function PreferencesProvider({
       formatNumber: (n) => plain.format(n),
       formatMoney: (minor, currency) => {
         if (minor === null || minor === '') return '—';
-        const amount = grouped.format(Number(minor));
-        if (currency === 'IRR') return locale === 'fa' ? `${amount} ریال` : `${amount} IRR`;
-        return `${amount} ${currency}`;
+        const decimals = currencyDecimals(currency);
+        const value = Number(minor) / 10 ** decimals;
+        const amount = decimals ? new Intl.NumberFormat(tag, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value) : grouped.format(value);
+        if (locale === 'fa') return `${amount} ${CURRENCY_FA[currency] ?? currency}`;
+        const sign = CURRENCY_EN[currency];
+        return sign && sign.length === 1 ? `${sign}${amount}` : `${amount} ${sign ?? currency}`;
       },
       formatDate: (iso) => date.format(new Date(iso)),
       format: (template, vars) =>

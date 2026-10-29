@@ -3,14 +3,16 @@ import { Outlet, useLocation } from 'react-router';
 import { CartProvider } from '../../features/cart/cart';
 import { useSiteId, useSiteSettings } from '../../features/public-site/data';
 import { usePreferences } from '../../lib/preferences';
+import { SiteTexts, useSiteDesign } from '../../lib/siteLook';
 import { Footer } from './Footer';
 import { Header } from './Header';
 import { useEffectiveTheme } from './PreferenceControls';
 
-/** Applies the site's theme (or the visitor's choice) and optional brand accent to <html>. */
+/** Applies the site's theme (or the visitor's choice), its own themes and fonts, and the brand accent to <html>. */
 export function ThemeEffect() {
   const theme = useEffectiveTheme();
   const { data: settings } = useSiteSettings();
+  useSiteDesign(settings);
   const accent = settings?.accentColor ?? null;
   useEffect(() => {
     const root = document.documentElement;
@@ -22,6 +24,15 @@ export function ThemeEffect() {
 }
 
 export function SiteLayout() {
+  const { data: settings } = useSiteSettings();
+  return (
+    <SiteTexts settings={settings}>
+      <SiteFrame />
+    </SiteTexts>
+  );
+}
+
+function SiteFrame() {
   const { m } = usePreferences();
   const { pathname } = useLocation();
   const siteId = useSiteId();

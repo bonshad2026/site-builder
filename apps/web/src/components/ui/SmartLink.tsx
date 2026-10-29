@@ -1,18 +1,21 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
-/** Internal paths use the router (and keep the /fa prefix); anything else is a normal link. */
-export function SmartLink({ href, className, children, onClick }: { href: string; className?: string; children: ReactNode; onClick?: () => void }) {
+/**
+ * Internal paths use the router (and keep the /fa prefix); anything else is a normal link.
+ * External links open in a new tab; `newTab` does that for internal ones too.
+ */
+export function SmartLink({ href, className, children, onClick, newTab }: { href: string; className?: string; children: ReactNode; onClick?: () => void; newTab?: boolean }) {
   if (href.startsWith('/')) {
     return (
-      <Link to={href} className={className} onClick={onClick}>
+      <Link to={href} className={className} onClick={onClick} {...(newTab ? { target: '_blank', rel: 'noopener' } : {})}>
         {children}
       </Link>
     );
   }
   const external = /^https?:/i.test(href);
   return (
-    <a href={href || '#'} className={className} onClick={onClick} {...(external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}>
+    <a href={href || '#'} className={className} onClick={onClick} {...(external || newTab ? { target: '_blank', rel: 'noreferrer noopener' } : {})}>
       {children}
     </a>
   );

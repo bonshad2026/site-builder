@@ -1,14 +1,17 @@
-import { MODULES, PERMISSIONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
+import { DEFAULT_REQUEST_TYPES, FORM_TYPES, MODULES, PERMISSIONS, SOCIAL_ICONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../lib/api';
+import { SOCIAL_ICON_NAMES, SocialIcon, guessSocialIcon } from '../../components/ui/SocialIcon';
 import { cn } from '../../lib/cn';
 import { useAdminSettings } from '../AdminRoot';
 import { useIsOperator, useMe } from '../auth';
 import { useT } from '../i18n';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
+import { LinkPicker } from '../links';
 import { ImagePicker } from './FilesPage';
+import { DesignTab, FooterTab, FormChoicesEditor, FormFieldsEditor, HeaderTab, presetFields, ShopPageTab, ShopTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
 
 const empty = { en: '', fa: '' };
 
@@ -25,7 +28,8 @@ function SettingsView({ siteId }: { siteId: string }) {
     enabled: operator,
   });
   const [s, setS] = useState<SiteSettings | null>(null);
-  const [tab, setTab] = useState<'brand' | 'contact' | 'categories' | 'menu' | 'modules' | 'seo'>('brand');
+  type Tab = 'brand' | 'design' | 'contact' | 'categories' | 'requests' | 'texts' | 'menu' | 'header' | 'footer' | 'shopPage' | 'systemPages' | 'shop' | 'modules' | 'seo';
+  const [tab, setTab] = useState<Tab>('brand');
   useEffect(() => setS(data ?? null), [data]);
 
   const save = useMutation({
@@ -47,13 +51,25 @@ function SettingsView({ siteId }: { siteId: string }) {
   const tabs = (
     [
       ['brand', t.brandTab],
+      ['design', t.designTab],
       ['contact', t.contact],
       ['categories', t.productCategories],
+      ['requests', t.requestTypes],
+      ['texts', t.textsTab],
       ['menu', t.menu],
+      ['header', t.headerTab],
+      ['footer', t.footerTab],
+      ['shopPage', t.shopPageTab],
+      ['systemPages', t.systemPagesTab],
+      ['shop', t.shopTab],
       ['modules', t.modules],
       ['seo', t.seo],
     ] as const
-  ).filter(([id]) => operator || id === 'brand' || id === 'contact' || id === 'categories');
+  )
+    // Clients edit their own content and shop rules; the design is the operator's.
+    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'texts', 'footer', 'shop'].includes(id))
+    .filter(([id]) => (id === 'shopPage' || id === 'shop' ? !!s.modules.products : true));
+  const tabProps = { s, set, siteId };
 
   return (
     <>
@@ -80,6 +96,20 @@ function SettingsView({ siteId }: { siteId: string }) {
             <LocalizedField label={t.tagline} value={s.tagline} onChange={(v) => set('tagline', v)} />
             <ImagePicker siteId={siteId} label={t.logo} value={s.logoUrl ?? ''} onChange={(url, asset) => setS({ ...s, logoUrl: url, logoAssetId: url ? (asset?.id ?? s.logoAssetId) : null })} />
             {operator && (
+              <SelectField
+                label={t.headerBrand}
+                value={s.header.brand}
+                onChange={(brand) => set('header', { ...s.header, brand })}
+                options={[
+                  { value: 'auto', label: t.brandAuto },
+                  { value: 'logo', label: t.brandLogo },
+                  { value: 'name', label: t.brandName },
+                  { value: 'both', label: t.brandBoth },
+                ]}
+                className="max-w-sm"
+              />
+            )}
+            {operator && (
             <>
             <div className="grid gap-4 sm:grid-cols-2">
               <SelectField
@@ -90,6 +120,7 @@ function SettingsView({ siteId }: { siteId: string }) {
                   { value: 'ivory', label: 'Ivory' },
                   { value: 'noir', label: 'Noir' },
                   { value: 'sage', label: 'Sage' },
+                  ...(s.design?.themes ?? []).map((x) => ({ value: x.id, label: x.name.fa || x.name.en || x.id })),
                 ]}
               />
               <div className="flex items-end gap-3">
@@ -128,16 +159,42 @@ function SettingsView({ siteId }: { siteId: string }) {
             </div>
             <LocalizedField label={t.address} value={s.contact.address} onChange={(address) => set('contact', { ...s.contact, address })} />
             <LocalizedField label={t.hours} value={s.contact.hours} onChange={(hours) => set('contact', { ...s.contact, hours })} />
+            <SelectField
+              label={t.socialDisplay}
+              value={s.socialDisplay ?? 'label'}
+              onChange={(socialDisplay) => set('socialDisplay', socialDisplay)}
+              options={[
+                { value: 'label', label: t.socialShowLabel },
+                { value: 'icon', label: t.socialShowIcon },
+                { value: 'both', label: t.socialShowBoth },
+              ]}
+              className="max-w-xs"
+            />
             <ListEditor
               label={t.social}
               items={s.social}
               max={12}
               onChange={(v) => set('social', v)}
-              create={() => ({ label: '', href: 'https://' })}
+              create={() => ({ label: '', href: 'https://', icon: 'website' as const })}
               render={(item, update) => (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid items-end gap-3 sm:grid-cols-[auto_180px_1fr_1fr]">
+                  <span className="mb-2 text-ink-soft">
+                    <SocialIcon name={item.icon ?? 'website'} />
+                  </span>
+                  <SelectField
+                    label={t.socialIcon}
+                    value={item.icon ?? 'website'}
+                    onChange={(icon) => update({ ...item, icon })}
+                    options={SOCIAL_ICONS.map((i) => ({ value: i, label: SOCIAL_ICON_NAMES[i] }))}
+                  />
+                  <TextField
+                    label={t.url}
+                    dir="ltr"
+                    value={item.href}
+                    // Picks the matching icon while the icon is still the generic one.
+                    onChange={(href) => update({ ...item, href, icon: !item.icon || item.icon === 'website' ? (guessSocialIcon(href) ?? 'website') : item.icon })}
+                  />
                   <TextField label={t.label} value={item.label} onChange={(label) => update({ ...item, label })} />
-                  <TextField label={t.url} dir="ltr" value={item.href} onChange={(href) => update({ ...item, href })} />
                 </div>
               )}
             />
@@ -152,7 +209,7 @@ function SettingsView({ siteId }: { siteId: string }) {
             create={() => ({ href: linkOptions[0]?.value ?? '/', label: { ...empty } })}
             render={(item, update) => (
               <>
-                <SelectField label={t.link} value={item.href} onChange={(href) => update({ ...item, href })} options={linkOptions.some((o) => o.value === item.href) ? linkOptions : [...linkOptions, { value: item.href, label: item.href }]} />
+                <LinkPicker siteId={siteId} label={t.link} value={item.href} onChange={(href) => update({ ...item, href })} />
                 <LocalizedField label={t.label} value={item.label} onChange={(label) => update({ ...item, label })} />
               </>
             )}
@@ -200,6 +257,48 @@ function SettingsView({ siteId }: { siteId: string }) {
             )}
           />
         )}
+        {tab === 'requests' && (
+          <>
+            <p className="text-sm text-ink-soft">{t.requestTypesHint}</p>
+            <ListEditor
+              label={t.requestTypes}
+              items={s.requestTypes ?? DEFAULT_REQUEST_TYPES}
+              onChange={(requestTypes) => set('requestTypes', requestTypes)}
+              create={() => ({ slug: '', label: { en: '', fa: '' }, form: 'contact' as const, fields: [] })}
+              max={30}
+              render={(r, update) => (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                    <TextField label={t.requestTypeSlug} dir="ltr" value={r.slug} onChange={(slug) => update({ ...r, slug: slug.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} hint="demo, booking…" />
+                    <LocalizedField label={t.categoryName} value={r.label} onChange={(label) => update({ ...r, label })} />
+                  </div>
+                  {!r.fields?.length && (
+                    <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed border-line p-3">
+                      <SelectField
+                        label={t.requestTypeForm}
+                        value={r.form}
+                        onChange={(form) => update({ ...r, form })}
+                        options={FORM_TYPES.map((f) => ({ value: f, label: { contact: t.formContact, consultation: t.formConsultation, reservation: t.formReservation, demo: t.formDemo }[f] }))}
+                      />
+                      <Button size="sm" variant="outline" onClick={() => update({ ...r, fields: presetFields(r.form, s.formOptions) })}>
+                        {t.editFields}
+                      </Button>
+                    </div>
+                  )}
+                  <FormFieldsEditor value={r.fields ?? []} onChange={(fields) => update({ ...r, fields })} />
+                </>
+              )}
+            />
+            <FormChoicesEditor {...tabProps} />
+          </>
+        )}
+        {tab === 'design' && <DesignTab {...tabProps} />}
+        {tab === 'texts' && <TextsTab {...tabProps} />}
+        {tab === 'header' && <HeaderTab {...tabProps} />}
+        {tab === 'footer' && <FooterTab {...tabProps} />}
+        {tab === 'shopPage' && <ShopPageTab {...tabProps} />}
+        {tab === 'systemPages' && <SystemPagesTab {...tabProps} />}
+        {tab === 'shop' && <ShopTab {...tabProps} />}
         {tab === 'modules' && (
           <Card>
             <p className="mb-4 text-sm text-ink-soft">{t.modulesHint}</p>

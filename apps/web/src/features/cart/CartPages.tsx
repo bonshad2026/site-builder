@@ -16,8 +16,10 @@ import type { OrderItemDto, OrderStatus, PaymentStatus } from '../../types/api';
 import { normalizeDigits } from '../leads/leadSchema';
 import { usePaymentMethods, useSiteId } from '../public-site/data';
 import { lineKey, MAX_QUANTITY, useCart } from './cart';
+import { PageSlot, useSystemPage } from '../../sections/PageSlot';
 
 export function CartPage() {
+  const slots = useSystemPage('cart');
   const { m, l, formatMoney } = usePreferences();
   const cart = useCart();
   usePageMeta(m.shop.cart, undefined, { noIndex: true });
@@ -25,6 +27,7 @@ export function CartPage() {
 
   return (
     <>
+      <PageSlot slug={slots.before} />
       <PageHeader eyebrow={m.shop.cart} title={m.shop.cartTitle} />
       <Section className="pt-10">
         <Container>
@@ -49,7 +52,7 @@ export function CartPage() {
                           <span className="sr-only">{m.shop.quantity}</span>
                           <Select value={line.quantity} onChange={(e) => cart.setQuantity(lineKey(line), Number(e.target.value))} className="w-20 py-2">
                             {Array.from({ length: Math.max(10, line.quantity) }, (_, i) => i + 1)
-                              .filter((n) => n <= Math.min(MAX_QUANTITY, line.max ?? MAX_QUANTITY))
+                              .filter((n) => n <= Math.min(MAX_QUANTITY, line.max ?? 50))
                               .map((n) => (
                                 <option key={n} value={n}>
                                   {n}
@@ -84,6 +87,7 @@ export function CartPage() {
           </div>
         </Container>
       </Section>
+      <PageSlot slug={slots.after} />
     </>
   );
 }
@@ -103,6 +107,7 @@ type CheckoutInput = z.input<typeof checkoutSchema>;
 type CheckoutData = z.output<typeof checkoutSchema>;
 
 export function CheckoutPage() {
+  const slots = useSystemPage('checkout');
   const { m, l, locale, formatMoney, format } = usePreferences();
   const site = useSiteId();
   const cart = useCart();
@@ -151,6 +156,7 @@ export function CheckoutPage() {
 
   return (
     <>
+      <PageSlot slug={slots.before} />
       <PageHeader eyebrow={m.shop.checkout} title={m.shop.checkoutTitle} />
       <Section className="pt-10">
         <Container className="grid gap-14 lg:grid-cols-12">
@@ -222,6 +228,7 @@ export function CheckoutPage() {
           </aside>
         </Container>
       </Section>
+      <PageSlot slug={slots.after} />
     </>
   );
 }
@@ -236,6 +243,7 @@ interface BuyerOrder {
 }
 
 export function CheckoutResultPage() {
+  const slots = useSystemPage('checkoutResult');
   const { m, l, locale, formatMoney, format } = usePreferences();
   const site = useSiteId();
   const [params] = useSearchParams();
@@ -260,6 +268,7 @@ export function CheckoutResultPage() {
 
   return (
     <>
+      <PageSlot slug={slots.before} />
       <PageHeader eyebrow={m.shop.checkout} title={format(m.shop.resultTitle, { number })} />
       <Section className="pt-10">
         <Container className="max-w-3xl">
@@ -301,6 +310,7 @@ export function CheckoutResultPage() {
           )}
         </Container>
       </Section>
+      <PageSlot slug={slots.after} />
     </>
   );
 }

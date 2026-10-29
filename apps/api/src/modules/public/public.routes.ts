@@ -1,4 +1,4 @@
-import { leadInputSchema, orderInputSchema } from '@site-builder/shared';
+import { DEFAULT_REQUEST_TYPES, LEAD_TYPES, leadInputSchema, orderInputSchema, withSettingDefaults, type RequestType } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { sha256 } from '../../common/crypto.js';
@@ -32,7 +32,7 @@ export function publicRoutes(ctx: AppContext) {
 
   r.route({ method: 'get', path: '/settings', summary: 'Public site configuration' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
-    return { data: rows[0]?.settings ?? null };
+    return { data: rows[0]?.settings ? withSettingDefaults(rows[0].settings) : null };
   });
 
   r.route({ method: 'get', path: '/pages', summary: 'Published pages (for navigation and sitemap)' }, async ({ req }) => {
@@ -105,10 +105,13 @@ export function publicRoutes(ctx: AppContext) {
   });
 
   r.route(
-    { method: 'post', path: '/leads', summary: 'Submit a contact / consultation / service request', status: 201, body: leadInputSchema, middleware: [submitLimiter, requireModule('leads')] },
+    { method: 'post', path: '/leads', summary: 'Submit a customer request (consultation, reservation, demo, question…)', status: 201, body: leadInputSchema, middleware: [submitLimiter, requireModule('leads')] },
     async ({ req, body }) => {
       // Honeypot filled in: accept silently so bots learn nothing, but store nothing.
       if (body.website) return { data: { received: true } };
+      const configured = (await req.tenant!.db.query(`SELECT settings->'requestTypes' AS types FROM site_settings WHERE id = 1`)).rows[0]?.types as RequestType[] | null;
+      const known = new Set<string>([...LEAD_TYPES, ...(configured ?? DEFAULT_REQUEST_TYPES).map((t) => t.slug)]);
+      if (!known.has(body.type)) throw badRequest('Unknown request type');
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash, details)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at AS "createdAt"`,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { parseSectionProps } from './sections.js';
-import { LEAD_STATUSES, LEAD_TYPES, LOCALES, MODULES, ORDER_STATUSES, PAYMENT_METHODS, PERMISSIONS, PUBLISH_STATUSES, THEMES } from './constants.js';
+import { hrefSchema, parseSectionProps } from './sections.js';
+import { designSchema, exportOptionsSchema, footerSchema, formFieldSchema, formOptionsSchema, headerSchema, shopPageSchema, shopSchema, systemPagesSchema, textsSchema } from './siteOptions.js';
+import { DEFAULT_REQUEST_TYPES, FORM_TYPES, LEAD_STATUSES, LOCALES, MODULES, PAYMENT_METHODS, PERMISSIONS, PUBLISH_STATUSES, SOCIAL_ICONS } from './constants.js';
 
 export const slugSchema = z
   .string()
@@ -36,6 +37,9 @@ export const phoneSchema = z
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
+/** A customer request type id; older built-in ones (e.g. service_request) use an underscore. */
+export const requestTypeSlug = z.string().regex(/^[a-z0-9][a-z0-9_-]{1,39}$/, 'Use lowercase English letters, numbers and hyphens');
+
 export const passwordSchema = z
   .string()
   .min(10, 'Password must be at least 10 characters')
@@ -49,7 +53,8 @@ export const siteSettingsSchema = z.object({
   tagline: localizedSchema,
   defaultLocale: z.enum(LOCALES),
   locales: z.array(z.enum(LOCALES)).min(1),
-  themeId: z.enum(THEMES),
+  /** A built-in theme (ivory, noir, sage) or one of `design.themes`. */
+  themeId: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,39}$/),
   logoAssetId: z.string().uuid().nullable().default(null),
   /** Public URL of the logo image (shown in the header instead of the site name). */
   logoUrl: z
@@ -63,16 +68,37 @@ export const siteSettingsSchema = z.object({
     address: localizedSchema,
     hours: localizedSchema,
   }),
-  social: z.array(z.object({ label: z.string().min(1).max(40), href: z.string().url() })).max(12),
-  /** Main menu: internal paths like /services or /about, in display order. */
-  nav: z
-    .array(z.object({ href: z.string().max(200).regex(/^\/[a-z0-9/-]*$/, 'Use an internal path like /about'), label: localizedSchema }))
-    .max(20),
+  social: z
+    .array(
+      z.object({
+        label: z.string().max(40).default(''),
+        href: z.string().url(),
+        icon: z.enum(SOCIAL_ICONS).default('website'),
+      }),
+    )
+    .max(12),
+  /** How social links show: their name, their icon, or both. */
+  socialDisplay: z.enum(['label', 'icon', 'both']).default('label'),
+  /** Main menu in display order: pages of the site (/about) or full links. */
+  nav: z.array(z.object({ href: hrefSchema.refine((v) => v !== '', 'Choose a link'), label: localizedSchema })).max(20),
   /** Product categories with their display names (products refer to them by slug). */
   productCategories: z
     .array(z.object({ slug: slugSchema, label: localizedSchema }))
     .max(40)
     .default([]),
+  /** Kinds of customer request (consultation, booking, demo…); forms send one and the inbox filters by it. */
+  requestTypes: z
+    .array(
+      z.object({
+        slug: requestTypeSlug,
+        label: localizedSchema,
+        form: z.enum(FORM_TYPES),
+        /** Own questions; when set they replace the built-in ones of `form` (name and email are always asked). */
+        fields: z.array(formFieldSchema).max(30).default([]),
+      }),
+    )
+    .max(30)
+    .default(DEFAULT_REQUEST_TYPES),
   /** Header button (default: a consultation request linking to /contact). */
   headerCta: z
     .object({ label: localizedSchema, href: z.string().max(200).regex(/^\/[a-z0-9/-]*$/, 'Use an internal path like /contact') })
@@ -91,8 +117,46 @@ export const siteSettingsSchema = z.object({
     founded: z.number().int().min(1800).max(2100).nullable(),
     stats: z.array(z.object({ value: z.string().max(20), label: localizedSchema })).max(8),
   }),
+  design: designSchema,
+  texts: textsSchema,
+  formOptions: formOptionsSchema,
+  header: headerSchema,
+  footer: footerSchema,
+  shopPage: shopPageSchema,
+  systemPages: systemPagesSchema,
+  shop: shopSchema,
+  exportOptions: exportOptionsSchema,
 });
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
+
+const optionSchemas = {
+  socialDisplay: siteSettingsSchema.shape.socialDisplay,
+  productCategories: siteSettingsSchema.shape.productCategories,
+  requestTypes: siteSettingsSchema.shape.requestTypes,
+  design: designSchema,
+  texts: textsSchema,
+  formOptions: formOptionsSchema,
+  header: headerSchema,
+  footer: footerSchema,
+  shopPage: shopPageSchema,
+  systemPages: systemPagesSchema,
+  shop: shopSchema,
+  exportOptions: exportOptionsSchema,
+};
+
+/**
+ * Stored settings with every optional group filled in (sites saved before an option existed
+ * get its default, which keeps them looking as they did). Groups that do not parse also fall
+ * back to their default rather than breaking the site.
+ */
+export function withSettingDefaults<T extends object>(raw: T): T & Pick<SiteSettings, keyof typeof optionSchemas> {
+  const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  for (const [key, schema] of Object.entries(optionSchemas)) {
+    const parsed = (schema as z.ZodTypeAny).safeParse((raw as Record<string, unknown>)[key]);
+    out[key] = parsed.success ? parsed.data : (schema as z.ZodTypeAny).parse(undefined);
+  }
+  return out as T & Pick<SiteSettings, keyof typeof optionSchemas>;
+}
 
 /* ---------- Page document ---------- */
 
@@ -170,13 +234,20 @@ export const productInputSchema = z.object({
     .array(z.object({ name: localizedRequiredSchema, hex: z.string().regex(/^#[0-9a-fA-F]{6}$/) }))
     .max(12)
     .default([]),
-  /** Most units of this product in one order (empty = the global limit of 50). */
-  maxPerOrder: z.number().int().min(1).max(50).nullable().default(null),
+  /** Most units of this product in one order (empty = the shop's limit). */
+  maxPerOrder: z.number().int().min(1).max(999).nullable().default(null),
   featured: z.boolean().default(false),
   materials: localizedSchema.default({ en: '', fa: '' }),
   dimensions: z.string().max(80).default(''),
   leadTime: localizedSchema.default({ en: '', fa: '' }),
   imageAssetId: z.string().uuid().nullable().default(null),
+  /** More photos after the main one, in display order. */
+  images: z.array(z.string().uuid()).max(12).default([]),
+  /** Any number of name / value details (size, warranty, origin…). */
+  attributes: z
+    .array(z.object({ name: localizedSchema, value: localizedSchema }))
+    .max(40)
+    .default([]),
   status: z.enum(PUBLISH_STATUSES).default('draft'),
   position: z.number().int().min(0).default(0),
   seo: seoSchema,
@@ -185,12 +256,13 @@ export const productInputSchema = z.object({
 /* ---------- Leads ---------- */
 
 export const leadInputSchema = z.object({
-  type: z.enum(LEAD_TYPES).default('contact'),
+  /** A request type slug from the site settings (or one of the built-in LEAD_TYPES). */
+  type: requestTypeSlug.default('contact'),
   name: z.string().trim().min(2).max(120),
   email: emailSchema,
   phone: z.union([phoneSchema, z.literal('')]).default(''),
   projectType: z.string().max(40).optional(),
-  budget: z.string().max(40).optional(),
+  budget: z.string().max(80).optional(),
   message: z.string().trim().min(2).max(4000),
   sourcePath: z.string().max(300).optional(),
   /** Reservation / demo answers. */
@@ -200,6 +272,11 @@ export const leadInputSchema = z.object({
       time: z.string().max(20).optional(),
       people: z.number().int().min(1).max(500).optional(),
       company: z.string().max(120).optional(),
+      /** Answers to a request type's own questions, as shown to the visitor. */
+      answers: z
+        .array(z.object({ label: z.string().max(200), value: z.string().max(2000) }))
+        .max(30)
+        .optional(),
     })
     .default({}),
   consent: z.literal(true),
@@ -224,15 +301,16 @@ export const orderInputSchema = z.object({
   }),
   /** Client sends only product ids and quantities; prices are always read from the database. */
   items: z
-    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(50), option: z.string().trim().max(80).default('') }))
+    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(999), option: z.string().trim().max(80).default('') }))
     .min(1)
-    .max(50),
+    .max(100),
   note: z.string().max(1000).optional(),
   paymentMethod: z.enum(PAYMENT_METHODS).default('online'),
 });
 
+/** A built-in status or one the shop added (see `shop.orderStatuses`). */
 export const orderUpdateSchema = z.object({
-  status: z.enum(ORDER_STATUSES),
+  status: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,39}$/),
 });
 
 /* ---------- Memberships ---------- */

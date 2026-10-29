@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, Select, TextArea, TextInput } from '../../components/ui/Field';
 import { usePreferences } from '../../lib/preferences';
-import { useProducts } from '../public-site/data';
+import { useProducts, useSiteSettings } from '../public-site/data';
 import { budgets, createLeadSchema, projectTypes, type FormType, type Lead, type LeadInput } from './leadSchema';
 import { submitLead, type SubmitResult } from './submitLead';
 
@@ -17,31 +17,61 @@ const serviceToProjectType: Record<string, LeadInput['projectType']> = {
 };
 
 /**
- * A request form: contact, consultation, reservation or demo (set per section).
+ * A request form: contact, consultation, reservation or demo questions (set per section), sent
+ * as one of the site's request types (`requestType`, e.g. demo or payment).
  * Links from service (?service=) and product (?product=) pages pre-fill it.
  */
-export function ContactForm({ formType = 'consultation', submitLabel }: { formType?: FormType; submitLabel?: string }) {
+export function ContactForm({
+  formType = 'consultation',
+  requestType,
+  requestLabel,
+  submitLabel,
+}: {
+  formType?: FormType;
+  requestType?: string;
+  /** Shown above the form when a link picked the request type. */
+  requestLabel?: string;
+  submitLabel?: string;
+}) {
   const [params] = useSearchParams();
   const { data: products = [] } = useProducts();
   const { l } = usePreferences();
   const product = products.find((p) => p.slug === params.get('product'));
   const projectType = product ? 'furniture' : serviceToProjectType[params.get('service') ?? ''];
   const message = product ? `${l(product.name)} — ` : '';
-  return <ContactFormInner key={`${formType}-${projectType}-${message}`} formType={formType} submitLabel={submitLabel} defaultProjectType={projectType} defaultMessage={message} />;
+  return (
+    <ContactFormInner
+      key={`${formType}-${requestType}-${projectType}-${message}`}
+      formType={formType}
+      requestType={requestType}
+      requestLabel={requestLabel}
+      submitLabel={submitLabel}
+      defaultProjectType={projectType}
+      defaultMessage={message}
+    />
+  );
 }
 
 function ContactFormInner({
   formType,
+  requestType,
+  requestLabel,
   submitLabel,
   defaultProjectType,
   defaultMessage,
 }: {
   formType: FormType;
+  requestType?: string;
+  requestLabel?: string;
   submitLabel?: string;
   defaultProjectType?: LeadInput['projectType'];
   defaultMessage?: string;
 }) {
-  const { m } = usePreferences();
+  const { m, l } = usePreferences();
+  const { data: settings } = useSiteSettings();
+  // The site's own choices, else the built-in ones.
+  const projectChoices = settings?.formOptions?.projectTypes ?? projectTypes.map((v) => ({ value: v, label: { en: m.form.projectTypes[v], fa: m.form.projectTypes[v] } }));
+  const budgetChoices = settings?.formOptions?.budgets ?? budgets.map((v) => ({ value: v, label: { en: m.form.budgets[v], fa: m.form.budgets[v] } }));
   const schema = useMemo(() => createLeadSchema(m.form.errors, formType), [m, formType]);
   const [status, setStatus] = useState<'idle' | 'error' | SubmitResult['mode']>('idle');
 
@@ -59,7 +89,7 @@ function ContactFormInner({
       phone: '',
       // '' renders the placeholder option; the schema rejects it on submit.
       projectType: defaultProjectType ?? ('' as LeadInput['projectType']),
-      budget: 'unsure',
+      budget: budgetChoices.some((b) => b.value === 'unsure') ? 'unsure' : (budgetChoices[budgetChoices.length - 1]?.value ?? ''),
       message: defaultMessage ?? '',
       date: '',
       time: '',
@@ -70,7 +100,9 @@ function ContactFormInner({
 
   const onSubmit = async (data: Lead) => {
     try {
-      const result = await submitLead(data, formType);
+      // Send the budget as its wording, so the inbox shows what the visitor picked.
+      const budget = budgetChoices.find((b) => b.value === data.budget);
+      const result = await submitLead({ ...data, budget: budget ? l(budget.label) : data.budget }, formType, requestType);
       setStatus(result.mode);
     } catch {
       setStatus('error');
@@ -111,6 +143,7 @@ function ContactFormInner({
       className="grid gap-8 sm:grid-cols-2"
       aria-busy={isSubmitting}
     >
+      {requestLabel && <p className="eyebrow sm:col-span-2">{requestLabel}</p>}
       {hasErrors && (
         <p role="alert" className="border-s-2 border-danger ps-4 text-sm text-danger sm:col-span-2">
           {m.form.errorSummary}
@@ -132,9 +165,9 @@ function ContactFormInner({
           <option value="">
             —
           </option>
-          {projectTypes.map((t) => (
-            <option key={t} value={t}>
-              {m.form.projectTypes[t]}
+          {projectChoices.map((t) => (
+            <option key={t.value} value={t.value}>
+              {l(t.label)}
             </option>
           ))}
         </Select>
@@ -142,9 +175,9 @@ function ContactFormInner({
       <div className="sm:col-span-2">
         <FieldShell id="lead-budget" label={m.form.budget}>
           <Select id="lead-budget" {...register('budget')}>
-            {budgets.map((b) => (
-              <option key={b} value={b}>
-                {m.form.budgets[b]}
+            {budgetChoices.map((b) => (
+              <option key={b.value} value={b.value}>
+                {l(b.label)}
               </option>
             ))}
           </Select>

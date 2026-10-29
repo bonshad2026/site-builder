@@ -61,7 +61,7 @@ describe('admin panel access', () => {
     await userEvent.type(screen.getByLabelText(/password/i), 'correct-horse-42');
     await userEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
 
-    expect(await screen.findByText(/new enquiries/i)).toBeInTheDocument();
+    expect(await screen.findByText(/new customer requests/i)).toBeInTheDocument();
     expect(screen.getByText(/test payments \(not real money\)/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: /sign out/i })[0]);
