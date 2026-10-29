@@ -18,7 +18,12 @@ const leadType = (formType: FormType, projectType: Lead['projectType']) =>
  * Without VITE_API_URL (e.g. a static demo with no backend) nothing is sent,
  * and the result says so, so the UI never claims a delivery that did not happen.
  */
-export async function submitLead(lead: Lead, formType: FormType = 'consultation'): Promise<SubmitResult> {
+export async function submitLead(
+  lead: Lead,
+  formType: FormType = 'consultation',
+  requestType?: string,
+  answers?: { label: string; value: string }[],
+): Promise<SubmitResult> {
   if (!API_URL) {
     await new Promise((resolve) => setTimeout(resolve, 900));
     return { mode: 'simulated' };
@@ -28,19 +33,25 @@ export async function submitLead(lead: Lead, formType: FormType = 'consultation'
     ...(lead.time ? { time: lead.time } : {}),
     ...(lead.people ? { people: lead.people } : {}),
     ...(lead.company ? { company: lead.company } : {}),
+    ...(answers?.length ? { answers } : {}),
   };
   const res = await fetch(`${API_URL}/api/v1/public/sites/${DEFAULT_SITE_ID}/leads`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: leadType(formType, lead.projectType),
+      // The site's request type when the form has one; older forms derive it from their questions.
+      type: requestType || leadType(formType, lead.projectType),
       name: lead.name,
       email: lead.email,
       phone: lead.phone,
       projectType: lead.projectType || undefined,
       budget: lead.budget,
       // The API needs a message; bookings without a note send a short summary instead.
-      message: lead.message || [lead.date, lead.time, lead.people, lead.company].filter(Boolean).join(' · ') || formType,
+      message:
+        lead.message ||
+        [lead.date, lead.time, lead.people, lead.company, ...(answers ?? []).map((a) => `${a.label}: ${a.value}`)].filter(Boolean).join(' · ').slice(0, 4000) ||
+        requestType ||
+        formType,
       details,
       sourcePath: window.location.pathname,
       consent: true,

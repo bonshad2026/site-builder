@@ -6,19 +6,30 @@ import { usePageMeta } from '../../../hooks/usePageMeta';
 import { usePreferences } from '../../../lib/preferences';
 import { isNotFound, useService, useServices } from '../data';
 import { NotFoundPage } from './NotFoundPage';
+import { PageSlot, useSystemPage } from '../../../sections/PageSlot';
+import { ServiceCard } from '../components/Cards';
 
 export function ServicesPage() {
+  const slots = useSystemPage('services');
   const { m, l, formatNumber } = usePreferences();
   const { data: services = [], isLoading } = useServices();
   usePageMeta(m.services.eyebrow, m.services.intro);
 
   return (
     <>
+      <PageSlot slug={slots.before} />
       <PageHeader eyebrow={m.services.eyebrow} title={m.services.title} intro={m.services.intro} />
       <Section className="pt-12 sm:pt-16">
         <Container className="flex flex-col gap-20 sm:gap-28">
           {isLoading && <div role="status" aria-label="Loading" className="aspect-[16/6] animate-pulse bg-surface-2" />}
-          {services.map((s, i) => (
+          {slots.layout === 'cards' && (
+            <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-3">
+              {services.map((s, i) => (
+                <ServiceCard key={s.id} service={s} index={i} />
+              ))}
+            </div>
+          )}
+          {slots.layout !== 'cards' && services.map((s, i) => (
             <article key={s.id} className="grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
               <Link to={`/services/${s.slug}`} className={i % 2 ? 'lg:order-2' : ''} tabIndex={-1} aria-hidden="true">
                 <Image src={s.imageUrl} alt="" className="aspect-[4/3]" />
@@ -45,11 +56,13 @@ export function ServicesPage() {
           ))}
         </Container>
       </Section>
+      <PageSlot slug={slots.after} />
     </>
   );
 }
 
 export function ServiceDetailPage() {
+  const slots = useSystemPage('serviceDetail');
   const { slug = '' } = useParams();
   const { m, l, formatNumber } = usePreferences();
   const { data: service, error, isLoading } = useService(slug);
@@ -62,6 +75,7 @@ export function ServiceDetailPage() {
 
   return (
     <>
+      <PageSlot slug={slots.before} />
       <div className="pt-32 sm:pt-40">
         <Container>
           <Link to="/services" className="inline-flex items-center gap-2 text-sm text-ink-soft hover:text-ink">
@@ -143,6 +157,7 @@ export function ServiceDetailPage() {
           </Container>
         </Section>
       )}
+      <PageSlot slug={slots.after} />
     </>
   );
 }

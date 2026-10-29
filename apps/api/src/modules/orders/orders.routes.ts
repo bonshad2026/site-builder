@@ -1,5 +1,4 @@
-import { ORDER_STATUSES, orderUpdateSchema } from '@site-builder/shared';
-import { z } from 'zod';
+import { orderUpdateSchema } from '@site-builder/shared';
 import { notFound } from '../../common/errors.js';
 import { ApiRouter, idParam, pageMeta, paginationQuery } from '../../common/http.js';
 import { requireModule, requirePermission } from '../../middleware/tenant.js';
@@ -14,7 +13,7 @@ export function ordersRoutes() {
       method: 'get',
       path: '/',
       summary: 'List orders, newest first',
-      query: paginationQuery.extend({ status: z.enum(ORDER_STATUSES).optional() }),
+      query: paginationQuery.extend({ status: orderUpdateSchema.shape.status.optional() }),
       middleware: [requirePermission('orders:read')],
     },
     async ({ req, query }) => {
@@ -39,7 +38,7 @@ export function ordersRoutes() {
   });
 
   r.route(
-    { method: 'patch', path: '/:id', summary: 'Confirm, fulfil or cancel an order', params: idParam, body: orderUpdateSchema, middleware: [requirePermission('orders:write')] },
+    { method: 'patch', path: '/:id', summary: "Move an order to another of the shop's stages (cancelling puts stock back)", params: idParam, body: orderUpdateSchema, middleware: [requirePermission('orders:write')] },
     async ({ req, params, body }) => ({ data: await changeOrderStatus(req.tenant!.db, params.id, body.status, req.auth!.user.id) }),
   );
 

@@ -40,11 +40,9 @@ export function createLeadSchema(e: LeadErrorMessages, formType: FormType = 'con
       .trim()
       .transform(normalizeDigits)
       .refine((v) => v === '' || PHONE.test(v), e.phoneInvalid),
-    projectType:
-      formType === 'consultation'
-        ? z.enum(projectTypes, { errorMap: () => ({ message: e.projectTypeRequired }) })
-        : z.union([z.enum(projectTypes), z.literal('')]).optional(),
-    budget: z.enum(budgets).optional(),
+    // Choices come from the site settings (formOptions), so any value id is accepted here.
+    projectType: formType === 'consultation' ? z.string().trim().min(1, e.projectTypeRequired).max(40) : z.string().max(40).optional(),
+    budget: z.string().max(40).optional(),
     // Bookings carry their facts in the fields below; a note is optional.
     message: booking ? z.string().trim().max(4000) : z.string().trim().min(20, e.messageShort).max(4000),
     date: booking ? z.string().trim().min(1, e.dateRequired).max(40) : z.string().max(40).optional(),

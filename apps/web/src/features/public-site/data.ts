@@ -1,3 +1,4 @@
+import { withSettingDefaults } from '@site-builder/shared';
 import { useQuery } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { siteConfig } from '../../config/site';
@@ -20,7 +21,8 @@ export function useSiteSettings() {
   const site = useSiteId();
   return useQuery({
     queryKey: ['public', site, 'settings'],
-    queryFn: () => (apiAvailable() ? api.get<SiteSettings>(`/public/sites/${site}/settings`) : Promise.resolve(fallbackSettings)),
+    // Options a site never set get their defaults, so older sites keep their look.
+    queryFn: () => (apiAvailable() ? api.get<SiteSettings>(`/public/sites/${site}/settings`).then(withSettingDefaults) : Promise.resolve(fallbackSettings)),
     staleTime: 60_000,
   });
 }

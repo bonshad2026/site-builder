@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import type { ImageSize } from '@site-builder/shared';
+import { useState, type CSSProperties } from 'react';
 import { cn } from '../../lib/cn';
 
 interface ImageProps {
@@ -6,14 +7,22 @@ interface ImageProps {
   alt: string;
   className?: string;
   priority?: boolean;
+  /** Optional size from the builder: fixed width and/or height, how the image fills it, rounded corners. */
+  size?: ImageSize;
 }
 
 /** Image with a soft placeholder while loading and a graceful fallback when missing or broken. */
-export function Image({ src, alt, className, priority }: ImageProps) {
+export function Image({ src, alt, className, priority, size }: ImageProps) {
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const box: CSSProperties = {};
+  if (size?.width) Object.assign(box, { width: '100%', maxWidth: size.width });
+  // A set height replaces the layout's aspect ratio.
+  if (size?.height) Object.assign(box, { height: size.height, aspectRatio: 'auto' });
+  if (size?.radius) box.borderRadius = size.radius;
+  const fit = size?.fit === 'contain' ? 'object-contain' : size?.fit === 'fill' ? 'object-fill' : 'object-cover';
 
   return (
-    <div className={cn('relative overflow-hidden bg-surface-2', className)}>
+    <div className={cn('relative overflow-hidden bg-surface-2', className)} style={box}>
       {src && state !== 'error' ? (
         <img
           src={src}
@@ -22,7 +31,7 @@ export function Image({ src, alt, className, priority }: ImageProps) {
           decoding="async"
           onLoad={() => setState('loaded')}
           onError={() => setState('error')}
-          className={cn('h-full w-full object-cover transition duration-700 ease-(--ease-soft)', state === 'loaded' ? 'opacity-100' : 'opacity-0')}
+          className={cn('h-full w-full transition duration-700 ease-(--ease-soft)', fit, state === 'loaded' ? 'opacity-100' : 'opacity-0')}
         />
       ) : (
         <div role="img" aria-label={alt} className="flex h-full w-full items-center justify-center text-ink-soft/60">

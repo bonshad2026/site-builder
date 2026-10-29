@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThemeEffect } from '../../components/layout/SiteLayout';
-import { SiteIdContext } from '../../features/public-site/data';
+import { CartProvider } from '../../features/cart/cart';
+import { SiteIdContext, useSiteSettings } from '../../features/public-site/data';
+import { SiteTexts } from '../../lib/siteLook';
 import { cn } from '../../lib/cn';
 import { SectionRenderer } from '../../sections/SectionRenderer';
 import type { Section } from './state';
@@ -39,6 +41,8 @@ export default function PreviewFrame() {
 
   return (
     <SiteIdContext.Provider value={doc.siteId}>
+      <PreviewTexts>
+      <CartProvider siteId={`preview-${doc.siteId}`}>
       <ThemeEffect />
       <div className="min-h-screen bg-bg pb-24">
         {doc.sections.length === 0 && <p className="p-16 text-center text-ink-soft">+</p>}
@@ -62,6 +66,14 @@ export default function PreviewFrame() {
           </div>
         ))}
       </div>
+      </CartProvider>
+      </PreviewTexts>
     </SiteIdContext.Provider>
   );
+}
+
+/** The site's own wording for built-in texts, as visitors see it. */
+function PreviewTexts({ children }: { children: React.ReactNode }) {
+  const { data: settings } = useSiteSettings();
+  return <SiteTexts settings={settings}>{children}</SiteTexts>;
 }

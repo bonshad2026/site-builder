@@ -2,10 +2,13 @@ import { Arrow, ButtonLink } from '../../../components/ui/Button';
 import { Container } from '../../../components/ui/Layout';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { usePreferences } from '../../../lib/preferences';
+import { PageSlot, useSystemPage } from '../../../sections/PageSlot';
 
 export function NotFoundPage() {
   const { m, formatNumber } = usePreferences();
-  usePageMeta(m.notFound.title);
+  usePageMeta(m.notFound.title, undefined, { noIndex: true });
+  const own = useSystemPage('notFound').page;
+  if (own) return <PageSlot slug={own} />;
 
   return (
     <Container className="flex min-h-[80vh] flex-col items-start justify-center pt-32 pb-20">

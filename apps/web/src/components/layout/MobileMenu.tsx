@@ -67,14 +67,20 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
         <ul className="flex flex-col">
           {[{ to: '/', label: m.nav.home }, ...nav, ...(nav.some((n) => n.to === '/contact') ? [] : [{ to: '/contact', label: m.nav.contact }])].map((item, i) => (
             <li key={item.to} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
-              <NavLink
-                to={item.to}
-                end={item.to === '/'}
-                onClick={onClose}
-                className={({ isActive }) => cn('block py-4 font-display text-3xl transition-colors', isActive ? 'text-accent' : 'hover:text-accent')}
-              >
-                {item.label}
-              </NavLink>
+              {item.to.startsWith('/') ? (
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={onClose}
+                  className={({ isActive }) => cn('block py-4 font-display text-3xl transition-colors', isActive ? 'text-accent' : 'hover:text-accent')}
+                >
+                  {item.label}
+                </NavLink>
+              ) : (
+                <a href={item.to} target="_blank" rel="noreferrer noopener" className="block py-4 font-display text-3xl transition-colors hover:text-accent">
+                  {item.label}
+                </a>
+              )}
             </li>
           ))}
         </ul>

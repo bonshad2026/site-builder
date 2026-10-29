@@ -3,7 +3,8 @@ export type Locale = 'en' | 'fa';
 /** A string available in every supported locale. */
 export type Localized = Record<Locale, string>;
 
-export type ThemeId = 'ivory' | 'noir' | 'sage';
+/** A built-in theme (ivory, noir, sage) or the id of one of the site's own themes. */
+export type ThemeId = string;
 
 export type ModuleId = 'services' | 'products' | 'projects' | 'testimonials' | 'faq' | 'leads';
 

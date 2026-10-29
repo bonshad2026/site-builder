@@ -1,4 +1,4 @@
-import { siteSettingsSchema } from '@site-builder/shared';
+import { siteSettingsSchema, withSettingDefaults } from '@site-builder/shared';
 import { notFound } from '../../common/errors.js';
 import { ApiRouter } from '../../common/http.js';
 import { requirePermission } from '../../middleware/tenant.js';
@@ -16,7 +16,7 @@ export function siteRoutes(clientLocked = false) {
   r.route({ method: 'get', path: '/settings', summary: 'Get site settings (brand, theme, contact, menu, modules, SEO)' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query('SELECT settings, updated_at AS "updatedAt" FROM site_settings WHERE id = 1');
     if (!rows[0]) throw notFound('Site settings');
-    return { data: rows[0].settings, meta: { updatedAt: rows[0].updatedAt } };
+    return { data: withSettingDefaults(rows[0].settings), meta: { updatedAt: rows[0].updatedAt } };
   });
 
   r.route(
@@ -25,9 +25,10 @@ export function siteRoutes(clientLocked = false) {
       if (clientLocked && !req.auth!.user.isPlatformAdmin) {
         const current = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
         if (!current.rows[0]) throw notFound('Site settings');
-        // Clients edit their name, tagline, logo, contact details and product categories; the rest is the design.
-        const { name, tagline, logoAssetId, logoUrl, contact, productCategories } = body;
-        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, productCategories };
+        // Clients edit their name, tagline, logo, contact details, social links, product categories,
+        // request types and form choices, texts, footer and shop rules; the rest is the design.
+        const { name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, texts, footer, shop, exportOptions } = body;
+        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, texts, footer, shop, exportOptions };
       }
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO site_settings (id, settings, updated_by, updated_at) VALUES (1, $1, $2, now())

@@ -1,3 +1,4 @@
+import { DEFAULT_ORDER_STATUSES, DEFAULT_REQUEST_TYPES } from '@site-builder/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -5,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { api, apiRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { OrderItemDto, OrderStatus, PaymentStatus } from '../../types/api';
-import { useSiteInfo } from '../AdminRoot';
+import { useAdminSettings, useSiteInfo } from '../AdminRoot';
 import { useT } from '../i18n';
 import { Badge, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 
@@ -22,7 +23,7 @@ interface Lead {
   status: 'new' | 'contacted' | 'qualified' | 'closed';
   notes: { text: string; at: string }[];
   /** Reservation / demo answers. */
-  details?: { date?: string; time?: string; people?: number; company?: string };
+  details?: { date?: string; time?: string; people?: number; company?: string; answers?: { label: string; value: string }[] };
   createdAt: string;
 }
 
@@ -42,6 +43,32 @@ interface Order {
 }
 
 const leadTone = { new: 'accent', contacted: 'neutral', qualified: 'good', closed: 'neutral' } as const;
+
+/** The shop's order stages (settings) with their names, and where an order may move next (as the server allows). */
+function useOrderStages(siteId: string) {
+  const { l } = usePreferences();
+  const { data: settings } = useAdminSettings(siteId);
+  const stages = settings?.shop?.orderStatuses ?? DEFAULT_ORDER_STATUSES;
+  const label = (slug: string) => {
+    const s = stages.find((x) => x.slug === slug);
+    return (s && l(s.label)) || slug;
+  };
+  const next = (current: string) =>
+    current === 'fulfilled' || current === 'cancelled' ? [] : current === 'pending' ? ['confirmed', 'cancelled'] : stages.map((s) => s.slug).filter((s) => s !== current && s !== 'pending');
+  return { stages, label, next };
+}
+
+/** The site's request types (settings), plus older built-in types that may still be in the inbox. */
+function useRequestTypes(siteId: string) {
+  const { l } = usePreferences();
+  const { data: settings } = useAdminSettings(siteId);
+  const types = settings?.requestTypes ?? DEFAULT_REQUEST_TYPES;
+  const label = (slug: string) => {
+    const known = types.find((x) => x.slug === slug) ?? DEFAULT_REQUEST_TYPES.find((x) => x.slug === slug);
+    return (known && l(known.label)) || slug.replace(/_/g, ' ');
+  };
+  return { types, label };
+}
 export const paymentTone = (s: PaymentStatus) => (s === 'paid' ? 'good' : s === 'test_paid' ? 'warn' : s === 'failed' ? 'bad' : 'neutral');
 
 function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null; onClose: () => void }) {
@@ -60,6 +87,7 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
     },
   });
   const l = lead.data;
+  const { label: typeLabel } = useRequestTypes(siteId);
   return (
     <Modal open={!!id} onClose={onClose} title={l?.name ?? t.loading} wide>
       {!l ? (
@@ -82,12 +110,12 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
             <div>
               <dt className="text-xs text-ink-soft">{t.type}</dt>
               <dd>
-                {l.type}
+                {typeLabel(l.type)}
                 {l.projectType ? ` · ${l.projectType}` : ''}
                 {l.budget ? ` · ${l.budget}` : ''}
               </dd>
             </div>
-            {l.details && Object.values(l.details).some(Boolean) && (
+            {l.details && [l.details.date, l.details.time, l.details.people, l.details.company].some(Boolean) && (
               <div className="sm:col-span-2">
                 <dt className="text-xs text-ink-soft">{t.requestDetails}</dt>
                 <dd>
@@ -95,6 +123,12 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
                 </dd>
               </div>
             )}
+            {l.details?.answers?.map((a, i) => (
+              <div key={i}>
+                <dt className="text-xs text-ink-soft">{a.label}</dt>
+                <dd className="whitespace-pre-wrap">{a.value}</dd>
+              </div>
+            ))}
             <div>
               <dt className="text-xs text-ink-soft">{t.created}</dt>
               <dd>
@@ -155,6 +189,7 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
     },
   });
   const o = order.data;
+  const { label: stageLabel, next } = useOrderStages(siteId);
   return (
     <Modal open={!!id} onClose={onClose} title={o ? `#${o.number}` : t.loading} wide>
       {!o ? (
@@ -162,7 +197,7 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
       ) : (
         <div className="flex flex-col gap-5 text-sm">
           <div className="flex flex-wrap gap-2">
-            <Badge>{o.status}</Badge>
+            <Badge>{stageLabel(o.status)}</Badge>
             <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>
             {o.paymentMethod === 'cod' && <Badge tone="neutral">{t.cod}</Badge>}
             <span className="text-ink-soft">{formatDate(o.createdAt)}</span>
@@ -217,23 +252,20 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
               </ul>
             </div>
           )}
-          {canWrite && (
-            <div className="flex flex-wrap gap-3">
-              {o.status === 'pending' && (
-                <Button size="sm" onClick={() => setStatus.mutate('confirmed')}>
-                  {t.confirm}
+          {canWrite && next(o.status).length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-ink-soft">{t.moveTo}</span>
+              {next(o.status).map((st) => (
+                <Button
+                  key={st}
+                  size="sm"
+                  variant={st === 'cancelled' ? 'outline' : 'primary'}
+                  disabled={setStatus.isPending}
+                  onClick={() => (st !== 'cancelled' || window.confirm(t.confirmDelete)) && setStatus.mutate(st as OrderStatus)}
+                >
+                  {st === 'cancelled' ? t.cancelOrder : stageLabel(st)}
                 </Button>
-              )}
-              {o.status === 'confirmed' && (
-                <Button size="sm" onClick={() => setStatus.mutate('fulfilled')}>
-                  {t.fulfil}
-                </Button>
-              )}
-              {(o.status === 'pending' || o.status === 'confirmed') && (
-                <Button size="sm" variant="outline" onClick={() => window.confirm(t.confirmDelete) && setStatus.mutate('cancelled')}>
-                  {t.cancelOrder}
-                </Button>
-              )}
+              ))}
             </div>
           )}
           <ErrorNote error={setStatus.error} />
@@ -249,20 +281,44 @@ export default function InboxPages({ siteId, kind }: { siteId: string; kind: 'le
   const [params, setParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
+  // Customer requests can also be narrowed to one request type (?type= keeps it in the URL).
+  const type = kind === 'leads' ? (params.get('type') ?? '') : '';
+  const { types, label: typeLabel } = useRequestTypes(siteId);
   const open = params.get('open');
   const list = useQuery({
-    queryKey: ['site', siteId, kind, page, status],
-    queryFn: () => apiRequest<(Lead | Order)[]>(`/sites/${siteId}/${kind}?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`),
+    queryKey: ['site', siteId, kind, page, status, type],
+    queryFn: () => apiRequest<(Lead | Order)[]>(`/sites/${siteId}/${kind}?page=${page}&pageSize=20${status ? `&status=${status}` : ''}${type ? `&type=${type}` : ''}`),
     placeholderData: keepPreviousData,
   });
-  const statuses = kind === 'leads' ? ['new', 'contacted', 'qualified', 'closed'] : ['pending', 'confirmed', 'fulfilled', 'cancelled'];
-  const openItem = (id: string | null) => setParams(id ? { open: id } : {}, { replace: true });
+  const { stages, label: stageLabel } = useOrderStages(siteId);
+  const statuses = kind === 'leads' ? ['new', 'contacted', 'qualified', 'closed'] : stages.map((s) => s.slug);
+  const openItem = (id: string | null) => setParams({ ...(type ? { type } : {}), ...(id ? { open: id } : {}) }, { replace: true });
+  const setType = (v: string) => {
+    setPage(1);
+    setParams(v ? { type: v } : {}, { replace: true });
+  };
 
   return (
     <>
       <PageTitle title={kind === 'leads' ? t.leads : t.orders} />
+      {kind === 'leads' && (
+        <div role="tablist" aria-label={t.type} className="mb-4 flex flex-wrap gap-2">
+          {[{ slug: '', name: t.allTypes }, ...types.map((x) => ({ slug: x.slug, name: typeLabel(x.slug) }))].map((x) => (
+            <button
+              key={x.slug || 'all'}
+              type="button"
+              role="tab"
+              aria-selected={type === x.slug}
+              onClick={() => setType(x.slug)}
+              className={`rounded-full border px-3 py-1 text-sm ${type === x.slug ? 'border-ink bg-ink text-bg' : 'border-line text-ink-soft hover:border-ink hover:text-ink'}`}
+            >
+              {x.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mb-4 max-w-xs">
-        <SelectField label={t.status} value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[{ value: '', label: '—' }, ...statuses.map((s) => ({ value: s, label: s }))]} />
+        <SelectField label={t.status} value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[{ value: '', label: '—' }, ...statuses.map((s) => ({ value: s, label: kind === 'orders' ? stageLabel(s) : s }))]} />
       </div>
       {list.isLoading ? (
         <Spinner />
@@ -281,7 +337,7 @@ export default function InboxPages({ siteId, kind }: { siteId: string; kind: 'le
                       {l.email}
                     </div>
                   </Td>
-                  <Td className="text-xs">{l.type}</Td>
+                  <Td className="text-xs">{typeLabel(l.type)}</Td>
                   <Td>
                     <Badge tone={leadTone[l.status]}>{l.status}</Badge>
                   </Td>
@@ -301,7 +357,7 @@ export default function InboxPages({ siteId, kind }: { siteId: string; kind: 'le
                   <Td>{o.customer.name}</Td>
                   <Td className="text-xs">{formatMoney(o.totalMinor, o.currency)}</Td>
                   <Td>
-                    <Badge>{o.status}</Badge>
+                    <Badge>{stageLabel(o.status)}</Badge>
                   </Td>
                   <Td>
                     <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>

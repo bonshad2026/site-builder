@@ -1,4 +1,4 @@
-import { orderInputSchema } from '@site-builder/shared';
+import { orderInputSchema, shopSchema } from '@site-builder/shared';
 import type pg from 'pg';
 import type { z } from 'zod';
 import { randomToken, sha256 } from '../../common/crypto.js';
@@ -7,6 +7,13 @@ import { withTransaction } from '../../database/tenant/pools.js';
 import { auditTenant } from '../audit/audit.js';
 
 type OrderInput = z.output<typeof orderInputSchema>;
+
+/** The shop's rules (limits, order stages) from the site settings, with defaults. */
+export async function shopRules(db: pg.Pool | pg.PoolClient) {
+  const { rows } = await db.query(`SELECT settings->'shop' AS shop FROM site_settings WHERE id = 1`);
+  const parsed = shopSchema.safeParse(rows[0]?.shop ?? undefined);
+  return parsed.success ? parsed.data : shopSchema.parse(undefined);
+}
 
 interface ProductRow {
   id: string;
@@ -43,6 +50,10 @@ export async function createOrder(db: pg.Pool, input: OrderInput) {
   // Lets the buyer (and only the buyer) look up and pay for this order.
   const orderToken = randomToken(24);
 
+  const rules = await shopRules(db);
+  const totalUnits = [...quantities.values()].reduce((a, b) => a + b, 0);
+  if (rules.maxItemsPerOrder !== null && totalUnits > rules.maxItemsPerOrder) throw badRequest(`An order can have at most ${rules.maxItemsPerOrder} items`);
+
   return withTransaction(db, async (tx) => {
     const ids = [...quantities.keys()];
     const { rows: products } = await tx.query<ProductRow>(
@@ -60,7 +71,7 @@ export async function createOrder(db: pg.Pool, input: OrderInput) {
 
     for (const id of ids) {
       const product = byId.get(id)!;
-      const limit = Math.min(50, product.max_per_order ?? 50);
+      const limit = Math.min(rules.maxPerProduct, product.max_per_order ?? rules.maxPerProduct);
       if (quantities.get(id)! > limit) throw badRequest(`Quantity of ${product.slug} is limited to ${limit} per order`);
     }
 
@@ -110,19 +121,26 @@ export async function orderItems(db: pg.Pool | pg.PoolClient, orderId: string) {
   return rows;
 }
 
-const TRANSITIONS: Record<string, string[]> = {
-  pending: ['confirmed', 'cancelled'],
-  confirmed: ['fulfilled', 'cancelled'],
-  fulfilled: [],
-  cancelled: [],
-};
+/** Fulfilled and cancelled orders are done; nothing moves them again. */
+const FINAL = new Set(['fulfilled', 'cancelled']);
 
-/** Moves an order through its lifecycle; cancelling puts reserved stock back. */
+/**
+ * Where an order may go next: a pending order is confirmed or cancelled first; after that it can
+ * move to any of the shop's other stages (never back to pending); finished orders stay put.
+ */
+export function nextStatuses(current: string, stages: string[]): string[] {
+  if (FINAL.has(current)) return [];
+  if (current === 'pending') return ['confirmed', 'cancelled'];
+  return stages.filter((s) => s !== current && s !== 'pending');
+}
+
+/** Moves an order to another of the shop's stages (built-in or added in the settings). Cancelling puts reserved stock back. */
 export async function changeOrderStatus(db: pg.Pool, orderId: string, status: string, actorUserId: string) {
+  const stages = (await shopRules(db)).orderStatuses.map((s) => s.slug);
   return withTransaction(db, async (tx) => {
     const { rows } = await tx.query<{ status: string }>('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
     if (!rows[0]) throw notFound('Order');
-    if (!TRANSITIONS[rows[0].status].includes(status)) throw badRequest(`Cannot change an order from ${rows[0].status} to ${status}`);
+    if (!nextStatuses(rows[0].status, stages).includes(status)) throw badRequest(`Cannot change an order from ${rows[0].status} to ${status}`);
     if (status === 'cancelled') {
       await tx.query(
         `UPDATE products p SET stock = p.stock + i.quantity FROM order_items i

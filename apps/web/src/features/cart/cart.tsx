@@ -18,13 +18,16 @@ export interface CartLine {
 /** One cart line per product and colour. */
 export const lineKey = (l: { productId: string; option?: string }) => `${l.productId}|${l.option ?? ''}`;
 
-export const MAX_QUANTITY = 50;
+/** Hard ceiling; each line also carries its product and shop limit (`max`). */
+export const MAX_QUANTITY = 999;
+/** Limit for lines saved without one (before shops could set their own). */
+const DEFAULT_LINE_MAX = 50;
 
 /** Pure cart operations (kept separate so they are easy to test). */
 export const cartOps = {
   add(lines: CartLine[], line: Omit<CartLine, 'quantity'>, quantity = 1): CartLine[] {
     const key = lineKey(line);
-    const cap = Math.min(MAX_QUANTITY, line.max ?? MAX_QUANTITY);
+    const cap = Math.min(MAX_QUANTITY, line.max ?? DEFAULT_LINE_MAX);
     const existing = lines.find((l) => lineKey(l) === key);
     if (existing) return lines.map((l) => (lineKey(l) === key ? { ...l, quantity: Math.min(cap, l.quantity + quantity) } : l));
     return [...lines, { ...line, quantity: Math.min(cap, quantity) }];
@@ -33,7 +36,7 @@ export const cartOps = {
   setQuantity(lines: CartLine[], key: string, quantity: number): CartLine[] {
     const match = (l: CartLine) => lineKey(l) === key || lineKey(l) === `${key}|`;
     if (quantity <= 0) return lines.filter((l) => !match(l));
-    return lines.map((l) => (match(l) ? { ...l, quantity: Math.min(MAX_QUANTITY, l.max ?? MAX_QUANTITY, Math.floor(quantity)) } : l));
+    return lines.map((l) => (match(l) ? { ...l, quantity: Math.min(MAX_QUANTITY, l.max ?? DEFAULT_LINE_MAX, Math.floor(quantity)) } : l));
   },
   /** Display estimate only: the server recomputes every price when the order is placed. */
   subtotal(lines: CartLine[]): bigint {
@@ -81,6 +84,11 @@ export function CartProvider({ siteId, children }: { siteId: string; children: R
     [lines, add, setQuantity, clear],
   );
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+}
+
+/** The cart, or null where there is none (e.g. the builder's preview). */
+export function useCartOptional(): CartContextValue | null {
+  return useContext(CartContext);
 }
 
 export function useCart(): CartContextValue {

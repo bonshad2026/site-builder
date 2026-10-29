@@ -1,5 +1,5 @@
-import { isSectionType, parseSectionProps, type PageDocument } from '@site-builder/shared';
-import { Component, type ReactNode } from 'react';
+import { isSectionType, parseSectionProps, type PageDocument, type SectionAppearance } from '@site-builder/shared';
+import { Component, type CSSProperties, type ReactNode } from 'react';
 import { sectionRenderers } from './renderers';
 
 type Section = PageDocument['sections'][number];
@@ -35,8 +35,34 @@ export function SectionRenderer({ section, editing = false }: { section: Section
   const Renderer = sectionRenderers[section.type];
   return (
     <SectionBoundary fallback={editing ? <EditorNotice text="This section failed to render." /> : null}>
-      <Renderer props={parsed.data} />
+      <SectionLook look={parsed.data.appearance as SectionAppearance}>
+        <Renderer props={parsed.data} />
+      </SectionLook>
     </SectionBoundary>
+  );
+}
+
+/**
+ * A section's own spacing, colours, width and devices. Untouched settings add nothing, so
+ * sections look exactly as before. Colours work by giving the section its own theme colours.
+ */
+function SectionLook({ look, children }: { look: SectionAppearance | undefined; children: ReactNode }) {
+  if (!look) return <>{children}</>;
+  const changed = look.paddingTop !== 'default' || look.paddingBottom !== 'default' || look.background || look.textColor || look.width !== 'default' || look.showOn !== 'all';
+  if (!changed) return <>{children}</>;
+  const style: Record<string, string> = {};
+  if (look.background) Object.assign(style, { '--bg': look.background, '--surface': look.background, background: look.background });
+  if (look.textColor) Object.assign(style, { '--ink': look.textColor, '--ink-soft': look.textColor, color: look.textColor });
+  return (
+    <div
+      data-pt={look.paddingTop}
+      data-pb={look.paddingBottom}
+      data-width={look.width}
+      className={look.showOn === 'desktop' ? 'hidden md:block' : look.showOn === 'mobile' ? 'md:hidden' : undefined}
+      style={style as CSSProperties}
+    >
+      {children}
+    </div>
   );
 }
 
