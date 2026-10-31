@@ -1,4 +1,4 @@
-import { API_URL } from '../../lib/api';
+import { API_URL, ApiError } from '../../lib/api';
 import { DEFAULT_SITE_ID } from '../public-site/data';
 import type { FormType, Lead } from './leadSchema';
 
@@ -35,6 +35,9 @@ export async function submitLead(
     ...(lead.company ? { company: lead.company } : {}),
     ...(answers?.length ? { answers } : {}),
   };
+  // A box's "request" button links here with ?item=<table>/<item>.
+  const [collection, slug] = (new URLSearchParams(window.location.search).get('item') ?? '').split('/');
+  const item = collection && slug ? { collection, slug } : undefined;
   const res = await fetch(`${API_URL}/api/v1/public/sites/${DEFAULT_SITE_ID}/leads`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -54,9 +57,14 @@ export async function submitLead(
         formType,
       details,
       sourcePath: window.location.pathname,
+      item,
       consent: true,
     }),
   });
-  if (!res.ok) throw new Error(`Lead submission failed with ${res.status}`);
+  if (!res.ok) {
+    // Keep the server's reason (closed registration, rate limit…) so the form can explain it.
+    const e = ((await res.json().catch(() => null)) as { error?: { code: string; message: string; details?: ApiError['details'] } } | null)?.error;
+    throw new ApiError(res.status, e?.code ?? 'internal_error', e?.message ?? `Request failed (${res.status})`, e?.details);
+  }
   return { mode: 'sent' };
 }

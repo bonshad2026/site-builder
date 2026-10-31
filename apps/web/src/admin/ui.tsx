@@ -1,7 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router';
 import { Button } from '../components/ui/Button';
-import { ApiError } from '../lib/api';
+import { api } from '../lib/api';
+import { resolveCalendar, type CalendarSystem } from '../lib/calendar';
+import { errorLine, explainError, type ErrorLanguage } from '../lib/errorText';
+import { usePreferences } from '../lib/preferences';
 import { cn } from '../lib/cn';
 import type { Localized } from '../types/site';
 import { useT } from './i18n';
@@ -50,26 +55,60 @@ export function Spinner({ label }: { label?: string }) {
   );
 }
 
-export function ErrorNote({ error }: { error: unknown }) {
-  const t = useT();
+/**
+ * An error as people can act on it: what went wrong, each problem with where it is, and what
+ * to do, in the language chosen in the site settings (see useErrorLanguage).
+ */
+export function ErrorNote({ error, labels }: { error: unknown; labels?: Record<string, string> }) {
+  const lang = useErrorLanguage();
   if (!error) return null;
-  const message = error instanceof ApiError ? error.message : t.error;
-  const details = error instanceof ApiError ? error.details : undefined;
+  const e = explainError(error, lang, labels);
   return (
-    <div role="alert" className="border-s-2 border-danger bg-surface px-4 py-3 text-sm text-danger">
-      {message}
-      {details?.length ? (
-        <ul className="mt-1 list-disc ps-5">
-          {details.slice(0, 5).map((d, i) => (
+    <div role="alert" dir={lang === 'fa' ? 'rtl' : 'ltr'} className="border-s-2 border-danger bg-surface px-4 py-3 text-sm text-danger">
+      <p className="font-medium">{e.summary}</p>
+      {e.items.length > 0 && (
+        <ul className="mt-1 list-disc space-y-0.5 ps-5">
+          {e.items.slice(0, 8).map((d, i) => (
             <li key={i}>
-              {d.path && <code className="me-1">{d.path}</code>}
-              {d.message}
+              {d.where && <span className="font-medium">{d.where}: </span>}
+              {d.problem}
             </li>
           ))}
         </ul>
-      ) : null}
+      )}
+      {e.hint && <p className="mt-1 text-ink-soft">{e.hint}</p>}
     </div>
   );
+}
+
+/** The settings of the site the admin is in (from the address), if any. */
+function useCurrentSiteSettings() {
+  const siteId = useLocation().pathname.match(/^\/admin\/sites\/([^/]+)/)?.[1] ?? '';
+  return useQuery({
+    queryKey: ['site', siteId, 'settings'],
+    queryFn: () => api.get<{ errorLanguage?: 'auto' | ErrorLanguage; calendar?: string }>(`/sites/${siteId}/settings`),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  }).data;
+}
+
+/** Error language for the admin: the site's setting when inside a site, else the panel's language. */
+export function useErrorLanguage(): ErrorLanguage {
+  const { locale } = usePreferences();
+  const chosen = useCurrentSiteSettings()?.errorLanguage;
+  return chosen === 'fa' || chosen === 'en' ? chosen : locale;
+}
+
+/** Calendar for dates in the admin: the site's setting, else by the panel's language. */
+export function useAdminCalendar(): CalendarSystem {
+  const { locale } = usePreferences();
+  return resolveCalendar(useCurrentSiteSettings()?.calendar, locale);
+}
+
+/** An error as one line, for toasts. */
+export function useErrorLine() {
+  const lang = useErrorLanguage();
+  return (error: unknown) => errorLine(error, lang);
 }
 
 export function Empty({ text }: { text?: string }) {
@@ -112,11 +151,13 @@ export function TextField({
   rows = 3,
   placeholder,
   required,
+  disabled,
   className,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
   type?: string;
   hint?: string;
   error?: string;
@@ -133,7 +174,7 @@ export function TextField({
         multiline ? (
           <textarea id={id} dir={dir} rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={cn(inputCls, 'resize-y')} aria-invalid={!!error} />
         ) : (
-          <input id={id} type={type} dir={dir} value={value} placeholder={placeholder} required={required} onChange={(e) => onChange(e.target.value)} className={inputCls} aria-invalid={!!error} />
+          <input id={id} type={type} dir={dir} value={value} placeholder={placeholder} required={required} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={cn(inputCls, disabled && 'opacity-60')} aria-invalid={!!error} />
         )
       }
     </Field>
@@ -287,7 +328,7 @@ export function IconButton({ label, onClick, children, disabled, className }: { 
 
 /* ---------- dialogs & toasts ---------- */
 
-export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean | 'xl' }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   // Callers usually pass a new onClose on every render; keep the latest without re-running the
@@ -310,7 +351,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-10" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cn('w-full bg-bg p-6 shadow-xl', wide ? 'max-w-4xl' : 'max-w-lg')}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cn('w-full bg-bg p-6 shadow-xl', wide === 'xl' ? 'max-w-7xl' : wide ? 'max-w-4xl' : 'max-w-lg')}>
         <div className="mb-5 flex items-center justify-between gap-4">
           <h2 className="font-display text-2xl text-ink">{title}</h2>
           <IconButton label={t.close} onClick={onClose}>

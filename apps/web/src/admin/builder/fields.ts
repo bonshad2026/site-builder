@@ -24,7 +24,19 @@ export type FieldDef =
   /** A request type from the site settings. */
   | { key: string; kind: 'requestType'; label: Lbl }
   /** Optional width / height / fit / corners for an image. */
-  | { key: string; kind: 'imageSize'; label: Lbl };
+  | { key: string; kind: 'imageSize'; label: Lbl }
+  /** A content table (or the shop's products) the section reads from. */
+  | { key: string; kind: 'source'; label: Lbl }
+  /** Fixed filters on the source's fields. */
+  | { key: string; kind: 'filters'; label: Lbl }
+  /** Sort field of the source (with `dir`). */
+  | { key: string; kind: 'sortField'; label: Lbl }
+  /** Filters shown to visitors. */
+  | { key: string; kind: 'visitorFilters'; label: Lbl }
+  /** The box design: `cardDesign` (shared) and `card` (own) together. */
+  | { key: string; kind: 'card'; label: Lbl }
+  /** One item of the source (empty = the item whose page this is). */
+  | { key: string; kind: 'itemSlug'; label: Lbl };
 
 const L = (en: string, fa: string): Lbl => ({ en, fa });
 
@@ -259,6 +271,67 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       { key: 'text', kind: 'loc', label: L('Text', 'متن'), multiline: true },
       { ...buttons, label: L('Buttons', 'دکمه‌ها') },
       { key: 'tone', kind: 'select', label: L('Colour', 'رنگ'), options: [{ value: 'dark', label: L('Dark', 'تیره') }, { value: 'accent', label: L('Accent', 'رنگ تأکید') }] },
+    ],
+  },
+  'collection-list': {
+    label: L('List from a table', 'لیست از جدول'),
+    description: L('Items of a content table (classes, news…) or products, as boxes or a list, with filters', 'آیتم‌های یک جدول (کلاس‌ها، اخبار…) یا محصولات، به‌صورت باکس یا لیست، با فیلتر'),
+    dynamic: true,
+    fields: [
+      eyebrow,
+      heading,
+      intro,
+      { key: 'source', kind: 'source', label: L('Table', 'جدول') },
+      { key: 'filters', kind: 'filters', label: L('Show only items where…', 'فقط آیتم‌هایی که…') },
+      { key: 'sort', kind: 'sortField', label: L('Sort by', 'مرتب‌سازی بر اساس') },
+      { key: 'limit', kind: 'number', label: L('Items per page', 'تعداد آیتم در هر صفحه'), min: 1, max: 60 },
+      {
+        key: 'pagination',
+        kind: 'select',
+        label: L('More items', 'آیتم‌های بیشتر'),
+        options: [
+          { value: 'none', label: L('Only the first ones', 'فقط همین تعداد') },
+          { value: 'more', label: L('“Show more” button', 'دکمه‌ی «نمایش بیشتر»') },
+          { value: 'pages', label: L('Page numbers', 'شماره صفحه') },
+        ],
+      },
+      { key: 'showSearch', kind: 'bool', label: L('Search box for visitors', 'جستجو برای بازدیدکننده') },
+      { key: 'visitorFilters', kind: 'visitorFilters', label: L('Filters for visitors', 'فیلترهای بازدیدکننده') },
+      {
+        key: 'filtersLayout',
+        kind: 'select',
+        label: L('Filters are shown', 'نحوه‌ی چیدن فیلترها'),
+        options: [
+          { value: 'inline', label: L('One after another', 'پشت سر هم') },
+          { value: 'stacked', label: L('Below each other', 'زیر هم') },
+        ],
+      },
+      {
+        key: 'layout',
+        kind: 'select',
+        label: L('Layout', 'نحوه نمایش'),
+        options: [
+          { value: 'grid', label: L('Boxes in columns', 'باکس در ستون‌ها') },
+          { value: 'list', label: L('List (one per row)', 'لیست (هر سطر یکی)') },
+        ],
+      },
+      { key: 'columns', kind: 'number', label: L('Boxes per row (desktop)', 'باکس در هر سطر (دسکتاپ)'), min: 1, max: 6 },
+      { key: 'columnsTablet', kind: 'number', label: L('Boxes per row (tablet)', 'باکس در هر سطر (تبلت)'), min: 1, max: 4 },
+      { key: 'columnsMobile', kind: 'number', label: L('Boxes per row (mobile)', 'باکس در هر سطر (موبایل)'), min: 1, max: 2 },
+      { key: 'gap', kind: 'number', label: L('Space between boxes', 'فاصله بین باکس‌ها'), min: 0, max: 12 },
+      { key: 'card', kind: 'card', label: L('Box design', 'طراحی باکس') },
+      { key: 'emptyText', kind: 'loc', label: L('Text when nothing matches', 'متن وقتی موردی نیست') },
+      buttons,
+    ],
+  },
+  'collection-item': {
+    label: L('Item display', 'نمایش آیتم'),
+    description: L('One item drawn with a box design; on a table’s template page, the item of that page', 'یک آیتم با طراحی باکس؛ در صفحه‌ی قالب جدول، آیتم همان صفحه'),
+    dynamic: true,
+    fields: [
+      { key: 'source', kind: 'source', label: L('Table', 'جدول') },
+      { key: 'itemSlug', kind: 'itemSlug', label: L('Item', 'آیتم') },
+      { key: 'card', kind: 'card', label: L('Box design', 'طراحی باکس') },
     ],
   },
   'contact-form': {

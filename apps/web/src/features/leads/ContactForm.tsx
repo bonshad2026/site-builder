@@ -5,9 +5,11 @@ import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, Select, TextArea, TextInput } from '../../components/ui/Field';
 import { usePreferences } from '../../lib/preferences';
-import { useProducts, useSiteSettings } from '../public-site/data';
+import { useProducts, useSiteErrorLanguage, useSiteSettings } from '../public-site/data';
 import { budgets, createLeadSchema, projectTypes, type FormType, type Lead, type LeadInput } from './leadSchema';
 import { submitLead, type SubmitResult } from './submitLead';
+import { RequestItemNote } from './RequestItemNote';
+import { errorLine } from '../../lib/errorText';
 
 const serviceToProjectType: Record<string, LeadInput['projectType']> = {
   'residential-design': 'residential',
@@ -74,6 +76,8 @@ function ContactFormInner({
   const budgetChoices = settings?.formOptions?.budgets ?? budgets.map((v) => ({ value: v, label: { en: m.form.budgets[v], fa: m.form.budgets[v] } }));
   const schema = useMemo(() => createLeadSchema(m.form.errors, formType), [m, formType]);
   const [status, setStatus] = useState<'idle' | 'error' | SubmitResult['mode']>('idle');
+  const [failure, setFailure] = useState('');
+  const errorLang = useSiteErrorLanguage();
 
   const {
     register,
@@ -104,7 +108,8 @@ function ContactFormInner({
       const budget = budgetChoices.find((b) => b.value === data.budget);
       const result = await submitLead({ ...data, budget: budget ? l(budget.label) : data.budget }, formType, requestType);
       setStatus(result.mode);
-    } catch {
+    } catch (err) {
+      setFailure(errorLine(err, errorLang));
       setStatus('error');
     }
   };
@@ -144,6 +149,7 @@ function ContactFormInner({
       aria-busy={isSubmitting}
     >
       {requestLabel && <p className="eyebrow sm:col-span-2">{requestLabel}</p>}
+      <RequestItemNote />
       {hasErrors && (
         <p role="alert" className="border-s-2 border-danger ps-4 text-sm text-danger sm:col-span-2">
           {m.form.errorSummary}
@@ -235,7 +241,7 @@ function ContactFormInner({
       </div>
       {status === 'error' && (
         <p role="alert" className="text-sm text-danger sm:col-span-2">
-          {m.form.failed}
+          {m.form.failed} {failure}
         </p>
       )}
       <div className="sm:col-span-2">

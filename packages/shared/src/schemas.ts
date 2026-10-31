@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { savedCardSchema } from './collections.js';
 import { hrefSchema, parseSectionProps } from './sections.js';
 import { designSchema, exportOptionsSchema, footerSchema, formFieldSchema, formOptionsSchema, headerSchema, shopPageSchema, shopSchema, systemPagesSchema, textsSchema } from './siteOptions.js';
 import { DEFAULT_REQUEST_TYPES, FORM_TYPES, LEAD_STATUSES, LOCALES, MODULES, PAYMENT_METHODS, PERMISSIONS, PUBLISH_STATUSES, SOCIAL_ICONS } from './constants.js';
@@ -79,6 +80,18 @@ export const siteSettingsSchema = z.object({
     .max(12),
   /** How social links show: their name, their icon, or both. */
   socialDisplay: z.enum(['label', 'icon', 'both']).default('label'),
+  /** Language of error messages in the admin and on the site (auto = the language being used). */
+  errorLanguage: z.enum(['auto', 'fa', 'en']).default('auto'),
+  /** Writing direction of the site's pages (auto = by language: Persian right to left). */
+  direction: z.enum(['auto', 'rtl', 'ltr']).default('auto'),
+  /** Writing direction of the site's admin panel (auto = by the panel's language). */
+  adminDirection: z.enum(['auto', 'rtl', 'ltr']).default('auto'),
+  /** Calendar for dates (auto = Persian (Jalali) in Persian, Gregorian in English). */
+  calendar: z.enum(['auto', 'jalali', 'gregorian']).default('auto'),
+  /** Language the site's admin panel opens in (auto = the user's own choice). */
+  adminLanguage: z.enum(['auto', 'fa', 'en']).default('auto'),
+  /** Box designs shared by list sections (see the box designer). */
+  cardDesigns: z.array(savedCardSchema).max(40).default([]),
   /** Main menu in display order: pages of the site (/about) or full links, each with an optional submenu. */
   nav: z
     .array(
@@ -145,6 +158,12 @@ export type SiteSettings = z.infer<typeof siteSettingsSchema>;
 
 const optionSchemas = {
   socialDisplay: siteSettingsSchema.shape.socialDisplay,
+  cardDesigns: siteSettingsSchema.shape.cardDesigns,
+  errorLanguage: siteSettingsSchema.shape.errorLanguage,
+  direction: siteSettingsSchema.shape.direction,
+  adminDirection: siteSettingsSchema.shape.adminDirection,
+  calendar: siteSettingsSchema.shape.calendar,
+  adminLanguage: siteSettingsSchema.shape.adminLanguage,
   productCategories: siteSettingsSchema.shape.productCategories,
   requestTypes: siteSettingsSchema.shape.requestTypes,
   design: designSchema,
@@ -279,6 +298,8 @@ export const leadInputSchema = z.object({
   budget: z.string().max(80).optional(),
   message: z.string().trim().min(2).max(4000),
   sourcePath: z.string().max(300).optional(),
+  /** The content-table item this request is about (a class, an event…). */
+  item: z.object({ collection: z.string().max(40), slug: z.string().max(80) }).optional(),
   /** Reservation / demo answers. */
   details: z
     .object({
@@ -313,9 +334,21 @@ export const orderInputSchema = z.object({
     phone: phoneSchema,
     address: z.string().trim().max(500).optional(),
   }),
-  /** Client sends only product ids and quantities; prices are always read from the database. */
+  /**
+   * Client sends only ids and quantities; prices are always read from the database. A line is a
+   * product (`productId`) or an item of a content table that sells (`itemId`).
+   */
   items: z
-    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(999), option: z.string().trim().max(80).default('') }))
+    .array(
+      z
+        .object({
+          productId: z.string().uuid().optional(),
+          itemId: z.string().uuid().optional(),
+          quantity: z.number().int().min(1).max(999),
+          option: z.string().trim().max(80).default(''),
+        })
+        .refine((l) => !!l.productId !== !!l.itemId, 'Each line needs a product or an item'),
+    )
     .min(1)
     .max(100),
   note: z.string().max(1000).optional(),

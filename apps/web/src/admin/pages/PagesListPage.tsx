@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { Localized } from '../../types/site';
 import { useT } from '../i18n';
-import { Badge, ErrorNote, LocalizedField, Modal, PageTitle, Spinner, TextField, useToast } from '../ui';
+import { Badge, ErrorNote, LocalizedField, Modal, PageTitle, Spinner, TextField, useErrorLine, useToast } from '../ui';
 
 export interface PageSummary {
   id: string;
@@ -78,6 +78,7 @@ function SortableRow({ page, siteId, onDelete, onHome }: { page: PageSummary; si
 export default function PagesListPage({ siteId }: { siteId: string }) {
   const t = useT();
   const toast = useToast();
+  const errorText = useErrorLine();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data, isLoading, error } = usePages(siteId);
@@ -91,8 +92,8 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
 
   const refresh = () => qc.invalidateQueries({ queryKey: pagesKey(siteId) });
   const reorder = useMutation({ mutationFn: (ids: string[]) => api.put(`/sites/${siteId}/pages/order`, { ids }), onSuccess: refresh, onError: () => toast(t.error, 'bad') });
-  const remove = useMutation({ mutationFn: (id: string) => api.delete(`/sites/${siteId}/pages/${id}`), onSuccess: refresh, onError: (e) => toast(e.message, 'bad') });
-  const setHome = useMutation({ mutationFn: (id: string) => api.patch(`/sites/${siteId}/pages/${id}`, { isHome: true }), onSuccess: refresh, onError: (e) => toast(e.message, 'bad') });
+  const remove = useMutation({ mutationFn: (id: string) => api.delete(`/sites/${siteId}/pages/${id}`), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
+  const setHome = useMutation({ mutationFn: (id: string) => api.patch(`/sites/${siteId}/pages/${id}`, { isHome: true }), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
   const create = useMutation({
     mutationFn: () => api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug, title, document: { schemaVersion: 1, sections: [] } }),
     onSuccess: (page) => {

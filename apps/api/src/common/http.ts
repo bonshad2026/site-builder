@@ -45,9 +45,22 @@ const empty: Empty = z.object({});
 function parse<T extends ZodTypeAny>(schema: T, value: unknown, where: string): z.output<T> {
   const result = schema.safeParse(value ?? {});
   if (!result.success) {
-    throw new AppError(400, 'validation_failed', `Invalid ${where}`, result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
+    throw new AppError(400, 'validation_failed', `Invalid ${where}`, result.error.issues.map(issueDetail));
   }
   return result.data;
+}
+
+/**
+ * One validation problem for the client: where (`path`), the English message, and the kind of
+ * problem with its limits, so the site can explain it in the visitor's language.
+ */
+export function issueDetail(i: z.ZodIssue) {
+  const extra: Record<string, unknown> = {};
+  for (const key of ['minimum', 'maximum', 'exact', 'inclusive', 'type', 'validation', 'expected', 'received', 'options'] as const) {
+    const v = (i as unknown as Record<string, unknown>)[key];
+    if (v !== undefined && typeof v !== 'function') extra[key] = typeof v === 'bigint' ? Number(v) : v;
+  }
+  return { path: i.path.join('.'), message: i.message, code: i.code, ...extra };
 }
 
 export class ApiRouter {

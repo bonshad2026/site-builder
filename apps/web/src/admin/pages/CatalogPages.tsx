@@ -8,7 +8,7 @@ import type { ProductDto, ServiceDto } from '../../types/api';
 import type { Localized } from '../../types/site';
 import { useAdminSettings } from '../AdminRoot';
 import { useT } from '../i18n';
-import { Badge, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, NumberField, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
+import { Badge, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, NumberField, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useErrorLine, useToast } from '../ui';
 import { ImagePicker } from './FilesPage';
 import { ProductExport } from './ProductExport';
 
@@ -246,6 +246,7 @@ export default function CatalogPages({ siteId, kind }: { siteId: string; kind: K
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const errorText = useErrorLine();
   const { l, formatMoney } = usePreferences();
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
@@ -258,7 +259,7 @@ export default function CatalogPages({ siteId, kind }: { siteId: string; kind: K
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/sites/${siteId}/${kind}/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['site', siteId, kind] }),
-    onError: (e) => toast(e.message, 'bad'),
+    onError: (e) => toast(errorText(e), 'bad'),
   });
   const title = kind === 'services' ? t.services : t.products;
   const tone = { published: 'good', draft: 'neutral', archived: 'warn' } as const;

@@ -1,5 +1,9 @@
 import { isSectionType, parseSectionProps, type PageDocument, type SectionAppearance } from '@site-builder/shared';
-import { Component, type CSSProperties, type ReactNode } from 'react';
+import { Component, useMemo, type CSSProperties, type ReactNode } from 'react';
+import { fillTokens } from '../features/collections/CardView';
+import { useCurrentItem } from '../features/collections/data';
+import { useSiteCalendar } from '../features/public-site/data';
+import { usePreferences } from '../lib/preferences';
 import { sectionRenderers } from './renderers';
 
 type Section = PageDocument['sections'][number];
@@ -28,9 +32,10 @@ function EditorNotice({ text }: { text: string }) {
  * and a visible notice in the editor (`editing`).
  */
 export function SectionRenderer({ section, editing = false }: { section: Section; editing?: boolean }) {
+  const props = useItemTokens(section.props);
   if (section.hidden && !editing) return null;
   if (!isSectionType(section.type)) return editing ? <EditorNotice text={`Unknown section type “${section.type}”`} /> : null;
-  const parsed = parseSectionProps(section.type, section.props);
+  const parsed = parseSectionProps(section.type, props);
   if (!parsed.success) return editing ? <EditorNotice text={`Invalid section settings: ${parsed.error}`} /> : null;
   const Renderer = sectionRenderers[section.type];
   return (
@@ -40,6 +45,23 @@ export function SectionRenderer({ section, editing = false }: { section: Section
       </SectionLook>
     </SectionBoundary>
   );
+}
+
+/** On a table's template page, `{{field}}` in any text of a section becomes the item's value. */
+function useItemTokens(props: Record<string, unknown>): Record<string, unknown> {
+  const current = useCurrentItem();
+  const prefs = usePreferences();
+  const cal = useSiteCalendar();
+  return useMemo(() => {
+    if (!current) return props;
+    const fill = (v: unknown): unknown => {
+      if (typeof v === 'string') return v.includes('{{') ? fillTokens(v, current.item, current.collection, prefs, cal) : v;
+      if (Array.isArray(v)) return v.map(fill);
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]));
+      return v;
+    };
+    return fill(props) as Record<string, unknown>;
+  }, [props, current, prefs, cal]);
 }
 
 /**

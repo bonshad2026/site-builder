@@ -138,7 +138,8 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const h = settings?.header;
-  const shop = !!settings?.modules.products && !!settings.modules.orders && h?.showCart !== false;
+  // The cart shows when the site sells: products, or content-table items (needs orders).
+  const shop = !!settings?.modules.orders && h?.showCart !== false;
 
   // Over the home hero the header is transparent until the visitor scrolls (unless turned off).
   const overHero = pathname === '/' && !scrolled && h?.transparentOverHero !== false;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cardDesignSchema, collectionFilterSchema, visitorFilterSchema } from './collections.js';
 
 /**
  * Section library: every section type has a props schema with defaults.
@@ -215,6 +216,44 @@ export const sectionDefinitions = {
     buttons,
   }),
   cta: withLegacyButtons(z.object({ heading: loc(200), text: loc(400), buttons, tone: z.enum(['dark', 'accent']).default('dark') }), [['cta', 'primary']]),
+  /** Items of a content table (or the shop's products) as boxes or a list, with filters. */
+  'collection-list': z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    /** A table's slug, or `products`. */
+    source: z.string().max(40).default(''),
+    filters: z.array(collectionFilterSchema).max(10).default([]),
+    /** `position`, `newest`, `title` or a field key. */
+    sort: z.string().max(40).default('position'),
+    dir: z.enum(['asc', 'desc']).default('asc'),
+    limit: z.number().int().min(1).max(60).default(6),
+    /** After the first `limit` items: nothing, a "show more" button, or page numbers. */
+    pagination: z.enum(['none', 'more', 'pages']).default('none'),
+    showSearch: z.boolean().default(false),
+    /** Filters the visitor can use: buttons or a drop-down per field. */
+    visitorFilters: z.array(visitorFilterSchema).max(10).default([]),
+    /** Visitor filters one after another in a row (wrapping), or below each other. */
+    filtersLayout: z.enum(['inline', 'stacked']).default('inline'),
+    layout: z.enum(['grid', 'list']).default('grid'),
+    columns: z.number().int().min(1).max(6).default(3),
+    columnsTablet: z.number().int().min(1).max(4).default(2),
+    columnsMobile: z.number().int().min(1).max(2).default(1),
+    gap: z.number().int().min(0).max(12).default(6),
+    /** A box design saved in the site settings (its id); empty = `card` below. */
+    cardDesign: z.string().max(40).default(''),
+    /** This list's own box design (null = the default box). */
+    card: cardDesignSchema.nullable().default(null),
+    emptyText: loc(200),
+    buttons,
+  }),
+  /** One item drawn with a box design: the current item on a table's template page, or a chosen one. */
+  'collection-item': z.object({
+    source: z.string().max(40).default(''),
+    /** Empty = the item whose page this is. */
+    itemSlug: z.string().max(80).default(''),
+    cardDesign: z.string().max(40).default(''),
+    card: cardDesignSchema.nullable().default(null),
+  }),
   'contact-form': z.object({
     ...eyebrowHeading,
     intro: loc(600),
@@ -272,6 +311,35 @@ const STRUCTURE_KEYS = new Set([
   'textColor',
   'titleSize',
   'textSize',
+  // content tables and boxes
+  'source',
+  'field',
+  'op',
+  'valueFrom',
+  'sort',
+  'dir',
+  'pagination',
+  'cardDesign',
+  'itemSlug',
+  'type',
+  'id',
+  'direction',
+  'align',
+  'justify',
+  'ratio',
+  'variant',
+  'textStyle',
+  'size',
+  'weight',
+  'color',
+  'textAlign',
+  'dir',
+  'position',
+  'images',
+  'count',
+  'pick',
+  'filtersLayout',
+  'calendarMode',
 ]);
 
 /**

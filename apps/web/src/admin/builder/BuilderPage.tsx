@@ -22,9 +22,10 @@ import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { usePreferences } from '../../lib/preferences';
 import type { Localized } from '../../types/site';
+import { useAdminSettings } from '../AdminRoot';
 import { useT } from '../i18n';
 import { pagesKey, usePages } from '../pages/PagesListPage';
-import { Badge, Checkbox, ErrorNote, IconButton, LocalizedField, Modal, Spinner, TextField, useToast } from '../ui';
+import { Badge, Checkbox, ErrorNote, IconButton, LocalizedField, Modal, Spinner, TextField, useErrorLine, useToast } from '../ui';
 import { sectionMeta } from './fields';
 import type { SectionAppearance } from '@site-builder/shared';
 import { AppearanceEditor, FieldsEditor } from './Inspector';
@@ -212,6 +213,7 @@ export default function BuilderPage() {
   const t = useT();
   const b = useB();
   const toast = useToast();
+  const errorText = useErrorLine();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { locale, l, dir } = usePreferences();
@@ -284,7 +286,7 @@ export default function BuilderPage() {
       qc.invalidateQueries({ queryKey: pagesKey(siteId) });
       qc.invalidateQueries({ queryKey: ['public'] });
     },
-    onError: (e) => toast(e.message, 'bad'),
+    onError: (e) => toast(errorText(e), 'bad'),
   });
 
   // Keyboard shortcuts (outside text fields, where the browser's own undo applies).
@@ -306,10 +308,11 @@ export default function BuilderPage() {
   }, []);
 
   // Keep the preview iframe in sync.
+  const cardDesigns = useAdminSettings(siteId).data?.cardDesigns;
   const postToPreview = useCallback(() => {
-    const message: PreviewMessage = { type: 'sb:doc', siteId, sections: state.sections, selectedId: state.selectedId };
+    const message: PreviewMessage = { type: 'sb:doc', siteId, pageSlug: page.data?.slug ?? '', cardDesigns: cardDesigns ?? [], sections: state.sections, selectedId: state.selectedId };
     iframe.current?.contentWindow?.postMessage(message, window.location.origin);
-  }, [siteId, state.sections, state.selectedId]);
+  }, [siteId, page.data?.slug, cardDesigns, state.sections, state.selectedId]);
   useEffect(postToPreview, [postToPreview]);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {

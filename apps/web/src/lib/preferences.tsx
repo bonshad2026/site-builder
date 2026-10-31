@@ -34,6 +34,8 @@ interface PreferencesContextValue {
   format: (template: string, vars: Record<string, string | number>) => string;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: ThemeId | null) => void;
+  /** A site's own direction (null = by language). */
+  setDirection: (dir: 'ltr' | 'rtl' | null) => void;
 }
 
 /** Exported so a site can give its own wording for built-in texts (see SiteTexts). */
@@ -59,7 +61,8 @@ export function PreferencesProvider({
   onLocaleChange: (locale: Locale) => void;
 }) {
   const [theme, setThemeState] = useState<ThemeId | null>(storedTheme);
-  const dir = locale === 'fa' ? 'rtl' : 'ltr';
+  const [dirOverride, setDirection] = useState<'ltr' | 'rtl' | null>(null);
+  const dir = dirOverride ?? (locale === 'fa' ? 'rtl' : 'ltr');
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -105,10 +108,20 @@ export function PreferencesProvider({
         }),
       setLocale: onLocaleChange,
       setTheme,
+      setDirection,
     };
   }, [locale, dir, theme, onLocaleChange, setTheme]);
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
+}
+
+/** Applies a site's direction setting while mounted ('auto' or missing = by language). */
+export function useSiteDirection(choice: 'auto' | 'rtl' | 'ltr' | undefined) {
+  const { setDirection } = usePreferences();
+  useEffect(() => {
+    setDirection(choice === 'rtl' || choice === 'ltr' ? choice : null);
+    return () => setDirection(null);
+  }, [choice, setDirection]);
 }
 
 export function usePreferences(): PreferencesContextValue {

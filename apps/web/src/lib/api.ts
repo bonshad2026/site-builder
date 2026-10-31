@@ -10,7 +10,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
-    public readonly details?: { path: string; message: string }[],
+    /** Validation problems: where, the English message, and the kind of problem with its limits. */
+    public readonly details?: { path: string; message: string; code?: string; [limit: string]: unknown }[],
   ) {
     super(message);
   }
@@ -45,7 +46,7 @@ export async function apiRequest<T>(path: string, init: { method?: string; body?
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   if (res.status === 204) return { data: undefined as T };
-  const json = (await res.json().catch(() => null)) as (Envelope<T> & { error?: { code: string; message: string; details?: { path: string; message: string }[] } }) | null;
+  const json = (await res.json().catch(() => null)) as (Envelope<T> & { error?: { code: string; message: string; details?: ApiError['details'] } }) | null;
   if (!res.ok || !json) {
     const e = json?.error;
     throw new ApiError(res.status, e?.code ?? 'network_error', e?.message ?? `Request failed (${res.status})`, e?.details);

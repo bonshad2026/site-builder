@@ -5,6 +5,9 @@ import { FieldShell, Select, TextArea, TextInput } from '../../components/ui/Fie
 import { usePreferences } from '../../lib/preferences';
 import { normalizeDigits } from './leadSchema';
 import { submitLead } from './submitLead';
+import { RequestItemNote } from './RequestItemNote';
+import { errorLine } from '../../lib/errorText';
+import { useSiteErrorLanguage } from '../public-site/data';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^(\+?\d{1,3}[\s-]?)?\d[\d\s-]{7,14}$/;
@@ -20,6 +23,8 @@ export function CustomRequestForm({ requestType, fields, requestLabel, submitLab
   const [values, setValues] = useState<Values>({ name: '', email: '', consent: false });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<'idle' | 'sending' | 'error' | 'sent' | 'simulated'>('idle');
+  const [failure, setFailure] = useState('');
+  const errorLang = useSiteErrorLanguage();
   const set = (key: string, v: string | boolean) => setValues((x) => ({ ...x, [key]: v }));
   const text = (key: string) => (typeof values[key] === 'string' ? (values[key] as string) : '');
 
@@ -70,7 +75,8 @@ export function CustomRequestForm({ requestType, fields, requestLabel, submitLab
         answers,
       );
       setStatus(result.mode);
-    } catch {
+    } catch (err) {
+      setFailure(errorLine(err, errorLang));
       setStatus('error');
     }
   };
@@ -98,6 +104,7 @@ export function CustomRequestForm({ requestType, fields, requestLabel, submitLab
   return (
     <form noValidate onSubmit={onSubmit} className="grid gap-8 sm:grid-cols-2" aria-busy={status === 'sending'}>
       {requestLabel && <p className="eyebrow sm:col-span-2">{requestLabel}</p>}
+      <RequestItemNote />
       <FieldShell id="req-name" label={m.form.name} error={err('name')}>
         <TextInput id="req-name" autoComplete="name" value={text('name')} onChange={(e) => set('name', e.target.value)} aria-invalid={!!err('name')} />
       </FieldShell>
@@ -178,7 +185,7 @@ export function CustomRequestForm({ requestType, fields, requestLabel, submitLab
       </div>
       {status === 'error' && (
         <p role="alert" className="text-sm text-danger sm:col-span-2">
-          {m.form.failed}
+          {m.form.failed} {failure}
         </p>
       )}
       <div className="sm:col-span-2">

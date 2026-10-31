@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { CartProvider } from '../../features/cart/cart';
 import { useSiteId, useSiteSettings } from '../../features/public-site/data';
-import { usePreferences } from '../../lib/preferences';
+import { usePreferences, useSiteDirection } from '../../lib/preferences';
 import { SiteTexts, useSiteDesign } from '../../lib/siteLook';
 import { Footer } from './Footer';
 import { Header } from './Header';
@@ -25,6 +25,7 @@ export function ThemeEffect() {
 
 export function SiteLayout() {
   const { data: settings } = useSiteSettings();
+  useSiteDirection(settings?.direction);
   return (
     <SiteTexts settings={settings}>
       <SiteFrame />

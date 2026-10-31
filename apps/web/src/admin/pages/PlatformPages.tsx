@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { api, apiRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import { useT } from '../i18n';
-import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
+import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useErrorLine, useToast } from '../ui';
 
 interface Tenant {
   id: string;
@@ -228,6 +228,7 @@ function UsersPage() {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const errorText = useErrorLine();
   const { formatDate } = usePreferences();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
@@ -244,7 +245,7 @@ function UsersPage() {
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'active' | 'disabled' }) => api.patch(`/platform/users/${id}`, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['platform', 'users'] }),
-    onError: (e) => toast(e.message, 'bad'),
+    onError: (e) => toast(errorText(e), 'bad'),
   });
 
   return (

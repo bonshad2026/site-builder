@@ -14,6 +14,7 @@ import { assetsRoutes } from './modules/assets/assets.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { ssoLogin } from './modules/auth/sso.js';
 import { productsRoutes, servicesRoutes } from './modules/catalog/catalog.js';
+import { collectionsRoutes } from './modules/collections/collections.routes.js';
 import { leadsRoutes } from './modules/leads/leads.routes.js';
 import { membersRoutes } from './modules/members/members.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
@@ -60,6 +61,7 @@ export function createApp(ctx: AppContext) {
   site.use('/pages', pagesRoutes(clientLocked));
   site.use('/services', servicesRoutes(ctx.storage));
   site.use('/products', productsRoutes(ctx.storage));
+  site.use('/collections', collectionsRoutes(ctx.storage, operatorOnly));
   site.use('/payment-settings', paymentSettingsRoutes(ctx));
   site.use('/overview', operatorOnly, overviewRoutes());
   site.use('/leads', leadsRoutes());

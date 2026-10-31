@@ -12,6 +12,9 @@ const Inbox = lazy(() => import('./InboxPages'));
 const Files = lazy(() => import('./FilesPage'));
 const Settings = lazy(() => import('./SettingsPages'));
 const Content = lazy(() => import('./ContentPages'));
+// Defining tables is building the site; their items are the owner's content.
+const Tables = OPERATOR_UI ? lazy(() => import('../collections/TablesPage')) : null;
+const Items = lazy(() => import('../collections/ItemsPage'));
 
 /** A client's admin opens on its first data section. */
 function ClientHome({ siteId }: { siteId: string }) {
@@ -32,6 +35,8 @@ export default function SitePages({ account = false }: { account?: boolean }) {
       <Route path="content/*" element={<Content siteId={siteId} />} />
       <Route path="services" element={<Catalog siteId={siteId} kind="services" />} />
       <Route path="products" element={<Catalog siteId={siteId} kind="products" />} />
+      {operator && Tables && <Route path="tables" element={<Tables siteId={siteId} />} />}
+      <Route path="items/:collectionId" element={<Items siteId={siteId} />} />
       <Route path="leads" element={<Inbox siteId={siteId} kind="leads" />} />
       <Route path="orders" element={<Inbox siteId={siteId} kind="orders" />} />
       <Route path="files" element={<Files siteId={siteId} />} />

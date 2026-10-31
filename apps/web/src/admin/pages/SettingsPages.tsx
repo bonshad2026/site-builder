@@ -146,6 +146,56 @@ function SettingsView({ siteId }: { siteId: string }) {
                 </div>
               </fieldset>
               <SelectField label={t.defaultLanguage} value={s.defaultLocale} onChange={(v) => set('defaultLocale', v)} options={s.locales.map((c) => ({ value: c, label: c === 'en' ? t.english : t.persian }))} />
+              <SelectField
+                label={t.errorLanguage}
+                value={s.errorLanguage ?? 'auto'}
+                onChange={(v) => set('errorLanguage', v)}
+                options={[
+                  { value: 'auto', label: t.errorLanguageAuto },
+                  { value: 'fa', label: t.persian },
+                  { value: 'en', label: t.english },
+                ]}
+              />
+              <SelectField
+                label={t.siteDirection}
+                value={s.direction ?? 'auto'}
+                onChange={(v) => set('direction', v)}
+                options={[
+                  { value: 'auto', label: t.directionAuto },
+                  { value: 'rtl', label: t.directionRtl },
+                  { value: 'ltr', label: t.directionLtr },
+                ]}
+              />
+              <SelectField
+                label={t.adminDirection}
+                value={s.adminDirection ?? 'auto'}
+                onChange={(v) => set('adminDirection', v)}
+                options={[
+                  { value: 'auto', label: t.adminDirectionAuto },
+                  { value: 'rtl', label: t.directionRtl },
+                  { value: 'ltr', label: t.directionLtr },
+                ]}
+              />
+              <SelectField
+                label={t.calendarSetting}
+                value={s.calendar ?? 'auto'}
+                onChange={(v) => set('calendar', v)}
+                options={[
+                  { value: 'auto', label: t.calendarAuto },
+                  { value: 'jalali', label: t.calendarJalali },
+                  { value: 'gregorian', label: t.calendarGregorian },
+                ]}
+              />
+              <SelectField
+                label={t.adminLanguage}
+                value={s.adminLanguage ?? 'auto'}
+                onChange={(v) => set('adminLanguage', v)}
+                options={[
+                  { value: 'auto', label: t.adminLanguageAuto },
+                  { value: 'fa', label: t.persian },
+                  { value: 'en', label: t.english },
+                ]}
+              />
             </div>
             </>
             )}

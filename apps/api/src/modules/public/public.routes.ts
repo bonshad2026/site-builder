@@ -1,14 +1,17 @@
 import { DEFAULT_REQUEST_TYPES, LEAD_TYPES, leadInputSchema, orderInputSchema, withSettingDefaults, type RequestType } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
+import type pg from 'pg';
 import { z } from 'zod';
 import { sha256 } from '../../common/crypto.js';
-import { badRequest, notFound } from '../../common/errors.js';
+import { badRequest, conflict, notFound } from '../../common/errors.js';
 import { ApiRouter, pageMeta, paginationQuery } from '../../common/http.js';
 import { selectList } from '../../common/sql.js';
 import type { AppContext } from '../../context.js';
 import { requireModule } from '../../middleware/tenant.js';
 import { productsTable, servicesTable } from '../catalog/catalog.js';
 import { withImageUrls } from '../assets/urls.js';
+import { registerPublicCollectionRoutes } from '../collections/collections.routes.js';
+import { availabilityOf, loadCollections, seatsTaken, type ItemRow } from '../collections/collections.service.js';
 import { createOrder, orderItems } from '../orders/orders.service.js';
 import { findOrderForBuyer, gatewayFor, getPaymentSettings, startPayment } from '../payments/payments.service.js';
 
@@ -53,6 +56,8 @@ export function publicRoutes(ctx: AppContext) {
     if (!rows[0]) throw notFound('Page');
     return { data: rows[0] };
   });
+
+  registerPublicCollectionRoutes(r, ctx.storage);
 
   r.route({ method: 'get', path: '/services', summary: 'Published services', middleware: [requireModule('services')] }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(`SELECT ${selectList(servicesTable)} FROM services WHERE status = 'published' ORDER BY position, created_at`);
@@ -112,10 +117,11 @@ export function publicRoutes(ctx: AppContext) {
       const configured = (await req.tenant!.db.query(`SELECT settings->'requestTypes' AS types FROM site_settings WHERE id = 1`)).rows[0]?.types as RequestType[] | null;
       const known = new Set<string>([...LEAD_TYPES, ...(configured ?? DEFAULT_REQUEST_TYPES).map((t) => t.slug)]);
       if (!known.has(body.type)) throw badRequest('Unknown request type');
+      const itemRef = body.item ? await requestedItem(req.tenant!.db, body.item) : null;
       const { rows } = await req.tenant!.db.query(
-        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash, details)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at AS "createdAt"`,
-        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null, body.details],
+        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash, details, item_ref)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at AS "createdAt"`,
+        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null, body.details, itemRef],
       );
       return { data: { received: true, id: rows[0].id, createdAt: rows[0].createdAt } };
     },
@@ -128,9 +134,11 @@ export function publicRoutes(ctx: AppContext) {
       summary: 'Place an order (prices and stock are checked on the server; payment is not processed)',
       status: 201,
       body: orderInputSchema,
-      middleware: [submitLimiter, requireModule('products'), requireModule('orders')],
+      middleware: [submitLimiter, requireModule('orders')],
     },
     async ({ req, body }) => {
+      // Products need the shop; content-table items only need orders.
+      if (body.items.some((l) => l.productId) && !req.tenant!.modules?.products) throw badRequest('This site does not sell products');
       if (body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
       const order = await createOrder(req.tenant!.db, body);
       return {
@@ -203,7 +211,13 @@ export function publicRoutes(ctx: AppContext) {
     const pages = await db.query(
       `SELECT slug, is_home, published_at FROM pages WHERE published IS NOT NULL AND NOT coalesce((published_seo->>'noIndex')::boolean, false)`,
     );
-    for (const p of pages.rows) entries.push({ path: p.is_home ? '' : `/${p.slug}`, lastmod: p.published_at });
+    // A table's template page is only shown through its items.
+    const templates = new Set((await db.query<{ detail_page: string }>(`SELECT detail_page FROM collections WHERE detail_page <> ''`)).rows.map((r) => r.detail_page));
+    for (const p of pages.rows) if (!templates.has(p.slug)) entries.push({ path: p.is_home ? '' : `/${p.slug}`, lastmod: p.published_at });
+    const items = await db.query(
+      `SELECT c.slug AS collection, i.slug, i.updated_at FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE i.status = 'published'`,
+    );
+    for (const i of items.rows) entries.push({ path: `/${i.collection}/${encodeURIComponent(i.slug)}`, lastmod: i.updated_at });
     if (modules.services) {
       for (const s of (await db.query(`SELECT slug, updated_at FROM services WHERE status = 'published'`)).rows) entries.push({ path: `/services/${s.slug}`, lastmod: s.updated_at });
     }
@@ -230,6 +244,27 @@ export function publicRoutes(ctx: AppContext) {
   });
 
   return r.router;
+}
+
+/**
+ * The item a request is about, checked like a booking: it must be published and, when requests
+ * take a seat, open and not full. Returns what is stored with the request.
+ */
+async function requestedItem(db: pg.Pool, ref: { collection: string; slug: string }) {
+  const tables = await loadCollections(db);
+  const table = tables.find((t) => t.slug === ref.collection);
+  if (!table) throw badRequest('Unknown item');
+  const { rows } = await db.query<ItemRow>(
+    `SELECT id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM collection_items WHERE collection_id = $1 AND slug = $2 AND status = 'published'`,
+    [table.id, ref.slug],
+  );
+  const item = rows[0];
+  if (!item) throw badRequest('Unknown item');
+  const state = availabilityOf(table, item, (await seatsTaken(db, table, [item.id])).get(item.id) ?? 0);
+  if (state.reason === 'deadline') throw badRequest('Registration for this item has closed');
+  if (table.commerce.requestsTakeSeat && state.reason === 'full') throw conflict('This item is full');
+  return { collection: table.slug, id: item.id, slug: item.slug, title: item.title };
 }
 
 /** Canonical origin of a site: its primary domain in production, the web app URL otherwise. */

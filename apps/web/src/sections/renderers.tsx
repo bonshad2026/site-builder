@@ -15,6 +15,7 @@ import { GalleryCard, ProductCard, ServiceCard } from '../features/public-site/c
 import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
 import { cn } from '../lib/cn';
+import { CollectionItemSection, CollectionListSection } from './collectionSections';
 import { usePreferences } from '../lib/preferences';
 
 type Props<T extends SectionType> = { props: SectionProps<T> };
@@ -645,5 +646,7 @@ export const sectionRenderers: Record<SectionType, AnyRenderer> = {
   faq: FaqSection,
   pricing: PricingSection,
   cta: CtaSection,
+  'collection-list': CollectionListSection,
+  'collection-item': CollectionItemSection,
   'contact-form': ContactFormSection,
 };

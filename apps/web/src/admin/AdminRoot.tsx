@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { HOST_SITE_ID } from '../features/public-site/data';
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
 import type { SiteSettings } from '@site-builder/shared';
 import { LanguageSwitch } from '../components/layout/PreferenceControls';
 import { api } from '../lib/api';
 import { cn } from '../lib/cn';
-import { usePreferences } from '../lib/preferences';
+import { usePreferences, useSiteDirection } from '../lib/preferences';
 import { ForgotPasswordPage, isOperator, LoginPage, OPERATOR_UI, RequireAuth, useLogout, useMe, type Me } from './auth';
 import { useT } from './i18n';
 import { Spinner, ToastProvider } from './ui';
+import { useAdminCollections } from './collections/api';
 
 // Operator-only code is not even bundled into client builds.
 const Platform = OPERATOR_UI ? lazy(() => import('./pages/PlatformPages')) : null;
@@ -44,10 +46,40 @@ function useAdminTheme() {
   }, []);
 }
 
+/** Sites whose panel language was already applied this visit, so the user can still switch afterwards. */
+const appliedLanguage = new Set<string>();
+
+/**
+ * The current site's panel language and direction: the site in the address (/admin/sites/:id),
+ * or the site this address belongs to (a client's own /admin, also on the sign-in page).
+ */
+function AdminSiteLook() {
+  const routeSite = useLocation().pathname.match(/^\/admin\/sites\/([^/]+)/)?.[1];
+  const siteId = routeSite ?? HOST_SITE_ID;
+  const { locale, setLocale } = usePreferences();
+  const { data } = useQuery({
+    queryKey: ['admin-look', siteId],
+    queryFn: () => api.get<Pick<SiteSettings, 'adminDirection' | 'adminLanguage'>>(`/public/sites/${siteId}/settings`),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  });
+  useSiteDirection(siteId ? data?.adminDirection : undefined);
+  useEffect(() => {
+    const lang = data?.adminLanguage;
+    if (!siteId || (lang !== 'fa' && lang !== 'en')) return;
+    const key = `${siteId}:${lang}`;
+    if (appliedLanguage.has(key)) return;
+    appliedLanguage.add(key);
+    if (lang !== locale) setLocale(lang);
+  }, [siteId, data?.adminLanguage, locale, setLocale]);
+  return null;
+}
+
 export default function AdminRoot() {
   useAdminTheme();
   return (
     <ToastProvider>
+      <AdminSiteLook />
       <Suspense fallback={<Spinner />}>
         <Routes>
           <Route path="login" element={<LoginPage />} />
@@ -111,6 +143,8 @@ function SiteNav({ siteId }: { siteId: string }) {
   const { data: info } = useSiteInfo(siteId);
   const { data: settings } = useAdminSettings(siteId);
   const operator = isOperator(useMe().data);
+  const { l } = usePreferences();
+  const { data: tables = [] } = useAdminCollections(siteId);
   const can = (p: string) => !!info?.permissions.includes(p);
   const mod = (m: keyof SiteSettings['modules']) => !!settings?.modules[m];
   const base = `/admin/sites/${siteId}`;
@@ -128,6 +162,12 @@ function SiteNav({ siteId }: { siteId: string }) {
       {!operator && can('pages:write') && <NavItem to={`${base}/content`}>{t.content}</NavItem>}
       {mod('services') && <NavItem to={`${base}/services`}>{t.services}</NavItem>}
       {mod('products') && <NavItem to={`${base}/products`}>{t.products}</NavItem>}
+      {tables.map((c) => (
+        <NavItem key={c.id} to={`${base}/items/${c.id}`}>
+          {l(c.name) || c.slug}
+        </NavItem>
+      ))}
+      {operator && <NavItem to={`${base}/tables`}>{t.contentTables}</NavItem>}
       {mod('leads') && can('leads:read') && <NavItem to={`${base}/leads`}>{t.leads}</NavItem>}
       {mod('orders') && can('orders:read') && <NavItem to={`${base}/orders`}>{t.orders}</NavItem>}
       <NavItem to={`${base}/files`}>{t.files}</NavItem>

@@ -6,6 +6,7 @@ import { NotFoundPage } from '../features/public-site/pages/NotFoundPage';
 import { ProductDetailPage, ProductsPage } from '../features/public-site/pages/ProductsPages';
 import { ServiceDetailPage, ServicesPage } from '../features/public-site/pages/ServicesPages';
 import { SitePage } from '../features/public-site/pages/SitePage';
+import { CollectionItemPage } from '../features/collections/CollectionItemPage';
 
 // The admin panel and builder are loaded only when visited, keeping the public site light.
 const AdminRoot = lazy(() => import('../admin/AdminRoot'));
@@ -35,6 +36,8 @@ export const routes: RouteObject[] = [
       { path: 'checkout', element: <CheckoutPage /> },
       { path: 'checkout/result', element: <CheckoutResultPage /> },
       { path: ':slug', element: <SitePage /> },
+      // An item of a content table: /classes/hydrant.
+      { path: ':collection/:item', element: <CollectionItemPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

@@ -24,6 +24,8 @@ interface Lead {
   notes: { text: string; at: string }[];
   /** Reservation / demo answers. */
   details?: { date?: string; time?: string; people?: number; company?: string; answers?: { label: string; value: string }[] };
+  /** The content-table item the request is about (a class, an event…). */
+  item?: { collection: string; slug: string; title: { en: string; fa: string } } | null;
   createdAt: string;
 }
 
@@ -115,6 +117,14 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
                 {l.budget ? ` · ${l.budget}` : ''}
               </dd>
             </div>
+            {l.item && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-ink-soft">{t.requestItem}</dt>
+                <dd>
+                  {l.item.title.fa || l.item.title.en} <span className="text-ink-soft" dir="ltr">({l.item.collection}/{l.item.slug})</span>
+                </dd>
+              </div>
+            )}
             {l.details && [l.details.date, l.details.time, l.details.people, l.details.company].some(Boolean) && (
               <div className="sm:col-span-2">
                 <dt className="text-xs text-ink-soft">{t.requestDetails}</dt>

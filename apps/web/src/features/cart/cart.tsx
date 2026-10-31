@@ -2,7 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Localized } from '../../types/site';
 
 export interface CartLine {
+  /** Product id, or the item id for content-table items (`kind: 'item'`). */
   productId: string;
+  /** `item`: a content-table item (class seat, ticket…); missing = a product. */
+  kind?: 'item';
+  /** Page of the line (items live under their table's address). */
+  href?: string;
   slug: string;
   name: Localized;
   priceMinor: string;

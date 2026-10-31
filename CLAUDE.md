@@ -44,12 +44,16 @@ Old `sb-platform_*` / `sb-cell-*` volumes are leftover backups; don't delete wit
 
 ## Code map
 - `apps/api` Express 5 + pg. Control DB `sb_control` + one DB per site (tenant).
-  Migrations: `src/database/control-plane/migrations`, `src/database/tenant/migrations` (latest `003_shop_options.sql`).
+  Migrations: `src/database/control-plane/migrations`, `src/database/tenant/migrations` (latest `006_collections.sql`).
   Templates for new sites: `src/modules/platform/templates/` (`catalog.ts` 8 business types,
   `apply.ts`, `images.ts`). Cell mode: `src/cell-bootstrap.ts`, `src/modules/auth/sso.ts`.
+  Content tables: `src/modules/collections/` (admin + public routes, list filters, seats).
 - `apps/web` React + Vite + Tailwind. Admin in `src/admin` (`auth.tsx` has `OPERATOR_UI`,
   `ContentPages.tsx` is the client content editor). Public site in `src/features`, sections in `src/sections`.
-- `packages/shared` zod schemas (`schemas.ts`, `sections.ts` incl. `contentOnlyChange`, `constants.ts`).
+- `packages/shared` zod schemas (`schemas.ts`, `sections.ts` incl. `contentOnlyChange`, `constants.ts`,
+  `collections.ts` for tables, fields, filters and box blocks).
+- Web content tables: `src/admin/collections/` (tables + items pages), `src/admin/builder/CardDesigner.tsx`
+  (box designer), `src/features/collections/` (box renderer, item pages), `src/sections/collectionSections.tsx`.
 - `deploy/edge/nginx.conf` routing, `deploy/control/server.mjs` deploy service (no dependencies),
   `deploy/export/` package contents, `deploy/backup/`, `deploy/photos/`.
 
@@ -57,7 +61,18 @@ Old `sb-platform_*` / `sb-cell-*` volumes are leftover backups; don't delete wit
 Product discount %, colours, max per order, stock / sold out, categories; products section filters;
 About page; request forms per page (consultation / reservation / demo / contact) with details;
 cash on delivery (`allowCod`); header button and shop heading; 8 business templates with photos
-and a "Refresh photos" button; client content editing.
+and a "Refresh photos" button; client content editing; submenus, header/footer options.
+Content tables (branch `feature/collections`): the operator defines tables and fields per site
+(references between tables, presets), the owner adds items; the "List from a table" section has
+fixed and visitor filters, grid/list and a free box designer (shared designs live in
+`settings.cardDesigns`); an item's page is the table's template page (`{{field}}` texts, "Item
+display" section); items can be sold with seats and a deadline (checked on the server) or requested
+(`?item=<table>/<slug>` on the request form). Design updates replace table definitions and keep items.
+Box designer: image size/fit/position, several images (grid, slider, row), row/column direction and
+alignment. Visitor filters per field type (search, chips, checkboxes, slider, ranges, presets,
+calendar inline or in a window, "available"), shown inline or stacked. Site settings: error-message
+language, site and panel direction, panel language, calendar (Jalali/Gregorian; `src/lib/calendar.ts`).
+Errors are translated for people in `src/lib/errorText.ts` (the API sends issue codes and limits).
 
 ## Environment gotchas
 - The default npm registry in `package-lock.json` is a mirror that may be unreachable; set
@@ -73,5 +88,6 @@ and a "Refresh photos" button; client content editing.
 
 ## Git
 - Work branch: `feature/studio-and-client-delivery` (pushed). Not merged to `main`; no PR yet — ask first.
+- `feature/collections` (content tables) branches from it; pushed, not merged.
 - Push goes through the `bonshad2026` GitHub account (set per repo in the remote URL).
 - Commit messages: imperative, short, no prefixes.

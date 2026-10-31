@@ -6,7 +6,7 @@ import { requireModule, requirePermission } from '../../middleware/tenant.js';
 import { auditTenant } from '../audit/audit.js';
 
 const COLUMNS = `id, type, name, email, phone, project_type AS "projectType", budget, message, source_path AS "sourcePath",
-  status, notes, details, created_at AS "createdAt", updated_at AS "updatedAt"`;
+  status, notes, details, item_ref AS item, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 /** Owner/staff inbox for customer requests. Visitors submit through the public routes. */
 export function leadsRoutes() {

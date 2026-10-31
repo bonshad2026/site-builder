@@ -1,5 +1,6 @@
 import { BUTTON_STYLES, DEFAULT_REQUEST_TYPES, type SectionButton } from '@site-builder/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { useAdminCollections, type AdminItem } from './collections/api';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { usePreferences } from '../lib/preferences';
@@ -38,6 +39,14 @@ export function useLinkGroups(siteId: string): LinkGroup[] {
     enabled: !!modules.products,
   });
   const name = (label: Localized | undefined, fallback: string) => (label && l(label)) || fallback;
+  // Content tables: each item has its own page (/classes/hydrant).
+  const { data: tables = [] } = useAdminCollections(siteId);
+  const tableItems = useQueries({
+    queries: tables.map((c) => ({
+      queryKey: ['site', siteId, 'collections', c.id, 'items', 'links'],
+      queryFn: () => api.get<AdminItem[]>(`/sites/${siteId}/collections/${c.id}/items?pageSize=60&status=published`),
+    })),
+  });
 
   const groups: LinkGroup[] = [
     {
@@ -68,6 +77,10 @@ export function useLinkGroups(siteId: string): LinkGroup[] {
       label: t.linkGroupProducts,
       options: (products.data ?? []).map((p) => ({ value: `/products/${p.slug}`, label: name(p.name, p.slug) })),
     },
+    ...tables.map((c, i) => ({
+      label: name(c.name, c.slug),
+      options: (tableItems[i]?.data ?? []).map((it) => ({ value: `/${c.slug}/${it.slug}`, label: name(it.title, it.slug) })),
+    })),
   ];
   return groups.filter((g) => g.options.length);
 }

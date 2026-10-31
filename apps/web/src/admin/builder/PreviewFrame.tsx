@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThemeEffect } from '../../components/layout/SiteLayout';
 import { CartProvider } from '../../features/cart/cart';
+import type { SavedCard } from '@site-builder/shared';
+import { CardDesignsContext, CurrentItemContext, useCollectionItems, useCollections } from '../../features/collections/data';
 import { SiteIdContext, useSiteSettings } from '../../features/public-site/data';
 import { SiteTexts } from '../../lib/siteLook';
 import { cn } from '../../lib/cn';
@@ -10,6 +12,10 @@ import type { Section } from './state';
 export interface PreviewMessage {
   type: 'sb:doc';
   siteId: string;
+  /** Slug of the page being edited: a table's template page previews with one of its items. */
+  pageSlug: string;
+  /** Shared box designs as the builder has them (saved ones show before the site's cache refreshes). */
+  cardDesigns: SavedCard[];
   sections: Section[];
   selectedId: string | null;
 }
@@ -43,6 +49,8 @@ export default function PreviewFrame() {
     <SiteIdContext.Provider value={doc.siteId}>
       <PreviewTexts>
       <CartProvider siteId={`preview-${doc.siteId}`}>
+      <CardDesignsContext.Provider value={doc.cardDesigns}>
+      <SampleItem pageSlug={doc.pageSlug}>
       <ThemeEffect />
       <div className="min-h-screen bg-bg pb-24">
         {doc.sections.length === 0 && <p className="p-16 text-center text-ink-soft">+</p>}
@@ -66,10 +74,21 @@ export default function PreviewFrame() {
           </div>
         ))}
       </div>
+      </SampleItem>
+      </CardDesignsContext.Provider>
       </CartProvider>
       </PreviewTexts>
     </SiteIdContext.Provider>
   );
+}
+
+/** On a table's template page, the first published item stands in for "the item of this page". */
+function SampleItem({ pageSlug, children }: { pageSlug: string; children: React.ReactNode }) {
+  const { data: collections } = useCollections();
+  const collection = pageSlug ? collections?.find((c) => c.detailPage === pageSlug && c.slug !== 'products') : undefined;
+  const { data } = useCollectionItems(collection?.slug ?? '', { filters: [], choices: {}, q: '', sort: 'position', dir: 'asc', page: 1, pageSize: 1 }, !!collection);
+  const item = data?.data[0];
+  return <CurrentItemContext.Provider value={item && collection ? { item, collection } : null}>{children}</CurrentItemContext.Provider>;
 }
 
 /** The site's own wording for built-in texts, as visitors see it. */

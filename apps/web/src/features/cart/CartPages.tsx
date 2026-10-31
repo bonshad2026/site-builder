@@ -10,11 +10,12 @@ import { FieldShell, Select, TextArea, TextInput } from '../../components/ui/Fie
 import { Image } from '../../components/ui/Image';
 import { Container, PageHeader, Section } from '../../components/ui/Layout';
 import { usePageMeta } from '../../hooks/usePageMeta';
-import { api, apiAvailable, ApiError } from '../../lib/api';
+import { api, apiAvailable } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { OrderItemDto, OrderStatus, PaymentStatus } from '../../types/api';
 import { normalizeDigits } from '../leads/leadSchema';
-import { usePaymentMethods, useSiteId } from '../public-site/data';
+import { usePaymentMethods, useSiteErrorLanguage, useSiteId } from '../public-site/data';
+import { errorLine } from '../../lib/errorText';
 import { lineKey, MAX_QUANTITY, useCart } from './cart';
 import { PageSlot, useSystemPage } from '../../sections/PageSlot';
 
@@ -41,7 +42,7 @@ export function CartPage() {
                     <Image src={line.imageUrl} alt="" className="aspect-square w-24 shrink-0" />
                     <div className="flex flex-1 flex-col justify-between gap-3 sm:flex-row sm:items-center">
                       <div>
-                        <Link to={`/products/${line.slug}`} className="font-display text-2xl text-ink hover:text-accent">
+                        <Link to={line.href ?? `/products/${line.slug}`} className="font-display text-2xl text-ink hover:text-accent">
                           {l(line.name)}
                         </Link>
                         {line.option && <p className="text-sm text-ink-soft">{m.shop.color}: {line.option}</p>}
@@ -122,12 +123,15 @@ export function CheckoutPage() {
   const { register, handleSubmit, formState } = useForm<CheckoutInput, unknown, CheckoutData>({ resolver: zodResolver(checkoutSchema) });
   const errText = (name: keyof CheckoutInput) => (formState.errors[name] ? m.form.errors[name === 'phone' ? 'phoneInvalid' : name === 'email' ? 'emailInvalid' : 'nameRequired'] : undefined);
 
+  const errorLang = useSiteErrorLanguage();
   const submit = useMutation({
     mutationFn: async (data: CheckoutData) => {
       const order = await api.post<{ number: string; orderToken: string }>(`/public/sites/${site}/orders`, {
         customer: { name: data.name, email: data.email, phone: data.phone, address: data.address || undefined },
         note: data.note || undefined,
-        items: cart.lines.map((line) => ({ productId: line.productId, quantity: line.quantity, option: line.option ?? '' })),
+        items: cart.lines.map((line) =>
+          line.kind === 'item' ? { itemId: line.productId, quantity: line.quantity } : { productId: line.productId, quantity: line.quantity, option: line.option ?? '' },
+        ),
         paymentMethod: payBy,
       });
       cart.clear();
@@ -138,7 +142,7 @@ export function CheckoutPage() {
       }
       navigate(`/checkout/result?order=${order.number}&token=${encodeURIComponent(order.orderToken)}`);
     },
-    onError: (err) => setError(format(m.shop.orderFailed, { reason: err instanceof ApiError ? err.message : String(err) })),
+    onError: (err) => setError(format(m.shop.orderFailed, { reason: errorLine(err, errorLang) })),
   });
 
   if (!cart.lines.length && !submit.isPending) {

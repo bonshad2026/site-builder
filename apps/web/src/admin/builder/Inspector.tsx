@@ -1,4 +1,4 @@
-import { DEFAULT_REQUEST_TYPES, SPACINGS, type ImageSize, type SectionAppearance, type SectionButton } from '@site-builder/shared';
+import { DEFAULT_REQUEST_TYPES, SPACINGS, type CardBlock, type CollectionFilter, type ImageSize, type VisitorFilter, type SectionAppearance, type SectionButton } from '@site-builder/shared';
 import { usePreferences } from '../../lib/preferences';
 import type { Localized } from '../../types/site';
 import { useAdminSettings } from '../AdminRoot';
@@ -6,6 +6,8 @@ import { useT } from '../i18n';
 import { ButtonsEditor, LinkPicker } from '../links';
 import { Checkbox, ListEditor, LocalizedField, NumberField, SelectField, TextField } from '../ui';
 import { ImagePicker } from '../pages/FilesPage';
+import { CardDesignField } from './CardDesigner';
+import { FiltersField, ItemSlugField, SortField, SourceField, VisitorFiltersField } from './CollectionFields';
 import type { FieldDef } from './fields';
 
 type Props = Record<string, unknown>;
@@ -217,6 +219,55 @@ export function FieldsEditor({ fields, value, onChange, siteId, contentOnly = fa
           }
           case 'image':
             return <ImagePicker key={f.key} siteId={siteId} label={label} value={(v as string) ?? ''} onChange={(url) => set(f.key, url)} />;
+          case 'source':
+            return (
+              <SourceField
+                key={f.key}
+                siteId={siteId}
+                label={label}
+                value={(v as string) ?? ''}
+                // Filters and fields belong to the old table.
+                onChange={(x) => onChange({ ...value, [f.key]: x, filters: [], visitorFilters: [], itemSlug: '', sort: 'position' })}
+              />
+            );
+          case 'filters':
+            return <FiltersField key={f.key} siteId={siteId} source={(value.source as string) ?? ''} label={label} value={(v as CollectionFilter[]) ?? []} onChange={(x) => set(f.key, x)} />;
+          case 'sortField':
+            return (
+              <SortField
+                key={f.key}
+                siteId={siteId}
+                source={(value.source as string) ?? ''}
+                label={label}
+                sort={(v as string) ?? 'position'}
+                dir={(value.dir as 'asc' | 'desc') ?? 'asc'}
+                onChange={(x) => onChange({ ...value, sort: x.sort, dir: x.dir })}
+              />
+            );
+          case 'visitorFilters':
+            return (
+              <VisitorFiltersField
+                key={f.key}
+                siteId={siteId}
+                source={(value.source as string) ?? ''}
+                label={label}
+                value={(v as VisitorFilter[]) ?? []}
+                onChange={(x) => set(f.key, x)}
+              />
+            );
+          case 'card':
+            return (
+              <CardDesignField
+                key={f.key}
+                siteId={siteId}
+                source={(value.source as string) ?? ''}
+                cardDesign={(value.cardDesign as string) ?? ''}
+                card={(value.card as CardBlock | null) ?? null}
+                onChange={(x) => onChange({ ...value, ...x })}
+              />
+            );
+          case 'itemSlug':
+            return <ItemSlugField key={f.key} siteId={siteId} source={(value.source as string) ?? ''} label={label} value={(v as string) ?? ''} onChange={(x) => set(f.key, x)} />;
           case 'number':
             return <NumberField key={f.key} label={label} value={(v as number) ?? f.min} min={f.min} onChange={(x) => set(f.key, Math.max(f.min, Math.min(f.max, x ?? f.min)))} />;
           case 'bool':
