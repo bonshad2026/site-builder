@@ -79,8 +79,22 @@ export const siteSettingsSchema = z.object({
     .max(12),
   /** How social links show: their name, their icon, or both. */
   socialDisplay: z.enum(['label', 'icon', 'both']).default('label'),
-  /** Main menu in display order: pages of the site (/about) or full links. */
-  nav: z.array(z.object({ href: hrefSchema.refine((v) => v !== '', 'Choose a link'), label: localizedSchema })).max(20),
+  /** Main menu in display order: pages of the site (/about) or full links, each with an optional submenu. */
+  nav: z
+    .array(
+      z
+        .object({
+          href: hrefSchema,
+          label: localizedSchema,
+          children: z
+            .array(z.object({ href: hrefSchema.refine((v) => v !== '', 'Choose a link'), label: localizedSchema }))
+            .max(12)
+            .default([]),
+        })
+        // An item with a submenu may be a heading only (no link of its own).
+        .refine((item) => item.href !== '' || item.children.length > 0, { message: 'Choose a link', path: ['href'] }),
+    )
+    .max(20),
   /** Product categories with their display names (products refer to them by slug). */
   productCategories: z
     .array(z.object({ slug: slugSchema, label: localizedSchema }))

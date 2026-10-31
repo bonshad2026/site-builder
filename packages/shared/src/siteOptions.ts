@@ -93,6 +93,8 @@ export const headerSchema = z
   .object({
     /** What the logo spot shows: the logo when there is one (else the name), or a fixed choice. */
     brand: z.enum(['auto', 'logo', 'name', 'both']).default('auto'),
+    /** Where the logo links; empty = the home page. */
+    logoHref: hrefSchema,
     layout: z.enum(['standard', 'centered', 'menu-start']).default('standard'),
     size: z.enum(['compact', 'normal', 'large']).default('normal'),
     showMenu: z.boolean().default(true),
@@ -107,6 +109,10 @@ export const headerSchema = z
   })
   .default({});
 
+/** Footer columns a block can sit in, left to right. */
+export const FOOTER_COLUMNS = 4;
+const footerColumn = (fallback: number) => z.number().int().min(1).max(FOOTER_COLUMNS).default(fallback);
+
 export const footerSchema = z
   .object({
     /** The site logo above the name (off by default). */
@@ -115,7 +121,18 @@ export const footerSchema = z
     showTagline: z.boolean().default(true),
     showSocial: z.boolean().default(true),
     showMenu: z.boolean().default(true),
+    /** Submenu links under their menu item. */
+    showSubmenu: z.boolean().default(true),
     showContact: z.boolean().default(true),
+    /** Which column each built-in block sits in; blocks sharing a column stack in this order. */
+    placement: z
+      .object({
+        brand: footerColumn(1),
+        social: footerColumn(1),
+        menu: footerColumn(2),
+        contact: footerColumn(3),
+      })
+      .default({}),
     /** Extra columns with a title, some text and links. */
     columns: z
       .array(
@@ -123,11 +140,14 @@ export const footerSchema = z
           title: loc(80),
           text: loc(600),
           links: z.array(z.object({ label: loc(80), href: hrefSchema })).max(12).default([]),
+          /** 1–4 = inside that column (after the built-in blocks); 0 = the full-width row below. */
+          column: z.number().int().min(0).max(FOOTER_COLUMNS).default(0),
         }),
       )
       .max(6)
       .default([]),
-    /** Empty = the built-in "All rights reserved". */
+    showCopyright: z.boolean().default(true),
+    /** Empty = the built-in "© year name. All rights reserved"; {year} and {name} are filled in. */
     copyright: loc(200),
   })
   .default({});

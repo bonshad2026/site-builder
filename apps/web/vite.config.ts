@@ -9,6 +9,16 @@ export default defineConfig({
   envDir: '../..',
   // Use the shared package's TypeScript source directly (no build step needed for the web app).
   resolve: { conditions: ['source', ...defaultClientConditions] },
+  // `vite preview` in the studio container: forward API calls when the port is opened directly
+  // (normally the edge proxy does this). Set by deploy/docker-compose.yml.
+  preview: process.env.PREVIEW_API_PROXY
+    ? {
+        proxy: {
+          '/api': process.env.PREVIEW_API_PROXY,
+          '/files': process.env.PREVIEW_API_PROXY,
+        },
+      }
+    : undefined,
   build: {
     rollupOptions: {
       output: {

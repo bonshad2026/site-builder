@@ -45,6 +45,9 @@ services:
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     command: ["sh", "/app/deploy/studio/api-start.sh"]
+    # Direct access for debugging (localhost only); normal use goes through the edge.
+    ports:
+      - "127.0.0.1:4000:4000"
     environment:
       NODE_ENV: development
       PORT: "4000"
@@ -88,6 +91,10 @@ services:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
         VITE_API_URL: same-origin
         VITE_SITE_ID: ""
+    environment:
+      PREVIEW_API_PROXY: http://studio-api:4000
+    ports:
+      - "127.0.0.1:5173:5173"
     networks:
       platform:
         aliases: [studio-web]
@@ -102,6 +109,8 @@ services:
       REPO_DIR: /repo
       DATA_DIR: /data
       STUDIO_API: http://studio-api:4000
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       # Docker access is needed to build and package sites; only operators can use the page.
       - /var/run/docker.sock:/var/run/docker.sock

@@ -65,9 +65,11 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
       <nav aria-label={m.nav.primary} className="flex-1 overflow-y-auto px-5 pt-6 sm:px-8">
         <ul className="flex flex-col">
-          {[{ to: '/', label: m.nav.home }, ...nav, ...(nav.some((n) => n.to === '/contact') ? [] : [{ to: '/contact', label: m.nav.contact }])].map((item, i) => (
-            <li key={item.to} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
-              {item.to.startsWith('/') ? (
+          {[{ to: '/', label: m.nav.home, children: [] }, ...nav].map((item, i) => (
+            <li key={i} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
+              {!item.to ? (
+                <span className="block py-4 font-display text-3xl">{item.label}</span>
+              ) : item.to.startsWith('/') ? (
                 <NavLink
                   to={item.to}
                   end={item.to === '/'}
@@ -80,6 +82,23 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
                 <a href={item.to} target="_blank" rel="noreferrer noopener" className="block py-4 font-display text-3xl transition-colors hover:text-accent">
                   {item.label}
                 </a>
+              )}
+              {item.children.length > 0 && (
+                <ul className="flex flex-col pb-3 ps-5">
+                  {item.children.map((c) => (
+                    <li key={c.to + c.label}>
+                      {c.to.startsWith('/') ? (
+                        <NavLink to={c.to} onClick={onClose} className={({ isActive }) => cn('block py-2 text-lg transition-colors', isActive ? 'text-accent' : 'text-ink-soft hover:text-accent')}>
+                          {c.label}
+                        </NavLink>
+                      ) : (
+                        <a href={c.to} target="_blank" rel="noreferrer noopener" className="block py-2 text-lg text-ink-soft transition-colors hover:text-accent">
+                          {c.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </li>
           ))}

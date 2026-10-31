@@ -3,6 +3,7 @@ import {
   CURRENCIES,
   EN_FONTS,
   FA_FONTS,
+  FOOTER_COLUMNS,
   FORM_FIELD_TYPES,
   IMAGE_RATIOS,
   SORT_OPTIONS,
@@ -302,6 +303,7 @@ export function HeaderTab({ s, set, siteId }: TabProps) {
           ]}
         />
       </div>
+      <LinkPicker siteId={siteId} label={t.logoLink} value={h.logoHref ?? ''} onChange={(logoHref) => up({ logoHref })} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Checkbox label={t.showMenu} checked={h.showMenu} onChange={(showMenu) => up({ showMenu })} />
         <Checkbox label={t.showCart} checked={h.showCart} onChange={(showCart) => up({ showCart })} />
@@ -319,6 +321,7 @@ export function FooterTab({ s, set, siteId }: TabProps) {
   const t = useT();
   const f = s.footer;
   const up = (patch: Partial<typeof f>) => set('footer', { ...f, ...patch });
+  const columnOptions = Array.from({ length: FOOTER_COLUMNS }, (_, i) => ({ value: String(i + 1), label: t.footerColumnN.replace('{n}', String(i + 1)) }));
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -327,16 +330,45 @@ export function FooterTab({ s, set, siteId }: TabProps) {
         <Checkbox label={t.showTagline} checked={f.showTagline} onChange={(showTagline) => up({ showTagline })} />
         <Checkbox label={t.showSocial} checked={f.showSocial} onChange={(showSocial) => up({ showSocial })} />
         <Checkbox label={t.showFooterMenu} checked={f.showMenu} onChange={(showMenu) => up({ showMenu })} />
+        <Checkbox label={t.showFooterSubmenu} checked={f.showSubmenu} onChange={(showSubmenu) => up({ showSubmenu })} />
         <Checkbox label={t.showContact} checked={f.showContact} onChange={(showContact) => up({ showContact })} />
       </div>
+      <Card title={t.footerPlacement}>
+        <p className="mb-3 text-xs text-ink-soft">{t.footerPlacementHelp}</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(
+            [
+              ['brand', t.footerBrandBlock],
+              ['social', t.footerSocialBlock],
+              ['menu', t.footerMenuBlock],
+              ['contact', t.footerContactBlock],
+            ] as const
+          ).map(([key, label]) => (
+            <SelectField
+              key={key}
+              label={label}
+              value={String(f.placement[key])}
+              onChange={(v) => up({ placement: { ...f.placement, [key]: Number(v) } })}
+              options={columnOptions}
+            />
+          ))}
+        </div>
+      </Card>
       <ListEditor
         label={t.footerColumns}
         items={f.columns}
         max={6}
         onChange={(columns) => up({ columns })}
-        create={() => ({ title: { ...empty }, text: { ...empty }, links: [] })}
+        create={() => ({ title: { ...empty }, text: { ...empty }, links: [], column: 0 })}
         render={(c, update) => (
           <>
+            <SelectField
+              label={t.footerColumn}
+              value={String(c.column ?? 0)}
+              onChange={(v) => update({ ...c, column: Number(v) })}
+              options={[...columnOptions, { value: '0', label: t.footerBottomRow }]}
+              className="max-w-xs"
+            />
             <LocalizedField label={t.columnTitle} value={c.title} onChange={(title) => update({ ...c, title })} />
             <LocalizedField label={t.columnText} value={c.text} onChange={(text) => update({ ...c, text })} multiline rows={3} />
             <ListEditor
@@ -355,7 +387,17 @@ export function FooterTab({ s, set, siteId }: TabProps) {
           </>
         )}
       />
-      <LocalizedField label={t.copyright} value={f.copyright} onChange={(copyright) => up({ copyright })} />
+      <Card title={t.copyright}>
+        <div className="flex flex-col gap-3">
+          <Checkbox label={t.showCopyright} checked={f.showCopyright} onChange={(showCopyright) => up({ showCopyright })} />
+          {f.showCopyright && (
+            <>
+              <LocalizedField label={t.copyright} value={f.copyright} onChange={(copyright) => up({ copyright })} />
+              <p className="text-xs text-ink-soft">{t.copyrightHelp}</p>
+            </>
+          )}
+        </div>
+      </Card>
     </>
   );
 }

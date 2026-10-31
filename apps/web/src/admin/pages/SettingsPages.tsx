@@ -206,25 +206,50 @@ function SettingsView({ siteId }: { siteId: string }) {
             items={s.nav}
             max={20}
             onChange={(v) => set('nav', v)}
-            create={() => ({ href: linkOptions[0]?.value ?? '/', label: { ...empty } })}
-            render={(item, update) => (
-              <>
-                <LinkPicker siteId={siteId} label={t.link} value={item.href} onChange={(href) => update({ ...item, href })} />
-                <LocalizedField label={t.label} value={item.label} onChange={(label) => update({ ...item, label })} />
-              </>
-            )}
+            create={() => ({ href: linkOptions[0]?.value ?? '/', label: { ...empty }, children: [] })}
+            render={(item, update) => {
+              const children = item.children ?? [];
+              return (
+                <>
+                  {children.length > 0 && (
+                    <Checkbox label={t.noLink} checked={item.href === ''} onChange={(none) => update({ ...item, href: none ? '' : (linkOptions[0]?.value ?? '/') })} />
+                  )}
+                  {item.href !== '' || children.length === 0 ? (
+                    <LinkPicker siteId={siteId} label={t.link} value={item.href} onChange={(href) => update({ ...item, href })} />
+                  ) : null}
+                  <LocalizedField label={t.label} value={item.label} onChange={(label) => update({ ...item, label })} />
+                  <div className="mt-2 border-s-2 border-line ps-4">
+                    <p className="mb-2 text-xs text-ink-soft">{t.subMenuHelp}</p>
+                    <ListEditor
+                      label={t.subMenu}
+                      items={children}
+                      max={12}
+                      // Without a submenu the item needs its own link again.
+                      onChange={(next) => update({ ...item, children: next, href: next.length === 0 && item.href === '' ? (linkOptions[0]?.value ?? '/') : item.href })}
+                      create={() => ({ href: '/', label: { ...empty } })}
+                      render={(child, updateChild) => (
+                        <>
+                          <LinkPicker siteId={siteId} label={t.link} value={child.href} onChange={(href) => updateChild({ ...child, href })} />
+                          <LocalizedField label={t.label} value={child.label} onChange={(label) => updateChild({ ...child, label })} />
+                        </>
+                      )}
+                    />
+                  </div>
+                </>
+              );
+            }}
           />
         )}
         {tab === 'menu' && (
           <Card title={t.headerButton}>
             <div className="flex flex-col gap-4">
-              <LocalizedField label={t.label} value={s.headerCta?.label ?? { ...empty }} onChange={(label) => set('headerCta', { href: s.headerCta?.href ?? '/contact', label })} />
-              <SelectField
-                label={t.link}
-                value={s.headerCta?.href ?? '/contact'}
-                onChange={(href) => set('headerCta', { label: s.headerCta?.label ?? { ...empty }, href })}
-                options={[{ value: '/contact', label: '/contact' }, ...linkOptions.filter((o) => o.value !== '/contact')]}
-              />
+              <Checkbox label={t.showHeaderButton} checked={s.header?.showButton !== false} onChange={(showButton) => set('header', { ...s.header, showButton })} />
+              {s.header?.showButton !== false && (
+                <>
+                  <LocalizedField label={t.label} value={s.headerCta?.label ?? { ...empty }} onChange={(label) => set('headerCta', { href: s.headerCta?.href ?? '/contact', label })} />
+                  <LinkPicker siteId={siteId} label={t.link} value={s.headerCta?.href ?? '/contact'} onChange={(href) => set('headerCta', { label: s.headerCta?.label ?? { ...empty }, href })} />
+                </>
+              )}
             </div>
           </Card>
         )}
