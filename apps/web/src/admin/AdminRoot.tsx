@@ -360,6 +360,7 @@ function AdminLayout({ me }: { me: Me }) {
             <NavItem item={{ to: "/admin/platform/sites", label: t.sites }} />
             <NavItem item={{ to: "/admin/platform/users", label: t.users }} />
             <NavItem item={{ to: "/admin/platform/bank", label: t.bk.nav }} />
+            <NavItem item={{ to: "/admin/platform/starters", label: t.sr.nav }} />
             <NavItem item={{ to: "/admin/platform/messaging", label: t.su.messaging }} />
             <NavItem item={{ to: "/admin/platform/audit", label: t.audit }} />
             {/* Studio deploy service (served next to the admin by the edge proxy). */}

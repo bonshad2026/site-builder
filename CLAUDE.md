@@ -157,5 +157,5 @@ Bank deletes and starters: built-in bank entries and photos can be removed too (
 `bank_hidden`, entry ref = hash of its texts; "Bring back removed built-ins" clears them). Starters
 (`starters` table, `/platform/starters`, web `src/admin/starters.tsx`): any page ("Save as starter" in
 Pages) or table (Tables) is saved to the studio; "New page" and "New table" on any site can start from one
-(tables: `s:<id>` in "Start from"). Photos in a page starter still point at the source site's files.
+(tables: `s:<id>` in "Start from"); Platform ← Starters (`/admin/platform/starters`, `pages/StartersPage.tsx`) lists them to rename or delete. Photos in a page starter still point at the source site's files.
 The 404 page: Pages shows "Make the 404 page editable" until the site has its `not-found` page.
