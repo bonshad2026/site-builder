@@ -55,19 +55,23 @@ export function PreferencesProvider({
   children,
   locale,
   onLocaleChange,
+  scoped = false,
 }: {
   children: ReactNode;
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
+  /** A preview inside the page (admin): language and direction apply to its children only. */
+  scoped?: boolean;
 }) {
   const [theme, setThemeState] = useState<ThemeId | null>(storedTheme);
   const [dirOverride, setDirection] = useState<'ltr' | 'rtl' | null>(null);
   const dir = dirOverride ?? (locale === 'fa' ? 'rtl' : 'ltr');
 
   useEffect(() => {
+    if (scoped) return;
     document.documentElement.lang = locale;
     document.documentElement.dir = dir;
-  }, [locale, dir]);
+  }, [locale, dir, scoped]);
 
   const setTheme = useCallback((next: ThemeId | null) => {
     setThemeState(next);

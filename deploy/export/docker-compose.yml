@@ -58,6 +58,7 @@ services:
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
       KAVENEGAR_API_KEY: ${KAVENEGAR_API_KEY:-}
       KAVENEGAR_OTP_TEMPLATE: ${KAVENEGAR_OTP_TEMPLATE:-}
+      KAVENEGAR_SENDER: ${KAVENEGAR_SENDER:-}
     volumes:
       - uploads:/data/uploads
       - ./data/uploads.tar.gz:/restore/uploads.tar.gz:ro
@@ -71,6 +72,7 @@ services:
     image: caddy:2-alpine
     environment:
       DOMAIN: ${DOMAIN:?}
+      CELL_SLUG: ${CELL_SLUG:?}
       SITE_URL: ${SITE_URL}
       OLD_SITE_URL: ${OLD_SITE_URL}
     # The built site has placeholder addresses; serve a copy with the real one filled in.

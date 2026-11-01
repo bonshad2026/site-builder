@@ -64,6 +64,7 @@ services:
       STORAGE_LOCAL_DIR: /data/uploads
       PUBLIC_API_URL: http://admin.localhost
       WEB_APP_URL: http://admin.localhost
+      SITE_PREVIEW_URL: http://{slug}.preview.localhost
       CORS_ORIGINS: http://admin.localhost
       EMAIL_PROVIDER: console
       SMS_PROVIDER: console

@@ -41,15 +41,18 @@ else
       set_env NODE_ENV production
       set_env EMAIL_PROVIDER smtp; set_env SMTP_URL "$SMTP"
       set_env EMAIL_FROM "$(ask "Sender address" "${NAME:-$SLUG} <no-reply@$DOMAIN>")"
-      KEY=$(ask "Kavenegar API key for SMS codes (empty: no SMS)")
+      KEY=$(ask "Kavenegar API key for SMS codes (empty: set it later in the admin panel)")
       if [ -n "$KEY" ]; then
         set_env SMS_PROVIDER kavenegar; set_env KAVENEGAR_API_KEY "$KEY"
         set_env KAVENEGAR_OTP_TEMPLATE "$(ask "Kavenegar verify template")"
       else
-        fail "Production needs an SMS provider. Re-run and enter a Kavenegar key, or leave SMTP empty for test mode."
+        echo "SMS: set it in the admin panel (Platform > Messaging)."
+        set_env SMS_PROVIDER panel
       fi
+    elif [ "$(ask "No SMTP. Set e-mail and SMS later in the admin panel? (y = live site, n = test mode)" "y")" = "y" ]; then
+      set_env NODE_ENV production; set_env EMAIL_PROVIDER panel; set_env SMS_PROVIDER panel
     else
-      echo "No SMTP: test mode (e-mails and SMS codes are only written to the logs)."
+      echo "Test mode: e-mails and SMS codes are only written to the logs."
       set_env NODE_ENV development; set_env EMAIL_PROVIDER console; set_env SMS_PROVIDER console
     fi
   else
@@ -75,6 +78,17 @@ done
 echo
 docker compose -p "$PROJECT" logs api 2>/dev/null | grep -q "API listening" || fail "The site did not start. Logs: docker compose -p $PROJECT logs api"
 
+# A nightly backup (03:30) of the database and files into backups/, when cron is available.
+chmod 755 backup.sh restore.sh 2>/dev/null || true
+if command -v crontab >/dev/null; then
+  LINE="30 3 * * * cd $(pwd) && ./backup.sh >> backups/backup.log 2>&1"
+  mkdir -p backups
+  ( crontab -l 2>/dev/null | grep -vF "$(pwd) && ./backup.sh"; echo "$LINE" ) | crontab -
+  BACKUP_NOTE="every night at 03:30 into $(pwd)/backups (./backup.sh now, ./restore.sh backups/<date> to restore)"
+else
+  BACKUP_NOTE="cron is not available: run ./backup.sh yourself (./restore.sh backups/<date> to restore)"
+fi
+
 SITE_URL=$(get SITE_URL)
 cat <<EOF
 
@@ -89,6 +103,8 @@ cat <<EOF
    $(get HTTP_PORT)/tcp   HTTP  (site, admin, API)
    $(get HTTPS_PORT)/tcp   HTTPS$( [ "$(get DOMAIN)" = ":80" ] && echo " (not used without a domain)")
    Database and API are internal only (no host ports).
+
+ Backups  ${BACKUP_NOTE}
 
  Manage (in this folder)
    docker compose -p $PROJECT ps

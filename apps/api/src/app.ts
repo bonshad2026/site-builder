@@ -15,10 +15,16 @@ import { authRoutes } from './modules/auth/auth.routes.js';
 import { ssoLogin } from './modules/auth/sso.js';
 import { productsRoutes, servicesRoutes } from './modules/catalog/catalog.js';
 import { collectionsRoutes } from './modules/collections/collections.routes.js';
+import { customersRoutes } from './modules/customers/customers.routes.js';
+import { loadCustomer } from './modules/customers/customers.service.js';
 import { leadsRoutes } from './modules/leads/leads.routes.js';
 import { membersRoutes } from './modules/members/members.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { pagesRoutes } from './modules/pages/pages.routes.js';
+import { bankRoutes } from './modules/bank/bank.routes.js';
+import { starterRoutes } from './modules/starters/starters.routes.js';
+import { shopAdminRoutes, shopPublicRoutes } from './modules/shop/shop.routes.js';
+import { messagingRoutes } from './modules/platform/messaging.js';
 import { platformRoutes } from './modules/platform/platform.routes.js';
 import { publicRoutes, resolveRoutes } from './modules/public/public.routes.js';
 import { siteRoutes } from './modules/site/site.routes.js';
@@ -35,7 +41,7 @@ export function createApp(ctx: AppContext) {
   if (ctx.env.NODE_ENV !== 'test') app.use(pinoHttp({ logger: ctx.log, autoLogging: { ignore: (req) => req.url === '/health' } }));
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   // Credentials (cookies) are only accepted from the configured web origins.
-  app.use(cors({ origin: ctx.env.corsOrigins, credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] }));
+  app.use(cors({ origin: ctx.env.corsOrigins, credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Customer-CSRF'] }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(loadSession(ctx));
@@ -48,6 +54,9 @@ export function createApp(ctx: AppContext) {
 
   app.get('/api/v1/auth/sso', (req, res, next) => ssoLogin(ctx, req, res).catch(next));
   app.use('/api/v1/auth', authRoutes(ctx));
+  app.use('/api/v1/platform/bank', requirePlatformAdmin, bankRoutes(ctx));
+  app.use('/api/v1/platform/starters', requirePlatformAdmin, starterRoutes(ctx));
+  app.use('/api/v1/platform', requirePlatformAdmin, messagingRoutes(ctx, () => ctx.resetMessaging()));
   app.use('/api/v1/platform', requirePlatformAdmin, platformRoutes(ctx));
 
   // Everything under a site: membership (or platform admin) is checked first, from the session.
@@ -64,15 +73,18 @@ export function createApp(ctx: AppContext) {
   site.use('/collections', collectionsRoutes(ctx.storage, operatorOnly));
   site.use('/payment-settings', paymentSettingsRoutes(ctx));
   site.use('/overview', operatorOnly, overviewRoutes());
-  site.use('/leads', leadsRoutes());
-  site.use('/orders', ordersRoutes());
+  site.use('/leads', leadsRoutes(ctx));
+  site.use('/orders', ordersRoutes(ctx));
+  site.use('/customers', customersRoutes());
   site.use('/assets', assetsRoutes(ctx));
   site.use('/members', membersRoutes(ctx));
+  site.use('/shop', shopAdminRoutes());
   app.use('/api/v1/sites/:siteId', site);
 
   app.use('/api/v1/payments', express.urlencoded({ extended: false, limit: '10kb' }), paymentReturnRoutes(ctx));
   app.use('/api/v1/public', resolveRoutes(ctx));
-  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), publicRoutes(ctx));
+  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), loadCustomer(), publicRoutes(ctx));
+  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), loadCustomer(), shopPublicRoutes(ctx));
 
   const openapi = new OpenApiGeneratorV3(registry.definitions).generateDocument({
     openapi: '3.0.3',

@@ -16,9 +16,9 @@ const pageRef = z.string().max(64).default('');
 /* ---------- design: fonts and themes ---------- */
 
 /** Google Fonts that cover Latin text. */
-export const EN_FONTS = ['Cormorant Garamond', 'Playfair Display', 'Lora', 'Libre Baskerville', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Poppins', 'Montserrat', 'DM Sans', 'Work Sans'] as const;
+export const EN_FONTS = ['Cormorant Garamond', 'Playfair Display', 'Lora', 'Libre Baskerville', 'Merriweather', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Poppins', 'Montserrat', 'DM Sans', 'Work Sans', 'Nunito', 'Raleway', 'Manrope', 'custom'] as const;
 /** Google Fonts that cover Persian text. */
-export const FA_FONTS = ['Vazirmatn', 'Noto Sans Arabic', 'Noto Naskh Arabic', 'Markazi Text', 'Lalezar', 'Amiri', 'Lateef'] as const;
+export const FA_FONTS = ['Vazirmatn', 'Noto Sans Arabic', 'Noto Naskh Arabic', 'Noto Kufi Arabic', 'Markazi Text', 'Lalezar', 'Amiri', 'Lateef', 'Cairo', 'Tajawal', 'Reem Kufi', 'Mirza', 'Harmattan', 'custom'] as const;
 
 export const THEME_COLOR_KEYS = ['bg', 'surface', 'surface2', 'ink', 'inkSoft', 'line', 'accent', 'accentInk', 'accentSoft'] as const;
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
@@ -42,24 +42,59 @@ export const designSchema = z
       .default({}),
     /** Themes made for this site, alongside the built-in ivory, noir and sage. */
     themes: z.array(customThemeSchema).max(10).default([]),
+    /** An uploaded font file (woff2 / woff / ttf), used where a font is set to "custom" (e.g. a licensed Persian font). */
+    customFont: z
+      .object({ name: z.string().max(60).default(''), url: z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v)).default('') })
+      .default({}),
   })
   .default({});
 
 /* ---------- forms ---------- */
 
-export const FORM_FIELD_TYPES = ['text', 'textarea', 'email', 'tel', 'number', 'date', 'time', 'select', 'radio', 'checkbox'] as const;
+/** `heading` is a title and text inside the form; `step` starts a new page of a multi-step form. */
+export const FORM_FIELD_TYPES = ['text', 'textarea', 'email', 'tel', 'number', 'date', 'time', 'select', 'radio', 'checkbox', 'checkboxes', 'file', 'heading', 'step'] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+
+/** What an answer means to the system: the customer's name, and the phone / email used to follow the request up. */
+export const FIELD_ROLES = ['', 'name', 'phone', 'email'] as const;
+/** Ready-made checks for text answers. */
+export const FIELD_PATTERNS = ['', 'digits', 'nationalId', 'postalCode', 'iban', 'persian', 'latin'] as const;
+export const FILE_KINDS = ['image', 'pdf'] as const;
+
+/** A choice; `price` (smallest currency unit) is added to the form's total when it is chosen. */
+const optionSchema = z.object({ en: z.string().max(120).default(''), fa: z.string().max(120).default(''), price: z.number().int().min(0).max(1e12).default(0) });
 
 export const formFieldSchema = z.object({
   id: slug,
   type: z.enum(FORM_FIELD_TYPES).default('text'),
-  label: loc(120),
-  help: loc(300),
+  label: loc(200),
+  help: loc(600),
   required: z.boolean().default(false),
-  /** Choices for select and radio fields. */
-  options: z.array(loc(120)).max(30).default([]),
+  /** Choices for select, radio and checkboxes fields. */
+  options: z.array(optionSchema).max(50).default([]),
+  /** Shown only when another field has this answer (a choice's label in either language, or "✓" for a ticked box). */
+  showIf: z.object({ field: slug, value: z.string().max(120) }).nullable().default(null),
+  /** Width on wide screens: one column, the whole row, or automatic (long fields take the row). */
+  width: z.enum(['auto', 'full', 'half']).default('auto'),
+  /** The customer's name, or the phone / email the request is followed up with (SMS, email, tracking). */
+  role: z.enum(FIELD_ROLES).default(''),
+  placeholder: loc(120),
+  /**
+   * Limits: numbers → smallest / largest value; texts → fewest / most characters; dates → days from
+   * today (0 = today, 30 = in a month, -365 = a year ago); files → –/most files. Null = no limit.
+   */
+  min: z.number().nullable().default(null),
+  max: z.number().nullable().default(null),
+  pattern: z.enum(FIELD_PATTERNS).default(''),
+  /** Pricing: a ticked box adds this; a number adds this × the number (1 = the customer types the amount). */
+  price: z.number().int().min(0).max(1e12).default(0),
+  /** File questions: allowed kinds and size (MB) of each file. */
+  files: z
+    .object({ kinds: z.array(z.enum(FILE_KINDS)).min(1).default(['image', 'pdf']), maxMb: z.number().int().min(1).max(10).default(10) })
+    .default({}),
 });
 export type FormField = z.output<typeof formFieldSchema>;
+export type FieldOption = z.output<typeof optionSchema>;
 
 const choice = z.object({ value: slug, label: loc(80) });
 export const formOptionsSchema = z
@@ -95,13 +130,18 @@ export const headerSchema = z
     brand: z.enum(['auto', 'logo', 'name', 'both']).default('auto'),
     /** Where the logo links; empty = the home page. */
     logoHref: hrefSchema,
-    layout: z.enum(['standard', 'centered', 'menu-start']).default('standard'),
+    /** `stacked`: logo and buttons on one row, the menu on a full row below. */
+    layout: z.enum(['standard', 'centered', 'menu-start', 'stacked']).default('standard'),
     size: z.enum(['compact', 'normal', 'large']).default('normal'),
     showMenu: z.boolean().default(true),
     showCart: z.boolean().default(true),
     showLanguage: z.boolean().default(true),
     showTheme: z.boolean().default(true),
     showButton: z.boolean().default(true),
+    /** A search box that opens the shop's results. */
+    showSearch: z.boolean().default(false),
+    /** "Sign in" / the customer's name (when the site has accounts). */
+    showAccount: z.boolean().default(true),
     /** Header buttons; empty = the single header button (headerCta). */
     buttons: z.array(buttonSchema).max(4).default([]),
     /** See-through over the home page's hero until the visitor scrolls. */
@@ -221,7 +261,14 @@ export const currencyDecimals = (code: string) => (['USD', 'EUR', 'GBP', 'AED', 
 /** Statuses the order lifecycle relies on; they can be renamed but not removed. */
 export const BUILT_IN_ORDER_STATUSES = ['pending', 'confirmed', 'fulfilled', 'cancelled'] as const;
 
-export const orderStatusSchema = z.object({ slug, label: loc(60) });
+export const orderStatusSchema = z.object({
+  slug,
+  label: loc(60),
+  /** Tell the buyer (SMS / email) when the order reaches this stage. */
+  notify: z.boolean().default(false),
+  /** The text sent; {{number}}, {{name}}, {{stage}} and {{link}} are filled in. Empty = a standard text. */
+  message: loc(500),
+});
 export type OrderStatusDef = z.output<typeof orderStatusSchema>;
 
 export const DEFAULT_ORDER_STATUSES: OrderStatusDef[] = [
@@ -229,7 +276,58 @@ export const DEFAULT_ORDER_STATUSES: OrderStatusDef[] = [
   { slug: 'confirmed', label: { en: 'Confirmed', fa: 'تأییدشده' } },
   { slug: 'fulfilled', label: { en: 'Fulfilled', fa: 'تحویل‌شده' } },
   { slug: 'cancelled', label: { en: 'Cancelled', fa: 'لغوشده' } },
-];
+].map((s) => orderStatusSchema.parse(s));
+
+/** Iran's provinces, for the address part of the checkout. */
+export const IRAN_PROVINCES: { en: string; fa: string }[] = [
+  ['Tehran', 'تهران'], ['Alborz', 'البرز'], ['Isfahan', 'اصفهان'], ['Fars', 'فارس'], ['Khorasan Razavi', 'خراسان رضوی'], ['East Azerbaijan', 'آذربایجان شرقی'],
+  ['West Azerbaijan', 'آذربایجان غربی'], ['Khuzestan', 'خوزستان'], ['Mazandaran', 'مازندران'], ['Gilan', 'گیلان'], ['Kerman', 'کرمان'], ['Yazd', 'یزد'],
+  ['Qom', 'قم'], ['Markazi', 'مرکزی'], ['Hamadan', 'همدان'], ['Kermanshah', 'کرمانشاه'], ['Kurdistan', 'کردستان'], ['Lorestan', 'لرستان'],
+  ['Ilam', 'ایلام'], ['Zanjan', 'زنجان'], ['Qazvin', 'قزوین'], ['Semnan', 'سمنان'], ['Golestan', 'گلستان'], ['North Khorasan', 'خراسان شمالی'],
+  ['South Khorasan', 'خراسان جنوبی'], ['Sistan and Baluchestan', 'سیستان و بلوچستان'], ['Hormozgan', 'هرمزگان'], ['Bushehr', 'بوشهر'],
+  ['Kohgiluyeh and Boyer-Ahmad', 'کهگیلویه و بویراحمد'], ['Chaharmahal and Bakhtiari', 'چهارمحال و بختیاری'], ['Ardabil', 'اردبیل'],
+].map(([en, fa]) => ({ en, fa }));
+
+const need = z.enum(['off', 'optional', 'required']);
+
+/** What the checkout asks: contact and address details, and the shop's own extra questions. */
+export const checkoutSchema = z
+  .object({
+    email: need.default('optional'),
+    address: need.default('optional'),
+    /** Province and city as separate questions. */
+    region: z.boolean().default(true),
+    postalCode: need.default('optional'),
+    note: z.boolean().default(true),
+    /** Extra questions (answers are kept with the order). */
+    fields: z
+      .array(
+        z.object({
+          id: slug,
+          label: loc(120),
+          type: z.enum(['text', 'textarea', 'select']).default('text'),
+          options: z.array(loc(80)).max(20).default([]),
+          required: z.boolean().default(false),
+        }),
+      )
+      .max(10)
+      .default([]),
+  })
+  .default({});
+export type CheckoutSettings = z.output<typeof checkoutSchema>;
+
+/** A way of sending orders, with its price; free above `freeAbove` (smallest currency unit) when set. */
+export const shippingMethodSchema = z.object({
+  id: slug,
+  label: loc(80),
+  description: loc(200),
+  priceMinor: z.number().int().min(0).max(1e13).default(0),
+  freeAbove: z.number().int().min(0).max(1e13).nullable().default(null),
+});
+export type ShippingMethod = z.output<typeof shippingMethodSchema>;
+
+/** The cost of a shipping method for an order of `subtotal`. */
+export const shippingCost = (m: ShippingMethod, subtotal: number) => (m.freeAbove !== null && subtotal >= m.freeAbove ? 0 : m.priceMinor);
 
 export const shopSchema = z
   .object({
@@ -245,6 +343,11 @@ export const shopSchema = z
       .max(20)
       .default(DEFAULT_ORDER_STATUSES)
       .refine((list) => BUILT_IN_ORDER_STATUSES.every((s) => list.some((x) => x.slug === s)), 'Pending, confirmed, fulfilled and cancelled must stay in the list'),
+    checkout: checkoutSchema,
+    /** Ways of sending; empty = no choice and no shipping cost. */
+    shipping: z.array(shippingMethodSchema).max(10).default([]),
+    /** Email the staff when a product's (or variant's) stock falls to this or below (empty = never). */
+    lowStock: z.number().int().min(0).max(10_000).nullable().default(null),
   })
   .default({});
 
@@ -285,3 +388,51 @@ export const exportOptionsSchema = z
 
 /** Replacements for the site's built-in texts, by key (e.g. "common.viewAll"). */
 export const textsSchema = z.record(z.string().regex(/^[a-zA-Z0-9_.]{1,80}$/), z.object({ en: z.string().max(2000).default(''), fa: z.string().max(2000).default('') })).default({});
+
+/* ---------- page code, icons, announcement bar and popup ---------- */
+
+const urlOrPath = z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v), 'Use an uploaded image or an https:// URL').default('');
+
+/** Browser icon, default share image, and the operator's own code (analytics, trust badges, chat). */
+export const pageMetaSchema = z
+  .object({
+    faviconUrl: urlOrPath,
+    /** Shown when a page is shared and has no image of its own. */
+    shareImageUrl: urlOrPath,
+    /** HTML put in <head> on every page (meta tags, analytics). */
+    headCode: z.string().max(20_000).default(''),
+    /** HTML put at the end of <body> (chat widgets, badges). */
+    bodyCode: z.string().max(20_000).default(''),
+  })
+  .default({});
+
+/** A strip above the header (offers, notices). */
+export const announcementSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    text: loc(300),
+    href: z.string().max(500).default(''),
+    background: z.string().regex(/^(#[0-9a-fA-F]{6})?$/).default(''),
+    textColor: z.string().regex(/^(#[0-9a-fA-F]{6})?$/).default(''),
+    /** Visitors can close it (it stays closed for them until the text changes). */
+    dismissible: z.boolean().default(true),
+  })
+  .default({});
+
+/** A window that opens once per visitor (or on every visit). */
+export const popupSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    title: loc(200),
+    text: loc(1000),
+    imageUrl: urlOrPath,
+    buttonLabel: loc(60),
+    buttonHref: z.string().max(500).default(''),
+    /** Seconds after the page opens. */
+    delay: z.number().int().min(0).max(120).default(3),
+    /** Once per visitor (until the text changes), or every visit. */
+    once: z.boolean().default(true),
+    /** Every page, or the home page only. */
+    pages: z.enum(['all', 'home']).default('home'),
+  })
+  .default({});

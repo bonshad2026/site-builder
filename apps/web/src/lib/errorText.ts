@@ -363,5 +363,7 @@ export function errorLine(err: unknown, lang: ErrorLanguage): string {
   const e = explainError(err, lang);
   const first = e.items[0];
   const detail = first ? ` ${first.where ? `${first.where}: ` : ''}${first.problem}` : '';
-  return `${e.summary}${detail}${e.hint && !first ? ` ${e.hint}` : ''}`.trim();
+  // Some summaries already end with the hint (translated server messages): say it once.
+  const hint = e.hint && !first && !e.summary.includes(e.hint) ? ` ${e.hint}` : '';
+  return `${e.summary}${detail}${hint}`.trim();
 }

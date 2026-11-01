@@ -8,6 +8,8 @@ import type { ProductDto } from '../../types/api';
 import { useAdminSettings } from '../AdminRoot';
 import { useT, type AdminStrings } from '../i18n';
 import { Checkbox, ErrorNote, Modal } from '../ui';
+import { usePreferences } from '../../lib/preferences';
+import { downloadXlsx } from '../../lib/xlsx';
 
 const label = (t: AdminStrings): Record<ProductExportField, string> => ({
   slug: t.colSlug,
@@ -89,10 +91,8 @@ function cell(p: ProductDto, f: ProductExportField, settings: SiteSettings | und
 }
 
 /** CSV with a UTF-8 BOM so Excel opens Persian text correctly. */
-function toCsv(rows: string[][]) {
-  const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  return '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
-}
+/** Numbers stay numbers in the sheet (prices, stock, discount). */
+const NUMERIC: ProductExportField[] = ['price', 'discountPercent', 'finalPrice', 'stock'];
 
 /** Exports the products to a file Excel opens, with the columns chosen here (saved per site for next time). */
 export function ProductExport({ siteId }: { siteId: string }) {
@@ -105,6 +105,7 @@ export function ProductExport({ siteId }: { siteId: string }) {
     if (open) setFields(settings?.exportOptions?.productFields ?? ['slug', 'nameFa', 'category', 'price', 'stock', 'imageUrl']);
   }, [open, settings]);
   const names = label(t);
+  const { locale } = usePreferences();
 
   const run = useMutation({
     mutationFn: async () => {
@@ -115,13 +116,14 @@ export function ProductExport({ siteId }: { siteId: string }) {
         qc.setQueryData(['site', siteId, 'settings'], saved);
       }
       const products = await allProducts(siteId);
-      const csv = toCsv([chosen.map((f) => names[f]), ...products.map((p) => chosen.map((f) => cell(p, f, settings)))]);
-      const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })),
-        download: `products-${siteId}-${new Date().toISOString().slice(0, 10)}.csv`,
+      const value = (p: ProductDto, f: ProductExportField) => {
+        const v = cell(p, f, settings);
+        return NUMERIC.includes(f) && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : v;
+      };
+      downloadXlsx(`products-${siteId}-${new Date().toISOString().slice(0, 10)}.xlsx`, [chosen.map((f) => names[f]), ...products.map((p) => chosen.map((f) => value(p, f)))], {
+        sheet: 'products',
+        rtl: locale === 'fa',
       });
-      a.click();
-      URL.revokeObjectURL(a.href);
     },
     onSuccess: () => setOpen(false),
   });

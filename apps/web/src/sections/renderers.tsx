@@ -1,4 +1,5 @@
 import { DEFAULT_REQUEST_TYPES, type SectionButton, type SectionProps, type SectionType } from '@site-builder/shared';
+import { SystemPageSection } from './BuiltInPage';
 import { useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router';
 import { Accordion } from '../components/ui/Accordion';
@@ -17,6 +18,7 @@ import { useProducts, useServices, useSiteSettings } from '../features/public-si
 import { cn } from '../lib/cn';
 import { CollectionItemSection, CollectionListSection } from './collectionSections';
 import { usePreferences } from '../lib/preferences';
+import { MapSection, NewsletterSection, VideoSection } from './mediaSections';
 
 type Props<T extends SectionType> = { props: SectionProps<T> };
 
@@ -536,7 +538,8 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
   // A link like /contact?type=demo picks the request type; else the section's own choice.
   const [params] = useSearchParams();
   const types = settings?.requestTypes ?? DEFAULT_REQUEST_TYPES;
-  const requestType = types.find((t) => t.slug === params.get('type')) ?? types.find((t) => t.slug === props.requestType);
+  // Older sections only name a form kind: its request type of the same name.
+  const requestType = types.find((t) => t.slug === params.get('type')) ?? types.find((t) => t.slug === props.requestType) ?? types.find((t) => t.slug === props.formType);
   return (
     <>
       <div className="border-b border-line pt-36 pb-4 sm:pt-44">
@@ -548,11 +551,13 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
       <Section className="pt-12 sm:pt-16">
         <Container className="grid gap-16 lg:grid-cols-12">
           <div className={props.showDetails ? 'lg:col-span-7' : 'lg:col-span-8'}>
+            {/* Every request type's form is built from its own (editable) fields. */}
             {requestType?.fields?.length ? (
               <CustomRequestForm
                 key={requestType.slug}
                 requestType={requestType.slug}
-                fields={requestType.fields}
+                type={requestType}
+                fields={requestType.fields ?? []}
                 requestLabel={params.get('type') ? l(requestType.label) : undefined}
                 submitLabel={l(props.submitLabel)}
               />
@@ -648,5 +653,9 @@ export const sectionRenderers: Record<SectionType, AnyRenderer> = {
   cta: CtaSection,
   'collection-list': CollectionListSection,
   'collection-item': CollectionItemSection,
+  'system-page': SystemPageSection,
+  map: MapSection,
+  video: VideoSection,
+  newsletter: NewsletterSection,
   'contact-form': ContactFormSection,
 };

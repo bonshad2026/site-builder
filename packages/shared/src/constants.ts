@@ -40,6 +40,12 @@ export interface RequestType {
   form: FormType;
   /** Own questions (see siteOptions); empty or missing = the built-in questions of `form`. */
   fields?: import('./siteOptions.js').FormField[];
+  workflow?: import('./interactions.js').Workflow | null;
+  contact?: { email: 'required' | 'optional' | 'off'; phone: 'required' | 'optional' | 'off' };
+  payment?: { onSubmit: boolean; amountMinor: number; currency: (typeof import('./siteOptions.js').CURRENCIES)[number]; title: { en: string; fa: string } };
+  access?: 'anyone' | 'signed_in';
+  layout?: import('./interactions.js').FormLayout;
+  formVersion?: number;
 }
 
 /** Request types a site starts with (and gets when its settings define none). */
@@ -58,7 +64,6 @@ export type SocialIcon = (typeof SOCIAL_ICONS)[number];
 
 /** How a buyer pays: online through the gateway, or on delivery. */
 export const PAYMENT_METHODS = ['online', 'cod'] as const;
-export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'closed'] as const;
 
 export const ORDER_STATUSES = ['pending', 'confirmed', 'fulfilled', 'cancelled'] as const;
 /**

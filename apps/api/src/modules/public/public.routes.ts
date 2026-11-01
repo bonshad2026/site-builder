@@ -1,4 +1,4 @@
-import { DEFAULT_REQUEST_TYPES, LEAD_TYPES, leadInputSchema, orderInputSchema, withSettingDefaults, type RequestType } from '@site-builder/shared';
+import { leadInputSchema, orderInputSchema, withSettingDefaults } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -12,8 +12,13 @@ import { productsTable, servicesTable } from '../catalog/catalog.js';
 import { withImageUrls } from '../assets/urls.js';
 import { registerPublicCollectionRoutes } from '../collections/collections.routes.js';
 import { availabilityOf, loadCollections, seatsTaken, type ItemRow } from '../collections/collections.service.js';
-import { createOrder, orderItems } from '../orders/orders.service.js';
+import { createOrder, orderItems, type LowStock } from '../orders/orders.service.js';
 import { findOrderForBuyer, gatewayFor, getPaymentSettings, startPayment } from '../payments/payments.service.js';
+import { verifiedCustomer } from '../customers/customers.service.js';
+import { accessValid, loadSettings, siteBaseUrl } from '../interactions/context.js';
+import { notifyStaff } from '../interactions/notify.js';
+import { registerInteractionRoutes } from '../interactions/public.routes.js';
+import { createRequest } from '../interactions/requests.service.js';
 
 const slugParam = z.object({ slug: z.string().min(1).max(64) });
 
@@ -26,7 +31,8 @@ export function publicRoutes(ctx: AppContext) {
 
   const submitLimiter = rateLimit({
     windowMs: 10 * 60_000,
-    limit: ctx.env.NODE_ENV === 'test' ? 1000 : 5,
+    // Strict on client servers; the studio and development (one shared address for every tester) allow many more.
+    limit: ctx.env.NODE_ENV === 'production' ? 5 : 1000,
     keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? '')}:${req.params.siteSlug}`,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
@@ -35,8 +41,13 @@ export function publicRoutes(ctx: AppContext) {
 
   r.route({ method: 'get', path: '/settings', summary: 'Public site configuration' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
-    return { data: rows[0]?.settings ? withSettingDefaults(rows[0].settings) : null };
+    if (!rows[0]?.settings) return { data: null };
+    // Workflows (internal stage names, message texts) and staff addresses stay private.
+    const { notifications: _n, ...settings } = withSettingDefaults(rows[0].settings);
+    return { data: { ...settings, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
   });
+
+  registerInteractionRoutes(r, ctx);
 
   r.route({ method: 'get', path: '/pages', summary: 'Published pages (for navigation and sitemap)' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(
@@ -114,16 +125,14 @@ export function publicRoutes(ctx: AppContext) {
     async ({ req, body }) => {
       // Honeypot filled in: accept silently so bots learn nothing, but store nothing.
       if (body.website) return { data: { received: true } };
-      const configured = (await req.tenant!.db.query(`SELECT settings->'requestTypes' AS types FROM site_settings WHERE id = 1`)).rows[0]?.types as RequestType[] | null;
-      const known = new Set<string>([...LEAD_TYPES, ...(configured ?? DEFAULT_REQUEST_TYPES).map((t) => t.slug)]);
-      if (!known.has(body.type)) throw badRequest('Unknown request type');
       const itemRef = body.item ? await requestedItem(req.tenant!.db, body.item) : null;
-      const { rows } = await req.tenant!.db.query(
-        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash, details, item_ref)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at AS "createdAt"`,
-        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null, body.details, itemRef],
-      );
-      return { data: { received: true, id: rows[0].id, createdAt: rows[0].createdAt } };
+      const { lead, code, token, paymentDue } = await createRequest(ctx, req.tenant!, body, {
+        customer: verifiedCustomer(req),
+        ipHash: req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null,
+        itemRef,
+      });
+      // The tracking code and token let the visitor follow (and pay for) the request without an account.
+      return { data: { received: true, id: lead.id, number: lead.number, code, token, paymentDue, createdAt: lead.createdAt } };
     },
   );
 
@@ -140,7 +149,14 @@ export function publicRoutes(ctx: AppContext) {
       // Products need the shop; content-table items only need orders.
       if (body.items.some((l) => l.productId) && !req.tenant!.modules?.products) throw badRequest('This site does not sell products');
       if (body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
-      const order = await createOrder(req.tenant!.db, body);
+      const order = await createOrder(req.tenant!.db, body, verifiedCustomer(req)?.id ?? null);
+      const settings = await loadSettings(req.tenant!.db);
+      const base = await siteBaseUrl(ctx, req.tenant!);
+      await notifyStaff(ctx, req.tenant!, settings, `Order #${order.number}`, `${body.customer.name} — #${order.number}\n\n${base}/admin/sites/${req.tenant!.slug}/orders?open=${order.id}`);
+      if (order.lowStock.length) {
+        const list = (order.lowStock as LowStock[]).map((x) => `- ${x.name.fa || x.name.en}${x.variant ? ` (${x.variant})` : ''}: ${x.stock}`).join('\n');
+        await notifyStaff(ctx, req.tenant!, settings, 'Low stock / موجودی کم', `${list}\n\n${base}/admin/sites/${req.tenant!.slug}/products`);
+      }
       return {
         data: {
           number: order.number,
@@ -193,18 +209,25 @@ export function publicRoutes(ctx: AppContext) {
       path: '/orders/:number/pay',
       summary: 'Start online payment; returns the gateway URL',
       params: orderLookup,
-      body: z.object({ token: z.string().min(10).max(100), locale: z.enum(['en', 'fa']).default('en') }),
+      body: z.object({ token: z.string().max(200).default(''), locale: z.enum(['en', 'fa']).default('en') }),
       middleware: [submitLimiter, requireModule('orders')],
     },
     async ({ req, params, body }) => {
-      const base = await siteBaseUrl(ctx, req.tenant!.id);
-      const returnUrl = `${base}${body.locale === 'fa' ? '/fa' : ''}/checkout/result?order=${params.number}&token=${encodeURIComponent(body.token)}`;
-      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl }) };
+      const base = await siteBaseUrl(ctx, req.tenant!);
+      // Signed in as the buyer, or holding a signed link (order page): no order token needed.
+      const { rows } = await req.tenant!.db.query<{ id: string; customer_id: string | null }>('SELECT id, customer_id FROM orders WHERE number = $1', [params.number]);
+      const customer = verifiedCustomer(req);
+      const verified =
+        !!rows[0] && ((!!customer && rows[0].customer_id === customer.id) || (body.token.startsWith('s.') && accessValid(ctx, req.tenant!.id, 'order', { id: rows[0].id, public_token_hash: null }, body.token)));
+      const returnUrl = verified
+        ? `${base}${body.locale === 'fa' ? '/fa' : ''}/track/${params.number}${body.token ? `?t=${encodeURIComponent(body.token)}` : ''}`
+        : `${base}${body.locale === 'fa' ? '/fa' : ''}/checkout/result?order=${params.number}&token=${encodeURIComponent(body.token)}`;
+      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl }, verified) };
     },
   );
 
   r.route({ method: 'get', path: '/sitemap.xml', summary: 'XML sitemap of published content in both languages' }, async ({ req, res }) => {
-    const base = await siteBaseUrl(ctx, req.tenant!.id);
+    const base = await siteBaseUrl(ctx, req.tenant!);
     const db = req.tenant!.db;
     const modules = (await db.query(`SELECT settings->'modules' AS modules FROM site_settings WHERE id = 1`)).rows[0]?.modules ?? {};
     const entries: { path: string; lastmod: Date }[] = [];
@@ -265,15 +288,6 @@ async function requestedItem(db: pg.Pool, ref: { collection: string; slug: strin
   if (state.reason === 'deadline') throw badRequest('Registration for this item has closed');
   if (table.commerce.requestsTakeSeat && state.reason === 'full') throw conflict('This item is full');
   return { collection: table.slug, id: item.id, slug: item.slug, title: item.title };
-}
-
-/** Canonical origin of a site: its primary domain in production, the web app URL otherwise. */
-async function siteBaseUrl(ctx: AppContext, tenantId: string): Promise<string> {
-  if (ctx.env.NODE_ENV === 'production') {
-    const { rows } = await ctx.control.query<{ domain: string }>('SELECT domain FROM tenant_domains WHERE tenant_id = $1 AND is_primary', [tenantId]);
-    if (rows[0]) return `https://${rows[0].domain}`;
-  }
-  return ctx.env.WEB_APP_URL.replace(/\/$/, '');
 }
 
 /** Maps a custom domain to its site id, for hosting each client on their own domain. */

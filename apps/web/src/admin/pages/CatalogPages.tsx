@@ -11,6 +11,7 @@ import { useT } from '../i18n';
 import { Badge, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, NumberField, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useErrorLine, useToast } from '../ui';
 import { ImagePicker } from './FilesPage';
 import { ProductExport } from './ProductExport';
+import { ExcelButton, fetchAll, listTotal } from '../ExcelExport';
 
 type Kind = 'services' | 'products';
 type Item = ServiceDto | ProductDto;
@@ -30,6 +31,7 @@ function blank(kind: Kind): Partial<ServiceDto> | Partial<ProductDto> {
         isAvailable: true,
         discountPercent: 0,
         colors: [],
+        variants: [],
         maxPerOrder: null,
         featured: false,
         materials: empty,
@@ -62,6 +64,10 @@ function payload(kind: Kind, item: Partial<Item>) {
     isAvailable: p.isAvailable,
     discountPercent: p.discountPercent ?? 0,
     colors: (p.colors ?? []).filter((c) => c.name.en.trim() && c.name.fa.trim()),
+    // A variant needs a name; one language is enough (it fills the other).
+    variants: (p.variants ?? [])
+      .filter((v) => v.name.en.trim() || v.name.fa.trim())
+      .map((v) => ({ ...v, name: { en: v.name.en.trim() || v.name.fa.trim(), fa: v.name.fa.trim() || v.name.en.trim() } })),
     maxPerOrder: p.maxPerOrder ?? null,
     featured: p.featured,
     materials: p.materials,
@@ -217,6 +223,21 @@ function Editor({ siteId, kind, item, onClose }: { siteId: string; kind: Kind; i
                 </div>
               )}
             />
+            <ListEditor
+              label={t.sx.variants}
+              items={p.variants ?? []}
+              onChange={(v) => set('variants', v)}
+              create={() => ({ name: { en: '', fa: '' }, priceMinor: null, stock: null })}
+              max={30}
+              render={(v, update) => (
+                <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr]">
+                  <LocalizedField label={t.sx.variantName} value={v.name} onChange={(name) => update({ ...v, name })} />
+                  <NumberField label={t.sx.variantPrice} min={0} value={v.priceMinor} onChange={(priceMinor) => update({ ...v, priceMinor })} />
+                  <NumberField label={t.sx.variantStock} min={0} value={v.stock} onChange={(stock) => update({ ...v, stock })} />
+                </div>
+              )}
+            />
+            <p className="-mt-3 text-xs text-ink-soft">{t.sx.variantsHint}</p>
             <div className="flex flex-wrap gap-6">
               <Checkbox label={t.available} checked={p.isAvailable ?? true} onChange={(v) => set('isAvailable', v)} />
               <Checkbox label={t.featured} checked={p.featured ?? false} onChange={(v) => set('featured', v)} />
@@ -270,7 +291,20 @@ export default function CatalogPages({ siteId, kind }: { siteId: string; kind: K
         title={title}
         actions={
           <>
-            {kind === 'products' && <ProductExport siteId={siteId} />}
+            {kind === 'products' && !!listTotal(list.data) && <ProductExport siteId={siteId} />}
+            {kind === 'services' && (
+              <ExcelButton
+                name={title}
+                count={listTotal(list.data)}
+                rows={async () => {
+                  const list = await fetchAll<ServiceDto>(`/sites/${siteId}/services${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+                  return [
+                    ['slug', 'عنوان', 'Title', 'خلاصه', 'Summary', 'مدت', 'شروع قیمت', 'وضعیت / Status', 'ترتیب / Position', 'تصویر / Image'],
+                    ...list.map((x) => [x.slug, x.title.fa, x.title.en, x.summary.fa, x.summary.en, l(x.duration), l(x.startingFrom), x.status, x.position, x.imageUrl ? new URL(x.imageUrl, window.location.origin).href : '']),
+                  ];
+                }}
+              />
+            )}
             <Button onClick={() => setEditing(blank(kind))}>{kind === 'services' ? t.newService : t.newProduct}</Button>
           </>
         }

@@ -28,12 +28,24 @@ export interface TenantContext {
   modules?: Partial<Record<ModuleId, boolean>>;
 }
 
+/** A visitor signed in to their account on the site (public routes). */
+export interface CustomerSession {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  hasPassword: boolean;
+  sessionId: string;
+  csrfHash: string;
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       auth?: AuthState;
       tenant?: TenantContext;
+      customer?: CustomerSession;
     }
   }
 }

@@ -1,4 +1,4 @@
-import type { SectionType } from '@site-builder/shared';
+import { SYSTEM_PAGES, type SectionType } from '@site-builder/shared';
 
 type Lbl = { en: string; fa: string };
 
@@ -332,6 +332,79 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       { key: 'source', kind: 'source', label: L('Table', 'جدول') },
       { key: 'itemSlug', kind: 'itemSlug', label: L('Item', 'آیتم') },
       { key: 'card', kind: 'card', label: L('Box design', 'طراحی باکس') },
+    ],
+  },
+  map: {
+    label: L('Map', 'نقشه'),
+    description: L('A point on the map (latitude / longitude) or an embed from Neshan or Google Maps, with directions links', 'یک نقطه روی نقشه (عرض و طول جغرافیایی) یا کد نقشه‌ی نشان و گوگل، با پیوند مسیریابی'),
+    fields: [
+      eyebrow,
+      heading,
+      { key: 'address', kind: 'loc', label: L('Address', 'نشانی') },
+      { key: 'lat', kind: 'number', label: L('Latitude (e.g. 35.6997)', 'عرض جغرافیایی (مثلاً 35.6997)'), min: -90, max: 90 },
+      { key: 'lng', kind: 'number', label: L('Longitude (e.g. 51.3380)', 'طول جغرافیایی (مثلاً 51.3380)'), min: -180, max: 180 },
+      { key: 'zoom', kind: 'number', label: L('Zoom', 'بزرگ‌نمایی'), min: 3, max: 19 },
+      { key: 'embedUrl', kind: 'text', label: L('Or the map\'s embed address (https)', 'یا آدرس embed نقشه (https)') },
+      { key: 'height', kind: 'number', label: L('Height (px)', 'ارتفاع (پیکسل)'), min: 200, max: 900 },
+    ],
+  },
+  video: {
+    label: L('Video', 'ویدیو'),
+    description: L('An Aparat, YouTube or Vimeo link, or an uploaded video file', 'پیوند آپارات، یوتیوب یا ویمئو، یا فایل ویدیوی بارگذاری‌شده'),
+    fields: [
+      eyebrow,
+      heading,
+      intro,
+      { key: 'url', kind: 'text', label: L('Video link or file address', 'پیوند یا آدرس فایل ویدیو') },
+      { key: 'posterUrl', kind: 'image', label: L('Cover image (video files)', 'تصویر کاور (برای فایل ویدیو)') },
+      {
+        key: 'ratio',
+        kind: 'select',
+        label: L('Shape', 'نسبت تصویر'),
+        options: [
+          { value: '16:9', label: L('Wide 16:9', 'عریض ۱۶:۹') },
+          { value: '4:3', label: L('4:3', '۴:۳') },
+          { value: '1:1', label: L('Square', 'مربع') },
+          { value: '9:16', label: L('Tall (stories, reels)', 'عمودی (استوری)') },
+        ],
+      },
+      { key: 'autoplay', kind: 'bool', label: L('Play by itself (muted)', 'پخش خودکار (بی‌صدا)') },
+    ],
+  },
+  newsletter: {
+    label: L('Newsletter', 'خبرنامه'),
+    description: L('Visitors leave an email or mobile number; listed under Customers → Newsletter', 'بازدیدکننده ایمیل یا موبایل می‌گذارد؛ در «مشتریان ← خبرنامه» فهرست می‌شود'),
+    dynamic: true,
+    fields: [
+      eyebrow,
+      heading,
+      intro,
+      { key: 'placeholder', kind: 'loc', label: L('Field hint', 'راهنمای فیلد') },
+      { key: 'buttonLabel', kind: 'loc', label: L('Button text', 'متن دکمه') },
+      { key: 'successText', kind: 'loc', label: L('Thank-you text', 'متن تشکر') },
+      { key: 'askName', kind: 'bool', label: L('Ask for the name too', 'نام هم پرسیده شود') },
+      {
+        key: 'tone',
+        kind: 'select',
+        label: L('Look', 'ظاهر'),
+        options: [
+          { value: 'light', label: L('Light', 'روشن') },
+          { value: 'dark', label: L('Dark', 'تیره') },
+        ],
+      },
+    ],
+  },
+  'system-page': {
+    label: L('Built-in content', 'محتوای آماده‌ی سیستم'),
+    description: L('The cart, the current product, the checkout… inside this page, with your own sections around it', 'سبد خرید، محصول همین صفحه، تسویه حساب… داخل این صفحه، با بخش‌های دلخواه شما در اطرافش'),
+    dynamic: true,
+    fields: [
+      {
+        key: 'page',
+        kind: 'select',
+        label: L('Content', 'محتوا'),
+        options: SYSTEM_PAGES.map((p) => ({ value: p.key, label: p.label })),
+      },
     ],
   },
   'contact-form': {

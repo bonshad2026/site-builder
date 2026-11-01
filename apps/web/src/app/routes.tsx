@@ -7,6 +7,23 @@ import { ProductDetailPage, ProductsPage } from '../features/public-site/pages/P
 import { ServiceDetailPage, ServicesPage } from '../features/public-site/pages/ServicesPages';
 import { SitePage } from '../features/public-site/pages/SitePage';
 import { CollectionItemPage } from '../features/collections/CollectionItemPage';
+import { AccountPage, CasePage, TrackPage } from '../features/account/AccountPages';
+import { BuiltInPage, registerSystemPages } from '../sections/BuiltInPage';
+import { WishlistPage } from '../features/wishlist/wishlist';
+
+// The built-in content a builder page can show in its "Built-in content" section.
+registerSystemPages({
+  products: ProductsPage,
+  productDetail: ProductDetailPage,
+  services: ServicesPage,
+  serviceDetail: ServiceDetailPage,
+  cart: CartPage,
+  checkout: CheckoutPage,
+  checkoutResult: CheckoutResultPage,
+  account: AccountPage,
+  track: TrackPage,
+  notFound: NotFoundPage,
+});
 
 // The admin panel and builder are loaded only when visited, keeping the public site light.
 const AdminRoot = lazy(() => import('../admin/AdminRoot'));
@@ -28,13 +45,17 @@ export const routes: RouteObject[] = [
     element: <SiteLayout />,
     children: [
       { index: true, element: <SitePage home /> },
-      { path: 'services', element: <ServicesPage /> },
-      { path: 'services/:slug', element: <ServiceDetailPage /> },
-      { path: 'products', element: <ProductsPage /> },
-      { path: 'products/:slug', element: <ProductDetailPage /> },
-      { path: 'cart', element: <CartPage /> },
-      { path: 'checkout', element: <CheckoutPage /> },
-      { path: 'checkout/result', element: <CheckoutResultPage /> },
+      { path: 'services', element: <BuiltInPage page="services"><ServicesPage /></BuiltInPage> },
+      { path: 'services/:slug', element: <BuiltInPage page="serviceDetail"><ServiceDetailPage /></BuiltInPage> },
+      { path: 'products', element: <BuiltInPage page="products"><ProductsPage /></BuiltInPage> },
+      { path: 'products/:slug', element: <BuiltInPage page="productDetail"><ProductDetailPage /></BuiltInPage> },
+      { path: 'cart', element: <BuiltInPage page="cart"><CartPage /></BuiltInPage> },
+      { path: 'checkout', element: <BuiltInPage page="checkout"><CheckoutPage /></BuiltInPage> },
+      { path: 'checkout/result', element: <BuiltInPage page="checkoutResult"><CheckoutResultPage /></BuiltInPage> },
+      { path: 'account', element: <BuiltInPage page="account"><AccountPage /></BuiltInPage> },
+      { path: 'track', element: <BuiltInPage page="track"><TrackPage /></BuiltInPage> },
+      { path: 'wishlist', element: <WishlistPage /> },
+      { path: 'track/:code', element: <CasePage /> },
       { path: ':slug', element: <SitePage /> },
       // An item of a content table: /classes/hydrant.
       { path: ':collection/:item', element: <CollectionItemPage /> },

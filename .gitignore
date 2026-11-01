@@ -8,3 +8,7 @@ coverage
 var/
 exports/
 backups/
+
+# Studio backups and stray files at the root
+/*.tar.gz
+/*.jpg

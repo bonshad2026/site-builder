@@ -201,7 +201,7 @@ function availableSql(sql: SqlBuilder, collection: Collection): string {
   }
   if (c.capacityField) {
     const raw = `i.data->>${sql.param(c.capacityField)}`;
-    const leads = c.requestsTakeSeat ? ` + (SELECT count(*) FROM leads l WHERE l.item_ref->>'id' = i.id::text AND l.status <> 'closed')` : '';
+    const leads = c.requestsTakeSeat ? ` + (SELECT count(*) FROM leads l WHERE l.item_ref->>'id' = i.id::text AND l.stage_kind <> 'cancelled')` : '';
     parts.push(
       `(coalesce(${raw}, '') = '' OR (${raw})::numeric > (SELECT coalesce(sum(oi.quantity), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.collection_item_id = i.id AND o.status <> 'cancelled')${leads})`,
     );
@@ -334,7 +334,7 @@ export async function seatsTaken(db: Db, collection: Collection, itemIds: string
   if (collection.commerce.requestsTakeSeat) {
     const leads = await db.query<{ id: string; n: number }>(
       `SELECT item_ref->>'id' AS id, count(*)::int AS n FROM leads
-        WHERE item_ref->>'id' = ANY($1::text[]) AND status <> 'closed' GROUP BY item_ref->>'id'`,
+        WHERE item_ref->>'id' = ANY($1::text[]) AND stage_kind <> 'cancelled' GROUP BY item_ref->>'id'`,
       [itemIds],
     );
     for (const r of leads.rows) taken.set(r.id, (taken.get(r.id) ?? 0) + r.n);

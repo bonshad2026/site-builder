@@ -468,6 +468,53 @@ const f = (key: string, type: FieldType, en: string, fa: string, extra: Partial<
 /** Starting points for common tables; everything can be changed after. */
 export const COLLECTION_PRESETS: { id: string; label: { en: string; fa: string }; collection: z.input<typeof collectionInputSchema> }[] = [
   {
+    id: 'articles',
+    label: { en: 'Articles / blog', fa: 'مطالب / وبلاگ' },
+    collection: {
+      slug: 'articles',
+      name: { en: 'Articles', fa: 'مطالب' },
+      itemName: { en: 'Article', fa: 'مطلب' },
+      imageField: 'image',
+      fields: [
+        f('image', 'image', 'Image', 'تصویر'),
+        f('date', 'date', 'Date', 'تاریخ'),
+        f('category', 'select', 'Category', 'دسته', { options: [{ value: 'guides', label: { en: 'Guides', fa: 'راهنما' } }, { value: 'news', label: { en: 'News', fa: 'خبر' } }, { value: 'stories', label: { en: 'Stories', fa: 'داستان مشتریان' } }] }),
+        f('summary', 'textarea', 'Summary', 'خلاصه'),
+        f('body', 'textarea', 'Text', 'متن'),
+      ],
+    },
+  },
+  {
+    id: 'portfolio',
+    label: { en: 'Portfolio / projects', fa: 'نمونه‌کارها / پروژه‌ها' },
+    collection: {
+      slug: 'portfolio',
+      name: { en: 'Portfolio', fa: 'نمونه‌کارها' },
+      itemName: { en: 'Project', fa: 'پروژه' },
+      imageField: 'image',
+      fields: [
+        f('image', 'image', 'Image', 'تصویر'),
+        f('gallery', 'gallery', 'More photos', 'عکس‌های بیشتر'),
+        f('category', 'select', 'Category', 'دسته', { options: [{ value: 'residential', label: { en: 'Residential', fa: 'مسکونی' } }, { value: 'commercial', label: { en: 'Commercial', fa: 'تجاری' } }, { value: 'other', label: { en: 'Other', fa: 'سایر' } }] }),
+        f('client', 'text', 'Client', 'کارفرما'),
+        f('date', 'date', 'Date', 'تاریخ'),
+        f('summary', 'textarea', 'Summary', 'خلاصه'),
+        f('body', 'textarea', 'Description', 'توضیحات'),
+      ],
+    },
+  },
+  {
+    id: 'team',
+    label: { en: 'Team', fa: 'تیم ما' },
+    collection: {
+      slug: 'team',
+      name: { en: 'Team', fa: 'تیم ما' },
+      itemName: { en: 'Team member', fa: 'عضو تیم' },
+      imageField: 'photo',
+      fields: [f('photo', 'image', 'Photo', 'عکس'), f('role', 'text', 'Role', 'سمت'), f('bio', 'textarea', 'About', 'درباره')],
+    },
+  },
+  {
     id: 'courses',
     label: { en: 'Courses', fa: 'دوره‌ها' },
     collection: {
@@ -509,17 +556,6 @@ export const COLLECTION_PRESETS: { id: string; label: { en: string; fa: string }
       itemName: { en: 'Teacher', fa: 'مدرس' },
       imageField: 'photo',
       fields: [f('photo', 'image', 'Photo', 'عکس'), f('role', 'text', 'Role', 'سمت'), f('bio', 'textarea', 'Biography', 'بیوگرافی')],
-    },
-  },
-  {
-    id: 'news',
-    label: { en: 'News', fa: 'اخبار' },
-    collection: {
-      slug: 'news',
-      name: { en: 'News', fa: 'اخبار' },
-      itemName: { en: 'News item', fa: 'خبر' },
-      imageField: 'image',
-      fields: [f('image', 'image', 'Image', 'تصویر'), f('date', 'date', 'Date', 'تاریخ'), f('summary', 'textarea', 'Summary', 'خلاصه'), f('body', 'textarea', 'Text', 'متن')],
     },
   },
   {

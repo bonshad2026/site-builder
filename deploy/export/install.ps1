@@ -56,12 +56,18 @@ if ($LASTEXITCODE -eq 0) {
       Set-EnvValue 'NODE_ENV' 'production'
       Set-EnvValue 'EMAIL_PROVIDER' 'smtp'; Set-EnvValue 'SMTP_URL' $smtp
       Set-EnvValue 'EMAIL_FROM' (Ask 'Sender address' "$name <no-reply@$domain>")
-      $key = Ask 'Kavenegar API key for SMS codes' ''
-      if (-not $key) { Fail 'Production needs an SMS provider. Re-run and enter a Kavenegar key, or leave SMTP empty for test mode.' }
-      Set-EnvValue 'SMS_PROVIDER' 'kavenegar'; Set-EnvValue 'KAVENEGAR_API_KEY' $key
-      Set-EnvValue 'KAVENEGAR_OTP_TEMPLATE' (Ask 'Kavenegar verify template' '')
+      $key = Ask 'Kavenegar API key for SMS codes (empty: set it later in the admin panel)' ''
+      if ($key) {
+        Set-EnvValue 'SMS_PROVIDER' 'kavenegar'; Set-EnvValue 'KAVENEGAR_API_KEY' $key
+        Set-EnvValue 'KAVENEGAR_OTP_TEMPLATE' (Ask 'Kavenegar verify template' '')
+      } else {
+        Write-Host 'SMS: set it in the admin panel (Platform > Messaging).'
+        Set-EnvValue 'SMS_PROVIDER' 'panel'
+      }
+    } elseif ((Ask 'No SMTP. Set e-mail and SMS later in the admin panel? (y = live site, n = test mode)' 'y') -eq 'y') {
+      Set-EnvValue 'NODE_ENV' 'production'; Set-EnvValue 'EMAIL_PROVIDER' 'panel'; Set-EnvValue 'SMS_PROVIDER' 'panel'
     } else {
-      Write-Host 'No SMTP: test mode (e-mails and SMS codes are only written to the logs).'
+      Write-Host 'Test mode: e-mails and SMS codes are only written to the logs.'
       Set-EnvValue 'NODE_ENV' 'development'; Set-EnvValue 'EMAIL_PROVIDER' 'console'; Set-EnvValue 'SMS_PROVIDER' 'console'
     }
   } else {
@@ -106,6 +112,12 @@ Write-Host "   $(Get-EnvValue 'HTTPS_PORT')/tcp   HTTPS$httpsNote"
 Write-Host '   Database and API are internal only (no host ports).'
 Write-Host ''
 Write-Host ' Manage (in this folder)'
+# A nightly backup (03:30) of the database and files into backups\ (Windows Task Scheduler).
+$task = "SiteBackup-$project"
+$script = Join-Path $PSScriptRoot 'backup.ps1'
+schtasks /Create /F /SC DAILY /ST 03:30 /TN $task /TR "powershell -NoProfile -ExecutionPolicy Bypass -File `"$script`"" *> $null
+if ($LASTEXITCODE -eq 0) { Write-Host " Backups  every night at 03:30 into $PSScriptRoot\backups (task $task)" }
+else { Write-Host ' Backups  could not schedule (run as administrator); run backup.ps1 yourself' }
 Write-Host "   docker compose -p $project ps"
 Write-Host "   docker compose -p $project logs -f api"
 Write-Host "   docker compose -p $project down        # stop (data is kept)"

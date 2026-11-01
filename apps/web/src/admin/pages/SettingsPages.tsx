@@ -1,21 +1,26 @@
-import { DEFAULT_REQUEST_TYPES, FORM_TYPES, MODULES, PERMISSIONS, SOCIAL_ICONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
+import { MODULES, PERMISSIONS, SOCIAL_ICONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../lib/api';
 import { SOCIAL_ICON_NAMES, SocialIcon, guessSocialIcon } from '../../components/ui/SocialIcon';
-import { cn } from '../../lib/cn';
+import { usePreferences } from '../../lib/preferences';
 import { useAdminSettings } from '../AdminRoot';
 import { useIsOperator, useMe } from '../auth';
 import { useT } from '../i18n';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { LinkPicker } from '../links';
 import { ImagePicker } from './FilesPage';
-import { DesignTab, FooterTab, FormChoicesEditor, FormFieldsEditor, HeaderTab, presetFields, ShopPageTab, ShopTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
+import { DesignTab, FooterTab, FormChoicesEditor, HeaderTab, ShopPageTab, ShopTab, ExtrasTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
+import { AccountsTab } from '../interactions/AccountsTab';
+import { RequestTypesEditor } from '../interactions/RequestTypesEditor';
+import { ExcelButton } from '../ExcelExport';
 
 const empty = { en: '', fa: '' };
 
 function SettingsView({ siteId }: { siteId: string }) {
+  const { locale } = usePreferences();
   const t = useT();
   const toast = useToast();
   const qc = useQueryClient();
@@ -28,8 +33,10 @@ function SettingsView({ siteId }: { siteId: string }) {
     enabled: operator,
   });
   const [s, setS] = useState<SiteSettings | null>(null);
-  type Tab = 'brand' | 'design' | 'contact' | 'categories' | 'requests' | 'texts' | 'menu' | 'header' | 'footer' | 'shopPage' | 'systemPages' | 'shop' | 'modules' | 'seo';
-  const [tab, setTab] = useState<Tab>('brand');
+  type Tab = 'brand' | 'design' | 'contact' | 'categories' | 'requests' | 'accounts' | 'notifications' | 'texts' | 'menu' | 'header' | 'footer' | 'shopPage' | 'systemPages' | 'shop' | 'modules' | 'seo' | 'extras';
+  // Each section has its own menu entry: ?tab= says which one this page shows.
+  const [params] = useSearchParams();
+  const requested = (params.get('tab') as Tab | null) ?? 'brand';
   useEffect(() => setS(data ?? null), [data]);
 
   const save = useMutation({
@@ -55,6 +62,8 @@ function SettingsView({ siteId }: { siteId: string }) {
       ['contact', t.contact],
       ['categories', t.productCategories],
       ['requests', t.requestTypes],
+      ['accounts', locale === 'fa' ? 'ثبت‌نام و ورود مشتری' : 'Customer sign-up & sign-in'],
+      ['notifications', locale === 'fa' ? 'اطلاع‌رسانی به کارکنان' : 'Staff notifications'],
       ['texts', t.textsTab],
       ['menu', t.menu],
       ['header', t.headerTab],
@@ -64,30 +73,27 @@ function SettingsView({ siteId }: { siteId: string }) {
       ['shop', t.shopTab],
       ['modules', t.modules],
       ['seo', t.seo],
+      ['extras', locale === 'fa' ? 'کد صفحه، آیکون، اعلان و پاپ‌آپ' : 'Page code, icon, bar & popup'],
     ] as const
   )
     // Clients edit their own content and shop rules; the design is the operator's.
-    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'texts', 'footer', 'shop'].includes(id))
+    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'notifications', 'texts', 'footer', 'shop', 'extras'].includes(id))
     .filter(([id]) => (id === 'shopPage' || id === 'shop' ? !!s.modules.products : true));
   const tabProps = { s, set, siteId };
+  // A section this person may not edit (or an unknown one) falls back to the general settings.
+  const tab: Tab = tabs.some(([id]) => id === requested) ? requested : 'brand';
+  const title = tabs.find(([id]) => id === tab)?.[1] ?? t.settings;
 
   return (
     <>
       <PageTitle
-        title={t.settings}
+        title={title}
         actions={
           <Button onClick={() => save.mutate(s)} disabled={save.isPending}>
             {save.isPending ? t.saving : t.save}
           </Button>
         }
       />
-      <div role="tablist" className="mb-6 flex flex-wrap gap-1 border-b border-line">
-        {tabs.map(([id, label]) => (
-          <button key={id} role="tab" type="button" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('-mb-px border-b-2 px-4 py-2 text-sm', tab === id ? 'border-ink text-ink' : 'border-transparent text-ink-soft hover:text-ink')}>
-            {label}
-          </button>
-        ))}
-      </div>
       <ErrorNote error={save.error} />
       <div className="mt-4 flex max-w-3xl flex-col gap-6">
         {tab === 'brand' && (
@@ -318,6 +324,16 @@ function SettingsView({ siteId }: { siteId: string }) {
           </Card>
         )}
         {tab === 'categories' && (
+          <div className="mb-4 flex justify-end">
+            <ExcelButton
+              name={t.productCategories}
+              count={(s.productCategories ?? []).length}
+              size="sm"
+              rows={async () => [['slug', 'نام / Name (fa)', 'Name (en)'], ...(s.productCategories ?? []).map((c) => [c.slug, c.label.fa, c.label.en])]}
+            />
+          </div>
+        )}
+        {tab === 'categories' && (
           <ListEditor
             label={t.productCategories}
             items={s.productCategories ?? []}
@@ -334,45 +350,19 @@ function SettingsView({ siteId }: { siteId: string }) {
         )}
         {tab === 'requests' && (
           <>
-            <p className="text-sm text-ink-soft">{t.requestTypesHint}</p>
-            <ListEditor
-              label={t.requestTypes}
-              items={s.requestTypes ?? DEFAULT_REQUEST_TYPES}
-              onChange={(requestTypes) => set('requestTypes', requestTypes)}
-              create={() => ({ slug: '', label: { en: '', fa: '' }, form: 'contact' as const, fields: [] })}
-              max={30}
-              render={(r, update) => (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-                    <TextField label={t.requestTypeSlug} dir="ltr" value={r.slug} onChange={(slug) => update({ ...r, slug: slug.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} hint="demo, booking…" />
-                    <LocalizedField label={t.categoryName} value={r.label} onChange={(label) => update({ ...r, label })} />
-                  </div>
-                  {!r.fields?.length && (
-                    <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed border-line p-3">
-                      <SelectField
-                        label={t.requestTypeForm}
-                        value={r.form}
-                        onChange={(form) => update({ ...r, form })}
-                        options={FORM_TYPES.map((f) => ({ value: f, label: { contact: t.formContact, consultation: t.formConsultation, reservation: t.formReservation, demo: t.formDemo }[f] }))}
-                      />
-                      <Button size="sm" variant="outline" onClick={() => update({ ...r, fields: presetFields(r.form, s.formOptions) })}>
-                        {t.editFields}
-                      </Button>
-                    </div>
-                  )}
-                  <FormFieldsEditor value={r.fields ?? []} onChange={(fields) => update({ ...r, fields })} />
-                </>
-              )}
-            />
-            <FormChoicesEditor {...tabProps} />
+            <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
+            {operator && <FormChoicesEditor {...tabProps} />}
           </>
         )}
+        {tab === 'accounts' && <AccountsTab s={s} set={set} part="accounts" />}
+        {tab === 'notifications' && <AccountsTab s={s} set={set} part="notifications" />}
         {tab === 'design' && <DesignTab {...tabProps} />}
         {tab === 'texts' && <TextsTab {...tabProps} />}
         {tab === 'header' && <HeaderTab {...tabProps} />}
         {tab === 'footer' && <FooterTab {...tabProps} />}
         {tab === 'shopPage' && <ShopPageTab {...tabProps} />}
         {tab === 'systemPages' && <SystemPagesTab {...tabProps} />}
+        {tab === 'extras' && <ExtrasTab {...tabProps} operator={operator} />}
         {tab === 'shop' && <ShopTab {...tabProps} />}
         {tab === 'modules' && (
           <Card>
@@ -396,7 +386,7 @@ function SettingsView({ siteId }: { siteId: string }) {
 }
 
 interface PaymentSettings {
-  provider: 'none' | 'zarinpal' | 'sandbox';
+  provider: 'none' | 'zarinpal' | 'zibal' | 'idpay' | 'sandbox';
   merchantId: string;
   useSandboxHost: boolean;
   allowCod: boolean;
@@ -434,12 +424,21 @@ function PaymentsView({ siteId }: { siteId: string }) {
           options={[
             { value: 'none', label: t.providerNone },
             { value: 'zarinpal', label: t.providerZarinpal },
+            { value: 'zibal', label: t.providerZibal },
+            { value: 'idpay', label: t.providerIdpay },
             ...(form.sandboxAvailable || form.provider === 'sandbox' ? [{ value: 'sandbox' as const, label: t.providerSandbox }] : []),
           ]}
         />
         {form.provider === 'zarinpal' && (
           <>
             <TextField label={t.merchantId} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            <Checkbox label={t.useSandboxHost} checked={form.useSandboxHost} onChange={(useSandboxHost) => setForm({ ...form, useSandboxHost })} />
+          </>
+        )}
+        {form.provider === 'zibal' && <TextField label={t.merchantId} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint={t.zibalHint} />}
+        {form.provider === 'idpay' && (
+          <>
+            <TextField label={t.apiKey} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
             <Checkbox label={t.useSandboxHost} checked={form.useSandboxHost} onChange={(useSandboxHost) => setForm({ ...form, useSandboxHost })} />
           </>
         )}

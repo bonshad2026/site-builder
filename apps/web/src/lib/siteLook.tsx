@@ -29,7 +29,8 @@ const FONT_WEIGHTS: Record<string, string> = {
 const PRELOADED = new Set(['Cormorant Garamond', 'Inter', 'Vazirmatn']);
 const SERIF = new Set(['Cormorant Garamond', 'Playfair Display', 'Lora', 'Libre Baskerville', 'Noto Naskh Arabic', 'Markazi Text', 'Amiri', 'Lateef']);
 
-const stack = (family: string) => `"${family}", ${SERIF.has(family) ? 'Georgia, serif' : 'system-ui, Tahoma, sans-serif'}`;
+const stack = (family: string) =>
+  family === 'custom' ? '"SiteCustom", system-ui, Tahoma, sans-serif' : `"${family}", ${SERIF.has(family) ? 'Georgia, serif' : 'system-ui, Tahoma, sans-serif'}`;
 const cssVar: Record<(typeof THEME_COLOR_KEYS)[number], string> = {
   bg: '--bg',
   surface: '--surface',
@@ -97,8 +98,12 @@ export function useSiteDesign(settings: SiteSettings | undefined) {
       root.style.setProperty('--font-display', stack(display));
       root.style.setProperty('--font-body', stack(body));
     }
+    const custom = design?.customFont;
+    if (custom?.url && [display, body].includes('custom')) {
+      upsert('font-custom', () => document.createElement('style'), (el) => (el.textContent = `@font-face{font-family:"SiteCustom";src:url("${custom.url.replace(/"/g, '')}");font-display:swap}`));
+    }
     for (const family of new Set([display, body])) {
-      if (PRELOADED.has(family)) continue;
+      if (PRELOADED.has(family) || family === 'custom') continue;
       const weights = FONT_WEIGHTS[family] ?? '';
       const href = `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, '+')}${weights ? `:wght@${weights}` : ''}&display=swap`;
       const id = `font-${family.replace(/\W+/g, '-').toLowerCase()}`;
@@ -108,7 +113,7 @@ export function useSiteDesign(settings: SiteSettings | undefined) {
         (el) => ((el as HTMLLinkElement).href = href),
       );
     }
-  }, [fonts, locale]);
+  }, [fonts, locale, design?.customFont]);
 }
 
 /* ---------- texts ---------- */

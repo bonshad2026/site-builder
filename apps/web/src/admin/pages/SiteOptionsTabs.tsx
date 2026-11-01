@@ -4,16 +4,17 @@ import {
   EN_FONTS,
   FA_FONTS,
   FOOTER_COLUMNS,
-  FORM_FIELD_TYPES,
   IMAGE_RATIOS,
   SORT_OPTIONS,
+  SYSTEM_PAGES,
+  systemPageSections,
   THEME_COLOR_KEYS,
-  type FormField,
-  type FormType,
   type SiteSettings,
   type ThemeColorKey,
 } from '@site-builder/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import { Button } from '../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { api } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
@@ -24,6 +25,8 @@ import type { Localized } from '../../types/site';
 import { useT, type AdminStrings } from '../i18n';
 import { ButtonsEditor, LinkPicker } from '../links';
 import { Card, Checkbox, ListEditor, LocalizedField, NumberField, SelectField, TextField } from '../ui';
+import { uploadFile } from '../../lib/api';
+import { ImagePicker } from './FilesPage';
 
 type Set = <K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => void;
 interface TabProps {
@@ -61,8 +64,23 @@ const IVORY: Record<ThemeColorKey, string> = {
   accentSoft: '#e9dccb',
 };
 
-export function DesignTab({ s, set }: TabProps) {
+export function DesignTab({ s, set, siteId }: TabProps) {
   const t = useT();
+  const { locale } = usePreferences();
+  const T = (en: string, fa: string) => (locale === 'fa' ? fa : en);
+  const custom = s.design.customFont ?? { name: '', url: '' };
+  const [uploading, setUploading] = useState(false);
+  const uploadFont = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const asset = await uploadFile<{ url: string }>(`/sites/${siteId}/assets`, form);
+      set('design', { ...s.design, customFont: { name: custom.name || file.name.replace(/\.[^.]+$/, ''), url: asset.url } });
+    } finally {
+      setUploading(false);
+    }
+  };
   const fonts = s.design.fonts;
   const setFonts = (patch: Partial<typeof fonts>) => set('design', { ...s.design, fonts: { ...fonts, ...patch } });
   const labels = colorLabel(t);
@@ -74,6 +92,18 @@ export function DesignTab({ s, set }: TabProps) {
           <SelectField label={t.fontEnBody} value={fonts.enBody} onChange={(enBody) => setFonts({ enBody })} options={EN_FONTS.map((f) => ({ value: f, label: f }))} />
           <SelectField label={t.fontFaDisplay} value={fonts.faDisplay} onChange={(faDisplay) => setFonts({ faDisplay })} options={FA_FONTS.map((f) => ({ value: f, label: f }))} />
           <SelectField label={t.fontFaBody} value={fonts.faBody} onChange={(faBody) => setFonts({ faBody })} options={FA_FONTS.map((f) => ({ value: f, label: f }))} />
+        </div>
+        <div className="mt-6 flex flex-col gap-3 border-t border-line pt-4">
+          <p className="text-sm text-ink-soft">
+            {T('"custom" uses a font file of your own (woff2, woff, ttf), e.g. a licensed Persian font.', '«custom» از فایل فونت خودتان (woff2، woff، ttf) استفاده می‌کند؛ مثلاً یک فونت فارسی دارای مجوز.')}
+          </p>
+          <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
+            <TextField label={T('Custom font file', 'فایل فونت دلخواه')} dir="ltr" value={custom.url} onChange={(url) => set('design', { ...s.design, customFont: { ...custom, url } })} />
+            <label className="cursor-pointer rounded-full border border-line px-4 py-2 text-sm hover:bg-surface-2">
+              {uploading ? '…' : T('Upload', 'بارگذاری')}
+              <input type="file" accept=".woff2,.woff,.ttf,.otf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadFont(e.target.files[0])} />
+            </label>
+          </div>
         </div>
       </Card>
       <p className="text-sm text-ink-soft">{t.customThemesHint}</p>
@@ -194,46 +224,6 @@ export function TextsTab({ s, set }: TabProps) {
 
 /* ---------- forms ---------- */
 
-/** The built-in questions of a preset form, as fields the owner can then change freely. */
-export function presetFields(form: FormType, options: SiteSettings['formOptions']): FormField[] {
-  const f = (id: string, type: FormField['type'], label: Localized, required = false, choices: Localized[] = []): FormField => ({ id, type, label, help: { ...empty }, required, options: choices });
-  const L = (pick: (m: typeof enMessages) => string): Localized => ({ en: pick(enMessages), fa: pick(faMessages as typeof enMessages) });
-  const phone = f('phone', 'tel', L((m) => m.form.phone));
-  if (form === 'consultation')
-    return [phone, f('project-type', 'select', L((m) => m.form.projectType), true, options.projectTypes.map((c) => c.label)), f('budget', 'select', L((m) => m.form.budget), false, options.budgets.map((c) => c.label)), f('message', 'textarea', L((m) => m.form.message), true)];
-  if (form === 'reservation')
-    return [phone, f('date', 'date', L((m) => m.form.date), true), f('time', 'time', L((m) => m.form.time), true), f('people', 'number', L((m) => m.form.people), true), f('notes', 'textarea', L((m) => m.form.notes))];
-  if (form === 'demo') return [phone, f('company', 'text', L((m) => m.form.company)), f('date', 'date', L((m) => m.form.date), true), f('notes', 'textarea', L((m) => m.form.notes))];
-  return [phone, f('message', 'textarea', L((m) => m.form.messageGeneral), true)];
-}
-
-export function FormFieldsEditor({ value, onChange }: { value: FormField[]; onChange: (v: FormField[]) => void }) {
-  const t = useT();
-  return (
-    <ListEditor
-      label={t.formFields}
-      items={value}
-      max={30}
-      onChange={onChange}
-      create={() => ({ id: `field-${value.length + 1}`, type: 'text' as const, label: { ...empty }, help: { ...empty }, required: false, options: [] })}
-      render={(f, update) => (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label={t.fieldId} dir="ltr" value={f.id} onChange={(id) => update({ ...f, id: toSlug(id) })} />
-            <SelectField label={t.fieldType} value={f.type} onChange={(type) => update({ ...f, type })} options={FORM_FIELD_TYPES.map((x) => ({ value: x, label: x }))} />
-          </div>
-          <LocalizedField label={t.fieldLabel} value={f.label} onChange={(label) => update({ ...f, label })} />
-          <LocalizedField label={t.fieldHelp} value={f.help} onChange={(help) => update({ ...f, help })} />
-          <Checkbox label={t.fieldRequired} checked={f.required} onChange={(required) => update({ ...f, required })} />
-          {(f.type === 'select' || f.type === 'radio') && (
-            <ListEditor label={t.fieldOptions} items={f.options} max={30} onChange={(options) => update({ ...f, options })} create={() => ({ ...empty })} render={(o, up) => <LocalizedField label={t.fieldOptions} value={o} onChange={up} />} />
-          )}
-        </>
-      )}
-    />
-  );
-}
-
 export function FormChoicesEditor({ s, set }: TabProps) {
   const t = useT();
   const opts = s.formOptions;
@@ -290,6 +280,7 @@ export function HeaderTab({ s, set, siteId }: TabProps) {
             { value: 'standard', label: t.layoutStandard },
             { value: 'centered', label: t.layoutCentered },
             { value: 'menu-start', label: t.layoutMenuStart },
+            { value: 'stacked', label: usePreferencesLocale() === 'fa' ? 'لوگو بالا، منو در ردیف پایین' : 'Logo above, menu on its own row' },
           ]}
         />
         <SelectField
@@ -310,6 +301,8 @@ export function HeaderTab({ s, set, siteId }: TabProps) {
         <Checkbox label={t.showLanguage} checked={h.showLanguage} onChange={(showLanguage) => up({ showLanguage })} />
         <Checkbox label={t.showTheme} checked={h.showTheme} onChange={(showTheme) => up({ showTheme })} />
         <Checkbox label={t.showButton} checked={h.showButton} onChange={(showButton) => up({ showButton })} />
+        <Checkbox label={t.showSearchBox} checked={h.showSearch} onChange={(showSearch) => up({ showSearch })} />
+        <Checkbox label={t.showAccountLink} checked={h.showAccount} onChange={(showAccount) => up({ showAccount })} />
         <Checkbox label={t.transparentOverHero} checked={h.transparentOverHero} onChange={(transparentOverHero) => up({ transparentOverHero })} />
       </div>
       <ButtonsEditor siteId={siteId} label={t.headerButtons} value={h.buttons} onChange={(buttons) => up({ buttons: buttons.slice(0, 4) })} />
@@ -466,15 +459,28 @@ export function ShopPageTab({ s, set }: TabProps) {
 export function SystemPagesTab({ s, set, siteId }: TabProps) {
   const t = useT();
   const { l } = usePreferences();
+  const qc = useQueryClient();
   const { data: pages = [] } = useQuery({
     queryKey: ['site', siteId, 'pages'],
-    queryFn: () => api.get<{ slug: string; isHome: boolean; title?: Localized }[]>(`/sites/${siteId}/pages`),
+    queryFn: () => api.get<{ id: string; slug: string; isHome: boolean; title?: Localized }[]>(`/sites/${siteId}/pages`),
   });
+  // Makes the builder page that replaces a built-in one, published straight away.
+  const create = useMutation({
+    mutationFn: async (key: (typeof SYSTEM_PAGES)[number]['key']) => {
+      const def = SYSTEM_PAGES.find((p) => p.key === key)!;
+      const sections = systemPageSections(key).map((x, i) => ({ id: `s${i + 1}`, ...x }));
+      const page = await api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug: def.slug, title: def.label, document: { schemaVersion: 1, sections } });
+      await api.post(`/sites/${siteId}/pages/${page.id}/publish`, {});
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['site', siteId, 'pages'] }),
+  });
+  const ownPage = (slug: string) => pages.find((p) => p.slug === slug);
+  const replaced = (key: string) => !!ownPage(SYSTEM_PAGES.find((p) => p.key === key)!.slug);
   const sp = s.systemPages;
   const options = [{ value: '', label: t.noPage }, ...pages.map((p) => ({ value: p.slug, label: `${(p.title && l(p.title)) || p.slug} (/${p.slug})` }))];
   const pick = (label: string, value: string, onChange: (v: string) => void) => <SelectField label={label} value={value} onChange={onChange} options={options.some((o) => o.value === value) ? options : [...options, { value, label: value }]} />;
   type AroundKey = 'products' | 'productDetail' | 'services' | 'serviceDetail' | 'cart' | 'checkout' | 'checkoutResult';
-  const around = (key: AroundKey, title: string, extra?: React.ReactNode) => (
+  const around = (key: AroundKey, title: string, extra?: React.ReactNode) => replaced(key) ? null : (
     <Card key={key} title={title}>
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -489,6 +495,31 @@ export function SystemPagesTab({ s, set, siteId }: TabProps) {
   return (
     <>
       <p className="text-sm text-ink-soft">{t.systemPagesHint}</p>
+      <Card title={t.spOwnTitle}>
+        <p className="mb-4 text-sm text-ink-soft">{t.spOwnHint}</p>
+        <ul className="flex flex-col divide-y divide-line">
+          {SYSTEM_PAGES.map((p) => {
+            const own = ownPage(p.slug);
+            return (
+              <li key={p.key} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <span className="text-sm text-ink">
+                  {l(p.label)} <span className="text-xs text-ink-soft" dir="ltr">{p.path}</span>
+                </span>
+                {own ? (
+                  <Link to={`/admin/sites/${siteId}/pages/${own.id}/builder`} className="text-sm underline underline-offset-4">
+                    {t.spOwnEdit}
+                  </Link>
+                ) : (
+                  <Button size="sm" variant="outline" disabled={create.isPending} onClick={() => create.mutate(p.key)}>
+                    {t.spOwnCreate}
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {create.error ? <p className="mt-3 text-sm text-danger">{String((create.error as Error).message)}</p> : null}
+      </Card>
       {around('products', t.spProducts)}
       {around(
         'productDetail',
@@ -525,7 +556,7 @@ export function SystemPagesTab({ s, set, siteId }: TabProps) {
       {around('cart', t.spCart)}
       {around('checkout', t.spCheckout)}
       {around('checkoutResult', t.spCheckoutResult)}
-      <Card title={t.spNotFound}>{pick(t.notFoundPage, sp.notFound.page, (page) => set('systemPages', { ...sp, notFound: { page } }))}</Card>
+      {!replaced('notFound') && <Card title={t.spNotFound}>{pick(t.notFoundPage, sp.notFound.page, (page) => set('systemPages', { ...sp, notFound: { page } }))}</Card>}
     </>
   );
 }
@@ -552,20 +583,223 @@ export function ShopTab({ s, set }: TabProps) {
         max={20}
         // The built-in stages always stay in the list.
         onChange={(orderStatuses) => up({ orderStatuses: BUILT_IN_ORDER_STATUSES.every((b) => orderStatuses.some((x) => x.slug === b)) ? orderStatuses : shop.orderStatuses })}
-        create={() => ({ slug: `stage-${shop.orderStatuses.length + 1}`, label: { ...empty } })}
+        create={() => ({ slug: `stage-${shop.orderStatuses.length + 1}`, label: { ...empty }, notify: false, message: { ...empty } })}
         render={(st, update) => (
-          <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-            {builtIn(st.slug) ? (
-              <p className="self-center text-xs text-ink-soft" dir="ltr">
-                {st.slug} ({t.builtIn})
-              </p>
-            ) : (
-              <TextField label={t.statusId} dir="ltr" value={st.slug} onChange={(slug) => update({ ...st, slug: toSlug(slug) })} />
+          <>
+            <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+              {builtIn(st.slug) ? (
+                <p className="self-center text-xs text-ink-soft" dir="ltr">
+                  {st.slug} ({t.builtIn})
+                </p>
+              ) : (
+                <TextField label={t.statusId} dir="ltr" value={st.slug} onChange={(slug) => update({ ...st, slug: toSlug(slug) })} />
+              )}
+              <LocalizedField label={t.label} value={st.label} onChange={(label) => update({ ...st, label })} />
+            </div>
+            <Checkbox label={t.notifyBuyer} checked={!!st.notify} onChange={(notify) => update({ ...st, notify })} />
+            {st.notify && (
+              <>
+                <LocalizedField label={t.notifyMessage} value={st.message} onChange={(message) => update({ ...st, message })} multiline rows={2} />
+                <p className="-mt-2 text-xs text-ink-soft" dir="ltr">
+                  {'{{site}} {{name}} {{number}} {{stage}} {{link}}'}
+                </p>
+              </>
             )}
-            <LocalizedField label={t.label} value={st.label} onChange={(label) => update({ ...st, label })} />
-          </div>
+          </>
         )}
       />
+      <CheckoutSettingsEditor shop={shop} up={up} />
+    </>
+  );
+}
+
+/** What the checkout asks, the ways of sending with their cost, and the low-stock warning. */
+function CheckoutSettingsEditor({ shop, up }: { shop: SiteSettings['shop']; up: (patch: Partial<SiteSettings['shop']>) => void }) {
+  const t = useT();
+  const x = t.sx;
+  const c = shop.checkout;
+  const setC = (patch: Partial<typeof c>) => up({ checkout: { ...c, ...patch } });
+  const rule = [
+    { value: 'off' as const, label: x.off },
+    { value: 'optional' as const, label: x.optional },
+    { value: 'required' as const, label: x.required },
+  ];
+  const toSlug = (v: string) => v.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  return (
+    <>
+      <Card title={x.checkout}>
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <SelectField label={x.askEmail} value={c.email} onChange={(email) => setC({ email })} options={rule} />
+            <SelectField label={x.askAddress} value={c.address} onChange={(address) => setC({ address })} options={rule} />
+            <SelectField label={x.askPostal} value={c.postalCode} onChange={(postalCode) => setC({ postalCode })} options={rule} />
+          </div>
+          <div className="flex flex-wrap gap-6">
+            <Checkbox label={x.askRegion} checked={c.region} onChange={(region) => setC({ region })} />
+            <Checkbox label={x.askNote} checked={c.note} onChange={(note) => setC({ note })} />
+          </div>
+          <ListEditor
+            label={x.extraFields}
+            items={c.fields}
+            onChange={(fields) => setC({ fields })}
+            create={() => ({ id: '', label: { en: '', fa: '' }, type: 'text' as const, options: [], required: false })}
+            max={10}
+            render={(f, update) => (
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-[160px_1fr_160px]">
+                  <TextField label={x.fieldId} dir="ltr" value={f.id} onChange={(id) => update({ ...f, id: toSlug(id) })} />
+                  <LocalizedField label={x.fieldLabel} value={f.label} onChange={(label) => update({ ...f, label })} />
+                  <SelectField
+                    label={x.fieldType}
+                    value={f.type}
+                    onChange={(type) => update({ ...f, type })}
+                    options={[
+                      { value: 'text', label: x.typeText },
+                      { value: 'textarea', label: x.typeTextarea },
+                      { value: 'select', label: x.typeSelect },
+                    ]}
+                  />
+                </div>
+                {f.type === 'select' && (
+                  <TextField
+                    label={x.fieldOptions}
+                    multiline
+                    rows={3}
+                    value={f.options.map((o) => (o.en && o.en !== o.fa ? `${o.fa}|${o.en}` : o.fa)).join('\n')}
+                    onChange={(v) =>
+                      update({
+                        ...f,
+                        options: v
+                          .split('\n')
+                          .map((line) => line.split('|').map((s) => s.trim()))
+                          .filter(([fa]) => fa)
+                          .map(([fa, en]) => ({ fa, en: en || fa })),
+                      })
+                    }
+                  />
+                )}
+                <Checkbox label={x.fieldRequired} checked={f.required} onChange={(required) => update({ ...f, required })} />
+              </div>
+            )}
+          />
+        </div>
+      </Card>
+      <Card title={x.shipping}>
+        <p className="mb-4 text-xs text-ink-soft">{x.shippingHint}</p>
+        <ListEditor
+          label={x.shipping}
+          items={shop.shipping}
+          onChange={(shipping) => up({ shipping })}
+          create={() => ({ id: '', label: { en: '', fa: '' }, description: { en: '', fa: '' }, priceMinor: 0, freeAbove: null })}
+          max={10}
+          render={(m, update) => (
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                <TextField label={x.methodId} dir="ltr" value={m.id} onChange={(id) => update({ ...m, id: toSlug(id) })} />
+                <LocalizedField label={x.methodName} value={m.label} onChange={(label) => update({ ...m, label })} />
+              </div>
+              <LocalizedField label={x.methodDesc} value={m.description} onChange={(description) => update({ ...m, description })} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberField label={x.methodPrice} min={0} value={m.priceMinor} onChange={(v) => update({ ...m, priceMinor: v ?? 0 })} />
+                <NumberField label={x.methodFreeAbove} min={0} value={m.freeAbove} onChange={(freeAbove) => update({ ...m, freeAbove })} />
+              </div>
+            </div>
+          )}
+        />
+      </Card>
+      <Card title={x.lowStock}>
+        <NumberField label={x.lowStock} min={0} value={shop.lowStock} onChange={(lowStock) => up({ lowStock })} className="max-w-xs" />
+      </Card>
+    </>
+  );
+}
+
+/** The locale of the admin (for a few labels written in place). */
+function usePreferencesLocale() {
+  return usePreferences().locale;
+}
+
+/**
+ * Browser icon, share image and page code (operator), and the announcement bar and popup (also
+ * the client's: they are content).
+ */
+export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: boolean }) {
+  const { locale } = usePreferences();
+  const T = (en: string, fa: string) => (locale === 'fa' ? fa : en);
+  const meta = s.meta;
+  const bar = s.announcement;
+  const pop = s.popup;
+  const upMeta = (patch: Partial<typeof meta>) => set('meta', { ...meta, ...patch });
+  const upBar = (patch: Partial<typeof bar>) => set('announcement', { ...bar, ...patch });
+  const upPop = (patch: Partial<typeof pop>) => set('popup', { ...pop, ...patch });
+  return (
+    <>
+      {operator && (
+        <Card title={T('Icon, share image and page code', 'آیکون، تصویر اشتراک‌گذاری و کد صفحه')}>
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ImagePicker siteId={siteId} label={T('Browser icon (favicon)', 'آیکون مرورگر (favicon)')} value={meta.faviconUrl} onChange={(faviconUrl) => upMeta({ faviconUrl })} />
+              <ImagePicker siteId={siteId} label={T('Default share image', 'تصویر پیش‌فرض اشتراک‌گذاری')} value={meta.shareImageUrl} onChange={(shareImageUrl) => upMeta({ shareImageUrl })} />
+            </div>
+            <TextField
+              label={T('Code in <head> (meta tags, Google Analytics, Enamad / Samandehi verification)', 'کد داخل <head> (متاتگ، گوگل آنالیتیکس، تأیید اینماد و ساماندهی)')}
+              dir="ltr"
+              multiline
+              rows={5}
+              value={meta.headCode}
+              onChange={(headCode) => upMeta({ headCode })}
+            />
+            <TextField
+              label={T('Code at the end of <body> (chat widgets, badges)', 'کد انتهای <body> (ابزار چت آنلاین، نشان‌ها)')}
+              dir="ltr"
+              multiline
+              rows={5}
+              value={meta.bodyCode}
+              onChange={(bodyCode) => upMeta({ bodyCode })}
+            />
+            <p className="text-xs text-ink-soft">
+              {T('Runs on every page of the site. Only paste code from services you trust.', 'روی همه‌ی صفحه‌های سایت اجرا می‌شود. فقط کد سرویس‌های مطمئن را قرار دهید.')}
+            </p>
+          </div>
+        </Card>
+      )}
+      <Card title={T('Announcement bar', 'نوار اعلان')}>
+        <div className="flex flex-col gap-4">
+          <Checkbox label={T('Show a bar above the header', 'نمایش نوار بالای سربرگ')} checked={bar.enabled} onChange={(enabled) => upBar({ enabled })} />
+          <LocalizedField label={T('Text', 'متن')} value={bar.text} onChange={(text) => upBar({ text })} />
+          <LinkPicker siteId={siteId} label={T('Link (optional)', 'پیوند (اختیاری)')} value={bar.href} onChange={(href) => upBar({ href })} />
+          <div className="flex flex-wrap items-center gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              {T('Background', 'پس‌زمینه')}
+              <input type="color" value={bar.background || '#1f5e4d'} onChange={(e) => upBar({ background: e.target.value })} className="h-8 w-12 rounded border border-line" />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              {T('Text colour', 'رنگ متن')}
+              <input type="color" value={bar.textColor || '#ffffff'} onChange={(e) => upBar({ textColor: e.target.value })} className="h-8 w-12 rounded border border-line" />
+            </label>
+            <Checkbox label={T('Visitors can close it', 'بازدیدکننده بتواند ببندد')} checked={bar.dismissible} onChange={(dismissible) => upBar({ dismissible })} />
+          </div>
+        </div>
+      </Card>
+      <Card title={T('Popup', 'پنجره‌ی پاپ‌آپ')}>
+        <div className="flex flex-col gap-4">
+          <Checkbox label={T('Show a popup', 'نمایش پاپ‌آپ')} checked={pop.enabled} onChange={(enabled) => upPop({ enabled })} />
+          <LocalizedField label={T('Title', 'عنوان')} value={pop.title} onChange={(title) => upPop({ title })} />
+          <LocalizedField label={T('Text', 'متن')} value={pop.text} onChange={(text) => upPop({ text })} multiline rows={3} />
+          <ImagePicker siteId={siteId} label={T('Image (optional)', 'تصویر (اختیاری)')} value={pop.imageUrl} onChange={(imageUrl) => upPop({ imageUrl })} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <LocalizedField label={T('Button text', 'متن دکمه')} value={pop.buttonLabel} onChange={(buttonLabel) => upPop({ buttonLabel })} />
+            <LinkPicker siteId={siteId} label={T('Button link', 'پیوند دکمه')} value={pop.buttonHref} onChange={(buttonHref) => upPop({ buttonHref })} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <NumberField label={T('Open after (seconds)', 'باز شدن پس از (ثانیه)')} min={0} value={pop.delay} onChange={(v) => upPop({ delay: Math.min(120, v ?? 0) })} />
+            <SelectField label={T('Pages', 'صفحه‌ها')} value={pop.pages} onChange={(pages) => upPop({ pages })} options={[{ value: 'home', label: T('Home page', 'صفحه‌ی اصلی') }, { value: 'all', label: T('Every page', 'همه‌ی صفحه‌ها') }]} />
+            <div className="flex items-end pb-2">
+              <Checkbox label={T('Once per visitor', 'یک بار برای هر بازدیدکننده')} checked={pop.once} onChange={(once) => upPop({ once })} />
+            </div>
+          </div>
+        </div>
+      </Card>
     </>
   );
 }

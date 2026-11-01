@@ -108,7 +108,10 @@ for (const route of routes) {
       `<meta property="og:description" content="${esc(description)}" />`,
       `<meta property="og:url" content="${esc(locale === 'fa' ? fa : en)}" />`,
       `<meta property="og:locale" content="${locale === 'fa' ? 'fa_IR' : 'en_US'}" />`,
-      route.image ? `<meta property="og:image" content="${esc(route.image)}" />` : '',
+      route.image || settings.meta?.shareImageUrl ? `<meta property="og:image" content="${esc(route.image || settings.meta.shareImageUrl)}" />` : '',
+      settings.meta?.faviconUrl ? `<link rel="icon" href="${esc(settings.meta.faviconUrl)}" />` : '',
+      // The operator's own head code (verification tags, analytics) as written; the app does not add it again.
+      settings.meta?.headCode?.trim() ? `<!--sb-head-->${settings.meta.headCode}<!--/sb-head-->` : '',
     ]
       .filter(Boolean)
       .join('\n    ');

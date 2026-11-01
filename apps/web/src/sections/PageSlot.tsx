@@ -1,5 +1,7 @@
+import { useContext } from 'react';
 import type { SiteSettings } from '@site-builder/shared';
 import { usePublishedPage, useSiteSettings } from '../features/public-site/data';
+import { EmbeddedContext } from './BuiltInPage';
 import { PageSections } from './SectionRenderer';
 
 function PublishedSections({ slug }: { slug: string }) {
@@ -7,9 +9,13 @@ function PublishedSections({ slug }: { slug: string }) {
   return page ? <PageSections document={page.document} /> : null;
 }
 
-/** The sections of a published builder page (by slug), or nothing when there is none. */
+/**
+ * The sections of a published builder page (by slug), or nothing when there is none. Inside a
+ * builder page that replaces a built-in one the page itself holds any extras, so nothing is added.
+ */
 export function PageSlot({ slug }: { slug?: string }) {
-  return slug ? <PublishedSections slug={slug} /> : null;
+  const embedded = useContext(EmbeddedContext);
+  return slug && !embedded ? <PublishedSections slug={slug} /> : null;
 }
 
 type SystemPages = SiteSettings['systemPages'];

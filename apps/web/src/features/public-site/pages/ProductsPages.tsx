@@ -13,10 +13,13 @@ import { finalPrice, isSoldOut } from '../components/price';
 import { isNotFound, useProduct, useProducts, useSiteSettings } from '../data';
 import { NotFoundPage } from './NotFoundPage';
 import { PageSlot, useSystemPage } from '../../../sections/PageSlot';
+import { useEmbedded } from '../../../sections/BuiltInPage';
 import type { SortOption } from '@site-builder/shared';
 import { useMaxQuantity } from '../../cart/AddToCart';
 import { cn } from '../../../lib/cn';
 import { productColumns } from '../../../sections/renderers';
+import { ProductReviews } from '../components/ProductReviews';
+import { WishlistButton } from '../../wishlist/wishlist';
 
 type Sort = SortOption;
 
@@ -125,16 +128,20 @@ export function ProductsPage() {
 
 export function ProductDetailPage() {
   const slots = useSystemPage('productDetail');
-  const { slug = '' } = useParams();
+  const { slug: param = '' } = useParams();
+  // On the builder's own product page without a product in the address (its preview), the first product stands in.
+  const embedded = useEmbedded();
+  const { data: products = [], isLoading: loadingAll } = useProducts();
+  const slug = param || (embedded ? products[0]?.slug ?? '' : '');
   const { m, l, formatMoney, format, formatNumber } = usePreferences();
   const categoryLabel = useCategoryLabel();
   const { data: product, error, isLoading } = useProduct(slug);
-  const { data: products = [] } = useProducts();
   const { data: settings } = useSiteSettings();
   const cart = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [color, setColor] = useState('');
+  const [variantName, setVariantName] = useState('');
   const [photo, setPhoto] = useState(0);
   const maxQuantity = useMaxQuantity();
 
@@ -154,12 +161,16 @@ export function ProductDetailPage() {
       : undefined,
   });
 
-  if (isLoading) return <div role="status" aria-label="Loading" className="min-h-screen" />;
+  if (isLoading || (!param && embedded && loadingAll)) return <div role="status" aria-label="Loading" className="min-h-screen" />;
   if (isNotFound(error) || !product) return <NotFoundPage />;
 
   const related = products.filter((p) => p.category === product.category && p.slug !== product.slug).concat(products.filter((p) => p.category !== product.category)).slice(0, 4);
-  const soldOut = isSoldOut(product);
-  const canOrder = !!settings?.modules.orders && !soldOut && product.priceMinor !== null;
+  // A variant (size, model…) may have its own price and stock.
+  const variants = product.variants ?? [];
+  const variant = variants.find((v) => l(v.name) === variantName) ?? variants[0];
+  const priced = variant && variant.priceMinor !== null ? { ...product, priceMinor: String(variant.priceMinor) } : product;
+  const soldOut = isSoldOut(product) || variant?.stock === 0;
+  const canOrder = !!settings?.modules.orders && !soldOut && priced.priceMinor !== null;
   const maxQty = maxQuantity(product);
   const discount = product.discountPercent ?? 0;
   const colors = product.colors ?? [];
@@ -197,12 +208,15 @@ export function ProductDetailPage() {
             </div>
             <div className="reveal flex flex-col lg:col-span-5 lg:pt-10">
               {product.category && <p className="eyebrow">{categoryLabel(product.category)}</p>}
-              <h1 className="mt-4 font-display text-5xl leading-tight text-ink sm:text-6xl">{l(product.name)}</h1>
+              <div className="mt-4 flex items-start justify-between gap-4">
+                <h1 className="font-display text-5xl leading-tight text-ink sm:text-6xl">{l(product.name)}</h1>
+                <WishlistButton product={product} />
+              </div>
               <p className="mt-6 flex flex-wrap items-baseline gap-3 text-2xl text-ink">
-                {formatMoney(discount ? finalPrice(product) : product.priceMinor, product.currency)}
+                {formatMoney(discount ? finalPrice(priced) : priced.priceMinor, product.currency)}
                 {discount > 0 && (
                   <>
-                    <span className="text-base text-ink-soft line-through">{formatMoney(product.priceMinor, product.currency)}</span>
+                    <span className="text-base text-ink-soft line-through">{formatMoney(priced.priceMinor, product.currency)}</span>
                     <span className="bg-accent px-2 py-0.5 text-sm text-accent-ink">{format(m.shop.discountBadge, { percent: formatNumber(discount) })}</span>
                   </>
                 )}
@@ -251,6 +265,27 @@ export function ProductDetailPage() {
                   </div>
                 </fieldset>
               )}
+              {variants.length > 0 && (
+                <fieldset className="mt-8">
+                  <legend className="mb-3 text-sm text-ink-soft">
+                    {m.shop.variant}: <span className="text-ink">{variant ? l(variant.name) : ''}</span>
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {variants.map((v) => (
+                      <button
+                        key={l(v.name)}
+                        type="button"
+                        aria-pressed={variant === v}
+                        disabled={v.stock === 0}
+                        onClick={() => setVariantName(l(v.name))}
+                        className={cn('rounded-full border px-4 py-1.5 text-sm transition disabled:opacity-40', variant === v ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:border-ink')}
+                      >
+                        {l(v.name)}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
               {canOrder ? (
                 <div className="mt-10 flex flex-wrap items-center gap-4">
                   <label className="flex items-center gap-3 text-sm text-ink-soft">
@@ -266,7 +301,7 @@ export function ProductDetailPage() {
                   <Button
                     onClick={() => {
                       cart.add(
-                        { productId: product.id, slug: product.slug, name: product.name, priceMinor: finalPrice(product)!, currency: product.currency, imageUrl: product.imageUrl, option: chosen, max: maxQty },
+                        { productId: product.id, slug: product.slug, name: product.name, priceMinor: finalPrice(priced)!, currency: product.currency, imageUrl: product.imageUrl, option: chosen, variant: variant ? l(variant.name) : '', max: variant?.stock !== null && variant?.stock !== undefined ? Math.min(maxQty, variant.stock) : maxQty },
                         quantity,
                       );
                       setAdded(true);
@@ -292,6 +327,7 @@ export function ProductDetailPage() {
           </div>
         </Container>
       </div>
+      <ProductReviews slug={product.slug} />
       {slots.showRelated !== false && related.length > 0 && (
         <Section>
           <Container>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router';
+import { useCustomer } from '../../features/account/customerApi';
 import { useCart } from '../../features/cart/cart';
 import { useSiteSettings } from '../../features/public-site/data';
 import { cn } from '../../lib/cn';
@@ -7,9 +8,66 @@ import { usePreferences } from '../../lib/preferences';
 import { ButtonLink } from '../ui/Button';
 import { SmartLink } from '../ui/SmartLink';
 import { Container } from '../ui/Layout';
+import { WishlistLink } from '../../features/wishlist/wishlist';
 import { MobileMenu } from './MobileMenu';
 import { LanguageSwitch, ThemeSwitch } from './PreferenceControls';
 import { useNavItems, type NavItem } from './nav';
+
+/** A search box that opens the shop's results (header option). */
+function HeaderSearch({ light }: { light: boolean }) {
+  const { locale } = usePreferences();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const label = locale === 'fa' ? 'جستجو' : 'Search';
+  return (
+    <form
+      role="search"
+      className="flex items-center gap-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (q.trim()) navigate(`/products?q=${encodeURIComponent(q.trim())}`);
+        setOpen(false);
+      }}
+    >
+      {open && (
+        <input
+          autoFocus
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onBlur={() => !q && setOpen(false)}
+          aria-label={label}
+          placeholder={label}
+          className={cn('w-36 border-b bg-transparent py-1 text-sm outline-none sm:w-48', light ? 'border-white/60 placeholder:text-white/70' : 'border-line placeholder:text-ink-soft')}
+        />
+      )}
+      <button type={open ? 'submit' : 'button'} onClick={open ? undefined : () => setOpen(true)} aria-label={label} className="p-1">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      </button>
+    </form>
+  );
+}
+
+/** "Sign in" or the customer's name, when the site has customer accounts. */
+export function AccountLink({ className }: { className?: string }) {
+  const { locale } = usePreferences();
+  const { enabled, customer } = useCustomer();
+  if (!enabled) return null;
+  const label = customer ? customer.name.split(' ')[0] : locale === 'fa' ? 'ورود' : 'Sign in';
+  return (
+    <Link to="/account" className={cn('inline-flex items-center gap-1.5 text-sm underline-offset-4 hover:underline', className)} aria-label={customer ? (locale === 'fa' ? 'حساب من' : 'My account') : label}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+      </svg>
+      <span className="max-w-24 truncate">{label}</span>
+    </Link>
+  );
+}
 
 export function CartLink({ className }: { className?: string }) {
   const { m, formatNumber } = usePreferences();
@@ -210,7 +268,10 @@ export function Header() {
     <div className="flex items-center gap-5">
       {h?.showTheme !== false && <ThemeSwitch className="hidden sm:flex" />}
       {h?.showLanguage !== false && <LanguageSwitch className="hidden sm:flex" />}
+      <WishlistLink className="hidden sm:inline-flex" />
       {shop && <CartLink />}
+      {h?.showSearch && <HeaderSearch light={overHero} />}
+      {h?.showAccount !== false && <AccountLink className="hidden sm:inline-flex" />}
       {h?.showButton !== false &&
         buttons.map((b, i) => (
           <span key={i} className="hidden md:block">
@@ -242,6 +303,7 @@ export function Header() {
         pad,
         overHero ? 'bg-transparent text-white' : 'bg-bg/90 text-ink shadow-[0_1px_0_var(--line)] backdrop-blur-md',
       )}
+      style={{ top: 'var(--bar-h, 0px)' }}
     >
       {layout === 'centered' ? (
         <Container className="flex flex-col items-center gap-3">
@@ -249,6 +311,14 @@ export function Header() {
             <span className="w-1/3" />
             <div className="flex w-1/3 justify-center">{brand}</div>
             <div className="flex w-1/3 justify-end">{tools}</div>
+          </div>
+          {menu}
+        </Container>
+      ) : layout === 'stacked' ? (
+        <Container className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-6">
+            {brand}
+            {tools}
           </div>
           {menu}
         </Container>

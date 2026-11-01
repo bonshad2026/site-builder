@@ -1,8 +1,10 @@
-import { API_URL, ApiError } from '../../lib/api';
+import { API_URL } from '../../lib/api';
+import { customerRequest } from '../account/customerApi';
 import { DEFAULT_SITE_ID } from '../public-site/data';
 import type { FormType, Lead } from './leadSchema';
 
-export type SubmitResult = { mode: 'sent' } | { mode: 'simulated' };
+/** `code` and `token` let the visitor follow the request; `paymentDue`: the form asks for payment now. */
+export type SubmitResult = { mode: 'sent'; code?: string; token?: string; number?: string; paymentDue?: boolean } | { mode: 'simulated' };
 
 const leadType = (formType: FormType, projectType: Lead['projectType']) =>
   formType === 'reservation' || formType === 'demo'
@@ -38,10 +40,10 @@ export async function submitLead(
   // A box's "request" button links here with ?item=<table>/<item>.
   const [collection, slug] = (new URLSearchParams(window.location.search).get('item') ?? '').split('/');
   const item = collection && slug ? { collection, slug } : undefined;
-  const res = await fetch(`${API_URL}/api/v1/public/sites/${DEFAULT_SITE_ID}/leads`, {
+  // Sent as the signed-in customer (if any), so the request shows in their account.
+  const data = await customerRequest<{ code?: string; token?: string; number?: string; paymentDue?: boolean }>(DEFAULT_SITE_ID, '/leads', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: {
       // The site's request type when the form has one; older forms derive it from their questions.
       type: requestType || leadType(formType, lead.projectType),
       name: lead.name,
@@ -59,12 +61,8 @@ export async function submitLead(
       sourcePath: window.location.pathname,
       item,
       consent: true,
-    }),
+      locale: document.documentElement.lang === 'fa' ? 'fa' : 'en',
+    },
   });
-  if (!res.ok) {
-    // Keep the server's reason (closed registration, rate limit…) so the form can explain it.
-    const e = ((await res.json().catch(() => null)) as { error?: { code: string; message: string; details?: ApiError['details'] } } | null)?.error;
-    throw new ApiError(res.status, e?.code ?? 'internal_error', e?.message ?? `Request failed (${res.status})`, e?.details);
-  }
-  return { mode: 'sent' };
+  return { mode: 'sent', code: data?.code, token: data?.token, number: data?.number, paymentDue: data?.paymentDue };
 }

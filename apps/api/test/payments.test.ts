@@ -41,7 +41,7 @@ describe('buyer order access', () => {
 describe('payment availability', () => {
   it('refuses to start a payment when no gateway is configured', async () => {
     const order = await placeOrder();
-    expect((await request(app).get(`${pub}/payment-methods`)).body.data).toEqual({ online: false, provider: null, isTest: false });
+    expect((await request(app).get(`${pub}/payment-methods`)).body.data).toEqual({ online: false, cod: false, provider: null, isTest: false });
     const res = await request(app).post(`${pub}/orders/${order.number}/pay`).send({ token: order.orderToken });
     expect(res.status).toBe(409);
   });

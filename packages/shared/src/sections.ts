@@ -110,6 +110,53 @@ function legacyHero(raw: unknown): unknown {
   return { ...rest, slides: [slide] };
 }
 
+/**
+ * Pages the system makes (shop list, product page, services, cart, checkout, payment result, "page
+ * not found"). Each can be replaced by a builder page at a fixed address (`slug`); the built-in
+ * content then goes anywhere in it as a `system-page` section.
+ */
+export const SYSTEM_PAGES = [
+  { key: 'products', slug: 'products', path: '/products', label: { en: 'Shop (product list)', fa: 'فروشگاه (فهرست محصولات)' } },
+  { key: 'productDetail', slug: 'product', path: '/products/…', label: { en: 'Product page', fa: 'صفحه‌ی هر محصول' } },
+  { key: 'services', slug: 'services', path: '/services', label: { en: 'Services list', fa: 'فهرست خدمات' } },
+  { key: 'serviceDetail', slug: 'service', path: '/services/…', label: { en: 'Service page', fa: 'صفحه‌ی هر خدمت' } },
+  { key: 'cart', slug: 'cart', path: '/cart', label: { en: 'Cart', fa: 'سبد خرید' } },
+  { key: 'checkout', slug: 'checkout', path: '/checkout', label: { en: 'Checkout', fa: 'تسویه حساب' } },
+  { key: 'checkoutResult', slug: 'checkout-result', path: '/checkout/result', label: { en: 'Payment result', fa: 'نتیجه‌ی پرداخت' } },
+  { key: 'account', slug: 'account', path: '/account', label: { en: 'Customer account', fa: 'حساب کاربری مشتری' } },
+  { key: 'track', slug: 'track', path: '/track', label: { en: 'Track an order / request', fa: 'پیگیری سفارش و درخواست' } },
+  { key: 'notFound', slug: 'not-found', path: '404', label: { en: 'Page not found (404)', fa: 'صفحه پیدا نشد (۴۰۴)' } },
+] as const;
+export type SystemPageKey = (typeof SYSTEM_PAGES)[number]['key'];
+export const SYSTEM_PAGE_KEYS = SYSTEM_PAGES.map((p) => p.key) as [SystemPageKey, ...SystemPageKey[]];
+
+/**
+ * What a new builder page for a built-in page starts with: the product list is a "List from a
+ * table" of products with search and filters; the others hold the built-in content section.
+ */
+export function systemPageSections(key: SystemPageKey): { type: string; props: Record<string, unknown> }[] {
+  if (key === 'products')
+    return [
+      { type: 'page-header', props: { heading: { en: 'Shop', fa: 'فروشگاه' } } },
+      {
+        type: 'collection-list',
+        props: {
+          source: 'products',
+          showSearch: true,
+          visitorFilters: [
+            { field: 'category', display: 'chips', label: { en: 'Category', fa: 'دسته‌بندی' } },
+            { field: 'price', display: 'slider', label: { en: 'Price', fa: 'قیمت' } },
+            { field: '__available', display: 'toggle', label: { en: 'In stock only', fa: 'فقط کالاهای موجود' } },
+          ],
+          limit: 12,
+          pagination: 'pages',
+          columns: 4,
+        },
+      },
+    ];
+  return [{ type: 'system-page', props: { page: key } }];
+}
+
 export const FEATURE_MARKERS = ['roman', 'number', 'bullet', 'none'] as const;
 export const TEXT_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
 
@@ -254,6 +301,38 @@ export const sectionDefinitions = {
     cardDesign: z.string().max(40).default(''),
     card: cardDesignSchema.nullable().default(null),
   }),
+  /** The built-in content of a system page (the cart, the current product…) inside a builder page. */
+  'system-page': z.object({ page: z.enum(SYSTEM_PAGE_KEYS).default('cart') }),
+  /** A map: an embed address (Neshan, Google Maps…) or a point shown on OpenStreetMap. */
+  map: z.object({
+    ...eyebrowHeading,
+    address: loc(300),
+    lat: z.number().min(-90).max(90).nullable().default(null),
+    lng: z.number().min(-180).max(180).nullable().default(null),
+    zoom: z.number().int().min(3).max(19).default(15),
+    /** The map's own embed address (https), instead of the point. */
+    embedUrl: z.string().max(2000).refine((v) => v === '' || /^https:\/\//i.test(v), 'Use an https:// address').default(''),
+    height: z.number().int().min(200).max(900).default(420),
+  }),
+  /** A video: an Aparat, YouTube or Vimeo link, or a video file. */
+  video: z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    url: z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v), 'Use a video link or an uploaded file').default(''),
+    posterUrl: imageUrlSchema,
+    ratio: z.enum(['16:9', '4:3', '1:1', '9:16']).default('16:9'),
+    autoplay: z.boolean().default(false),
+  }),
+  /** Newsletter sign-up (email or mobile), kept under Customers → Newsletter. */
+  newsletter: z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    placeholder: loc(80),
+    buttonLabel: loc(60),
+    successText: loc(200),
+    askName: z.boolean().default(false),
+    tone: z.enum(['light', 'dark']).default('light'),
+  }),
   'contact-form': z.object({
     ...eyebrowHeading,
     intro: loc(600),
@@ -340,6 +419,10 @@ const STRUCTURE_KEYS = new Set([
   'pick',
   'filtersLayout',
   'calendarMode',
+  'page',
+  'embedUrl',
+  'ratio',
+  'zoom',
 ]);
 
 /**

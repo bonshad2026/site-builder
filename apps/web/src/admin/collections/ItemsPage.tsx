@@ -10,6 +10,8 @@ import { ImagePicker } from '../pages/FilesPage';
 import { DatePickerButton } from '../../components/ui/Calendar';
 import { Badge, Checkbox, ErrorNote, Field, useAdminCalendar, useErrorLanguage, LocalizedField, Modal, NumberField, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useErrorLine, useToast } from '../ui';
 import { useAdminCollections, useAdminItems, type AdminItem } from './api';
+import { ExcelButton, fetchAll, listTotal } from '../ExcelExport';
+import type { Cell } from '../../lib/xlsx';
 
 type Lbl = { en: string; fa: string };
 const L = (en: string, fa: string): Lbl => ({ en, fa });
@@ -176,6 +178,46 @@ function FieldInput({
   }
 }
 
+/** A table's items as a sheet: address, title in both languages, status, then one column per field. */
+async function itemRows(siteId: string, table: Collection, l: (v: Lbl | undefined) => string, q: string): Promise<Cell[][]> {
+  const items = await fetchAll<AdminItem>(`/sites/${siteId}/collections/${table.id}/items?q=${encodeURIComponent(q)}`, 50);
+  const abs = (u: string) => new URL(u, window.location.origin).href;
+  const value = (f: Collection['fields'][number], item: AdminItem): Cell => {
+    const raw = item.data[f.key];
+    const preview = item.previewData[f.key];
+    if (raw === null || raw === undefined || raw === '') return '';
+    switch (f.type) {
+      case 'text':
+      case 'textarea':
+        return typeof raw === 'object' ? l(raw as Lbl) : String(raw);
+      case 'number':
+      case 'price':
+        return typeof raw === 'number' ? raw : String(raw);
+      case 'boolean':
+        return raw ? '✓' : '';
+      case 'select':
+        return l(f.options.find((o) => o.value === raw)?.label) || String(raw);
+      case 'multiselect':
+        return (raw as string[]).map((v) => l(f.options.find((o) => o.value === v)?.label) || v).join('، ');
+      case 'image':
+      case 'gallery': {
+        const list = (Array.isArray(preview) ? preview : [preview]) as ({ url?: string } | null)[];
+        return list.map((x) => (x?.url ? abs(x.url) : '')).filter(Boolean).join(' ');
+      }
+      case 'reference': {
+        const list = (Array.isArray(preview) ? preview : [preview]) as ({ title?: Lbl } | null)[];
+        return list.map((x) => l(x?.title)).filter(Boolean).join('، ');
+      }
+      default:
+        return String(raw);
+    }
+  };
+  return [
+    ['slug', 'عنوان', 'Title', 'وضعیت / Status', ...table.fields.map((f) => l(f.label) || f.key)],
+    ...items.map((item) => [item.slug, item.title.fa, item.title.en, item.status, ...table.fields.map((f) => value(f, item))]),
+  ];
+}
+
 /** Image URLs of an item's saved images (from the list's preview values). */
 function knownUrls(item: AdminItem | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -297,7 +339,15 @@ export default function ItemsPage({ siteId }: { siteId: string }) {
 
   return (
     <>
-      <PageTitle title={l(table.name) || table.slug} actions={<Button onClick={() => setEditing('new')}>{`${t(L('New', 'جدید'))} ${l(table.itemName)}`}</Button>} />
+      <PageTitle
+        title={l(table.name) || table.slug}
+        actions={
+          <>
+            <ExcelButton name={l(table.name) || table.slug} count={listTotal(list.data)} rows={() => itemRows(siteId, table, l, q)} />
+            <Button onClick={() => setEditing('new')}>{`${t(L('New', 'جدید'))} ${l(table.itemName)}`}</Button>
+          </>
+        }
+      />
       <div className="mb-4 max-w-xs">
         <TextField
           label={t(L('Search', 'جستجو'))}

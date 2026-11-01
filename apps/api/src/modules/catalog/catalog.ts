@@ -48,11 +48,12 @@ export const productsTable: TableDef = {
     imageAssetId: 'image_asset_id',
     images: 'image_asset_ids',
     attributes: 'attributes',
+    variants: 'variants',
     status: 'status',
     position: 'position',
     seo: 'seo',
   },
-  json: new Set(['name', 'description', 'materials', 'leadTime', 'colors', 'images', 'attributes', 'seo']),
+  json: new Set(['name', 'description', 'materials', 'leadTime', 'colors', 'images', 'attributes', 'variants', 'seo']),
 };
 
 interface CatalogConfig {

@@ -1,5 +1,6 @@
 import { defaultCardDesign, type CardBlock, type CollectionFilter, type SectionProps } from '@site-builder/shared';
 import { useContext, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SearchInput } from '../components/ui/Field';
 import { Container, Section, SectionHeading } from '../components/ui/Layout';
@@ -29,7 +30,9 @@ export function CollectionListSection({ props }: Props<'collection-list'>) {
   const collection = collections?.find((c) => c.slug === props.source);
   const current = useCurrentItem();
   const design = useCardDesign(props.cardDesign, props.card);
-  const [q, setQ] = useState('');
+  // A search from the address (the header's search box opens /products?q=…).
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(() => (props.showSearch ? params.get('q') ?? '' : ''));
   // Each visitor filter's conditions, by its place in the list.
   const [visitor, setVisitor] = useState<Record<number, CollectionFilter[]>>({});
   const [page, setPage] = useState(1);

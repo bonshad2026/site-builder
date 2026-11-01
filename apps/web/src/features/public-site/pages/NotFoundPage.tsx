@@ -2,9 +2,19 @@ import { Arrow, ButtonLink } from '../../../components/ui/Button';
 import { Container } from '../../../components/ui/Layout';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { usePreferences } from '../../../lib/preferences';
+import { BuiltInPage } from '../../../sections/BuiltInPage';
 import { PageSlot, useSystemPage } from '../../../sections/PageSlot';
 
+/** "Page not found": the site's own builder page at /not-found when it has one, else the built-in text. */
 export function NotFoundPage() {
+  return (
+    <BuiltInPage page="notFound">
+      <BuiltInNotFound />
+    </BuiltInPage>
+  );
+}
+
+function BuiltInNotFound() {
   const { m, formatNumber } = usePreferences();
   usePageMeta(m.notFound.title, undefined, { noIndex: true });
   const own = useSystemPage('notFound').page;

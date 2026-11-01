@@ -7,6 +7,7 @@ import { usePreferences } from '../../../lib/preferences';
 import { isNotFound, useService, useServices } from '../data';
 import { NotFoundPage } from './NotFoundPage';
 import { PageSlot, useSystemPage } from '../../../sections/PageSlot';
+import { useEmbedded } from '../../../sections/BuiltInPage';
 import { ServiceCard } from '../components/Cards';
 
 export function ServicesPage() {
@@ -63,13 +64,16 @@ export function ServicesPage() {
 
 export function ServiceDetailPage() {
   const slots = useSystemPage('serviceDetail');
-  const { slug = '' } = useParams();
+  const { slug: param = '' } = useParams();
   const { m, l, formatNumber } = usePreferences();
+  // On the builder's own service page without a service in the address (its preview), the first one stands in.
+  const embedded = useEmbedded();
+  const { data: all = [], isLoading: loadingAll } = useServices();
+  const slug = param || (embedded ? all[0]?.slug ?? '' : '');
   const { data: service, error, isLoading } = useService(slug);
-  const { data: all = [] } = useServices();
   usePageMeta(service ? l(service.title) : '', service ? l(service.summary) : undefined, { image: service?.imageUrl });
 
-  if (isLoading) return <div role="status" aria-label="Loading" className="min-h-screen" />;
+  if (isLoading || (!param && embedded && loadingAll)) return <div role="status" aria-label="Loading" className="min-h-screen" />;
   if (isNotFound(error) || !service) return <NotFoundPage />;
   const others = all.filter((s) => s.slug !== service.slug);
 

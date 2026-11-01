@@ -5,6 +5,7 @@ import { useSiteSettings } from '../../features/public-site/data';
 import { cn } from '../../lib/cn';
 import { usePreferences } from '../../lib/preferences';
 import { LanguageSwitch, ThemeSwitch } from './PreferenceControls';
+import { AccountLink } from './Header';
 import { useNavItems } from './nav';
 
 export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -106,6 +107,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </nav>
       <div className="flex items-center justify-between border-t border-line px-5 py-6 sm:px-8">
         <ThemeSwitch />
+        <AccountLink />
         <LanguageSwitch />
       </div>
     </div>,

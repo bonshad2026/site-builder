@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HOST_SITE_ID } from '../features/public-site/data';
-import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
 import type { SiteSettings } from '@site-builder/shared';
 import { LanguageSwitch } from '../components/layout/PreferenceControls';
 import { api } from '../lib/api';
@@ -130,14 +130,107 @@ function AdminHome() {
   );
 }
 
-function NavItem({ to, children, end }: { to: string; children: ReactNode; end?: boolean }) {
+interface MenuItem {
+  to: string;
+  label: string;
+  /** A section of the settings page (?tab=). */
+  tab?: string;
+  end?: boolean;
+  badge?: number;
+  show?: boolean;
+}
+
+/** Whether a menu entry is the page being shown (settings sections compare their ?tab=). */
+function useIsCurrent() {
+  const { pathname, search } = useLocation();
+  const current = new URLSearchParams(search).get('tab') ?? 'brand';
+  return (item: MenuItem) => (item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`)) && (!item.tab || item.tab === current);
+}
+
+const Count = ({ n }: { n?: number }) => (n ? <span className="ms-2 rounded-full bg-accent px-1.5 text-[11px] text-accent-ink">{n}</span> : null);
+
+function NavItem({ item, nested }: { item: MenuItem; nested?: boolean }) {
+  const isCurrent = useIsCurrent();
+  const active = isCurrent(item);
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => cn('block rounded-md px-3 py-2 text-sm', isActive ? 'bg-ink text-bg' : 'text-ink-soft hover:bg-surface-2 hover:text-ink')}>
-      {children}
-    </NavLink>
+    <Link
+      to={item.tab ? `${item.to}?tab=${item.tab}` : item.to}
+      aria-current={active ? 'page' : undefined}
+      className={cn('flex items-center justify-between rounded-md py-2 text-sm', nested ? 'ps-6 pe-3' : 'px-3', active ? 'bg-ink text-bg' : 'text-ink-soft hover:bg-surface-2 hover:text-ink')}
+    >
+      {item.label}
+      <Count n={item.badge} />
+    </Link>
   );
 }
 
+const CLOSED_KEY = 'sb_nav_closed';
+const readClosed = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * A collapsible group of the menu, hidden when empty. It opens by itself when one of its pages is
+ * opened, and can still be closed while that page is shown.
+ */
+function NavGroup({ id, title, items, badge }: { id: string; title: string; items: MenuItem[]; badge?: number }) {
+  const isCurrent = useIsCurrent();
+  const shown = items.filter((i) => i.show !== false);
+  const [closed, setClosed] = useState(() => readClosed().includes(id));
+  const current = shown.find(isCurrent);
+  const currentKey = current ? `${current.to}${current.tab ?? ''}` : '';
+  useEffect(() => {
+    if (currentKey) setClosed(false);
+  }, [currentKey]);
+  if (!shown.length) return null;
+  const open = !closed;
+  const toggle = () => {
+    const next = !closed;
+    setClosed(next);
+    try {
+      const list = readClosed().filter((x) => x !== id);
+      localStorage.setItem(CLOSED_KEY, JSON.stringify(next ? [...list, id] : list));
+    } catch {
+      // Storage may be unavailable; the group still toggles for this visit.
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className={cn(
+          'flex items-center justify-between rounded-md px-3 py-1.5 text-start text-xs font-semibold text-ink hover:bg-surface-2',
+          // Closed while one of its pages is open: the group shows it holds the current page, and which.
+          !open && current && 'border-s-2 border-accent bg-surface-2',
+        )}
+      >
+        <span className="flex min-w-0 flex-col">
+          <span className="flex items-center">
+            {title}
+            {!open && <Count n={badge} />}
+          </span>
+          {!open && current && <span className="truncate text-[11px] font-normal text-ink-soft">{current.label}</span>}
+        </span>
+        <span aria-hidden="true" className={cn('text-ink-soft transition-transform', open ? 'rotate-90' : 'rtl:rotate-180')}>
+          ›
+        </span>
+      </button>
+      {open && shown.map((item) => <NavItem key={`${item.to}${item.tab ?? ''}`} item={item} nested />)}
+    </div>
+  );
+}
+
+/**
+ * The site menu in standard groups: requests, shop, customers, tables, content, look and settings.
+ * Each settings section has its own entry where it belongs (shop rules under Shop, sign-up under
+ * Customers). Groups and entries a person cannot use are hidden.
+ */
 function SiteNav({ siteId }: { siteId: string }) {
   const t = useT();
   const { data: info } = useSiteInfo(siteId);
@@ -147,33 +240,100 @@ function SiteNav({ siteId }: { siteId: string }) {
   const { data: tables = [] } = useAdminCollections(siteId);
   const can = (p: string) => !!info?.permissions.includes(p);
   const mod = (m: keyof SiteSettings['modules']) => !!settings?.modules[m];
+  const L = (en: string, fa: string) => l({ en, fa });
+  // New requests and customer replies; refreshed every minute while the panel is open.
+  const summary = useQuery({
+    queryKey: ['site', siteId, 'leads', 'summary'],
+    queryFn: () => api.get<{ unread: number }>(`/sites/${siteId}/leads/summary`),
+    enabled: mod('leads') && can('leads:read'),
+    refetchInterval: 60_000,
+  });
   const base = `/admin/sites/${siteId}`;
+  const settingsUrl = `${base}/settings`;
+  const site = can('site:write');
+  const owner = info?.role === 'owner' || info?.role === 'platform_admin';
+  const shop = mod('products') || mod('orders');
   return (
-    <nav aria-label={info?.name ?? siteId} className="flex flex-col gap-0.5">
-      {operator && (
-        <>
-          <NavItem to={base} end>
-            {t.dashboard}
-          </NavItem>
-          <NavItem to={`${base}/pages`}>{t.pages}</NavItem>
-        </>
-      )}
-      {/* Clients edit the text and images of their pages; operators use the builder. */}
-      {!operator && can('pages:write') && <NavItem to={`${base}/content`}>{t.content}</NavItem>}
-      {mod('services') && <NavItem to={`${base}/services`}>{t.services}</NavItem>}
-      {mod('products') && <NavItem to={`${base}/products`}>{t.products}</NavItem>}
-      {tables.map((c) => (
-        <NavItem key={c.id} to={`${base}/items/${c.id}`}>
-          {l(c.name) || c.slug}
-        </NavItem>
-      ))}
-      {operator && <NavItem to={`${base}/tables`}>{t.contentTables}</NavItem>}
-      {mod('leads') && can('leads:read') && <NavItem to={`${base}/leads`}>{t.leads}</NavItem>}
-      {mod('orders') && can('orders:read') && <NavItem to={`${base}/orders`}>{t.orders}</NavItem>}
-      <NavItem to={`${base}/files`}>{t.files}</NavItem>
-      {(info?.role === 'owner' || info?.role === 'platform_admin') && <NavItem to={`${base}/members`}>{t.members}</NavItem>}
-      {can('site:write') && <NavItem to={`${base}/settings`}>{t.settings}</NavItem>}
-      {can('payments:manage') && mod('orders') && <NavItem to={`${base}/payments`}>{t.payments}</NavItem>}
+    <nav aria-label={info?.name ?? siteId} className="flex flex-col">
+      {operator && <NavItem item={{ to: base, end: true, label: t.dashboard }} />}
+      <NavGroup
+        id="requests"
+        title={L('Requests', 'درخواست‌ها')}
+        badge={summary.data?.unread}
+        items={[
+          { to: `${base}/leads`, label: L('All requests', 'همه‌ی درخواست‌ها'), badge: summary.data?.unread, show: mod('leads') && can('leads:read') },
+          { to: settingsUrl, tab: 'requests', label: L('Forms & workflows', 'فرم‌ها و روال پیگیری'), show: site && mod('leads') },
+        ]}
+      />
+      <NavGroup
+        id="shop"
+        title={L('Orders', 'سفارش‌ها')}
+        items={[
+          { to: `${base}/orders`, label: t.orders, show: mod('orders') && can('orders:read') },
+          { to: `${base}/coupons`, label: t.sx.coupons, show: mod('orders') && can('orders:read') },
+          { to: settingsUrl, tab: 'shop', label: L('Sales rules, checkout & shipping', 'قوانین فروش، تسویه و ارسال'), show: site && mod('products') },
+        ]}
+      />
+      <NavGroup
+        id="customers"
+        title={L('Customers', 'مشتریان')}
+        items={[
+          { to: `${base}/customers`, label: L('Customer list', 'فهرست مشتریان'), show: can('leads:read') && (!!settings?.accounts?.enabled || operator) },
+          { to: settingsUrl, tab: 'accounts', label: L('Sign-up & sign-in', 'ثبت‌نام و ورود مشتری'), show: site && operator },
+          { to: `${base}/reviews`, label: t.sx.reviews, show: mod('products') && can('catalog:write') },
+          { to: `${base}/subscribers`, label: t.sx.subscribers, show: can('leads:read') },
+        ]}
+      />
+      {/* Everything the site's people add items to: products, services, categories and the content tables. */}
+      <NavGroup
+        id="tables"
+        title={L('Tables', 'جدول‌ها')}
+        items={[
+          { to: `${base}/products`, label: t.products, show: mod('products') },
+          { to: settingsUrl, tab: 'categories', label: L('Product categories', 'دسته‌بندی محصولات'), show: site && mod('products') },
+          { to: `${base}/services`, label: t.services, show: mod('services') },
+          ...tables.map((c) => ({ to: `${base}/items/${c.id}`, label: l(c.name) || c.slug })),
+          { to: `${base}/tables`, label: L('Manage tables', 'مدیریت جدول‌ها'), show: operator },
+        ]}
+      />
+      <NavGroup
+        id="content"
+        title={L('Pages', 'صفحه‌ها')}
+        items={[
+          { to: `${base}/pages`, label: t.pages, show: operator },
+          // Clients edit the text and images of their pages; operators use the builder.
+          { to: `${base}/content`, label: t.content, show: !operator && can('pages:write') },
+          { to: settingsUrl, tab: 'shopPage', label: L('Shop page', 'صفحه‌ی فروشگاه'), show: site && operator && mod('products') },
+          { to: settingsUrl, tab: 'systemPages', label: L('Built-in pages (cart, 404…)', 'صفحه‌های آماده (سبد خرید، ۴۰۴…)'), show: site && operator },
+          { to: `${base}/files`, label: t.files },
+          { to: settingsUrl, tab: 'texts', label: L('Site texts', 'متن‌های سایت'), show: site },
+        ]}
+      />
+      <NavGroup
+        id="look"
+        title={L('Site look', 'ظاهر سایت')}
+        items={[
+          { to: settingsUrl, tab: 'design', label: L('Design & theme', 'طراحی و تم'), show: site && operator },
+          { to: settingsUrl, tab: 'menu', label: L('Menu', 'منوی سایت'), show: site && operator },
+          { to: settingsUrl, tab: 'header', label: L('Header', 'سربرگ'), show: site && operator },
+          { to: settingsUrl, tab: 'footer', label: L('Footer', 'پاورقی'), show: site },
+          { to: settingsUrl, tab: 'extras', label: L('Page code, icon, bar & popup', 'کد صفحه، آیکون، اعلان و پاپ‌آپ'), show: site },
+        ]}
+      />
+      <NavGroup
+        id="settings"
+        title={t.settings}
+        items={[
+          { to: settingsUrl, tab: 'brand', label: L('General', 'عمومی'), show: site },
+          { to: settingsUrl, tab: 'contact', label: L('Contact details', 'اطلاعات تماس'), show: site },
+          { to: settingsUrl, tab: 'notifications', label: L('Staff notifications', 'اطلاع‌رسانی به کارکنان'), show: site },
+          { to: settingsUrl, tab: 'seo', label: L('SEO', 'سئو'), show: site && operator },
+          { to: settingsUrl, tab: 'modules', label: L('Modules', 'ماژول‌ها'), show: site && operator },
+          { to: `${base}/payments`, label: L('Payment gateway', 'درگاه پرداخت'), show: can('payments:manage') && (shop || mod('leads')) },
+          { to: `${base}/messaging`, label: t.su.messaging, show: operator },
+          { to: `${base}/members`, label: t.members, show: owner },
+        ]}
+      />
     </nav>
   );
 }
@@ -189,7 +349,7 @@ function AdminLayout({ me }: { me: Me }) {
   const sites = me.sites;
 
   const sidebar = (
-    <div className="flex h-full flex-col gap-6 p-4">
+    <div className="flex min-h-full flex-col gap-6 p-4">
       <Link to="/admin" className="px-3 font-display text-2xl text-ink">
         {t.brand}
       </Link>
@@ -197,9 +357,11 @@ function AdminLayout({ me }: { me: Me }) {
         <div>
           <p className="mb-1 px-3 text-xs font-medium text-ink-soft uppercase rtl:normal-case">{t.platform}</p>
           <nav aria-label={t.platform} className="flex flex-col gap-0.5">
-            <NavItem to="/admin/platform/sites">{t.sites}</NavItem>
-            <NavItem to="/admin/platform/users">{t.users}</NavItem>
-            <NavItem to="/admin/platform/audit">{t.audit}</NavItem>
+            <NavItem item={{ to: "/admin/platform/sites", label: t.sites }} />
+            <NavItem item={{ to: "/admin/platform/users", label: t.users }} />
+            <NavItem item={{ to: "/admin/platform/bank", label: t.bk.nav }} />
+            <NavItem item={{ to: "/admin/platform/messaging", label: t.su.messaging }} />
+            <NavItem item={{ to: "/admin/platform/audit", label: t.audit }} />
             {/* Studio deploy service (served next to the admin by the edge proxy). */}
             <a href="/deploy/" className="block rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
               {t.deploy}
@@ -230,11 +392,11 @@ function AdminLayout({ me }: { me: Me }) {
 
   return (
     <div className="flex min-h-dvh bg-bg text-ink">
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-e border-line bg-surface lg:block">{sidebar}</aside>
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 overflow-y-auto overscroll-contain border-e border-line bg-surface lg:block">{sidebar}</aside>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <aside className={cn('absolute inset-y-0 w-72 bg-surface shadow-xl', dir === 'rtl' ? 'right-0' : 'left-0')} onClick={(e) => e.stopPropagation()}>
+          <aside className={cn('absolute inset-y-0 w-72 overflow-y-auto bg-surface shadow-xl', dir === 'rtl' ? 'right-0' : 'left-0')} onClick={(e) => e.stopPropagation()}>
             {sidebar}
           </aside>
         </div>

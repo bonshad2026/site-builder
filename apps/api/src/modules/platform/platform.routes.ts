@@ -1,12 +1,13 @@
-import { emailSchema, passwordSchema, slugSchema } from '@site-builder/shared';
+import { demoRunSchema, emailSchema, GENERAL_BANK_TYPE, passwordSchema, siteSetupSchema, slugSchema } from '@site-builder/shared';
 import { z } from 'zod';
 import { badRequest, notFound } from '../../common/errors.js';
 import { ApiRouter, idParam, pageMeta, paginationQuery } from '../../common/http.js';
 import type { AppContext } from '../../context.js';
 import { auditPlatform } from '../audit/audit.js';
 import { createUser, requestPasswordReset, revokeAllSessions } from '../auth/auth.service.js';
-import { provisionTenant } from './provisioning.js';
-import { applyTemplate } from './templates/apply.js';
+import { deleteTenant, provisionTenant } from './provisioning.js';
+import { clearDemoData, demoCounts, generateDemo } from './setup/demo.js';
+import { applySetup } from './templates/apply.js';
 import { refreshTemplatePhotos } from './templates/images.js';
 import { SITE_TEMPLATES, templateByKey } from './templates/catalog.js';
 
@@ -59,6 +60,8 @@ export function platformRoutes(ctx: AppContext) {
         domain: domainSchema.optional(),
         /** Kind of business: fills the new site with matching pages, products and photos. */
         template: z.string().max(40).optional(),
+        /** Pages, menus, forms, buttons, filters, tables, accounts and sample data to start with. */
+        setup: siteSetupSchema.optional(),
       }),
     },
     async ({ req, body }) => {
@@ -66,25 +69,70 @@ export function platformRoutes(ctx: AppContext) {
       if (body.template && !template) throw badRequest('Unknown business type');
       // A cell holds exactly one client; new clients get their own cell from the control panel.
       if (ctx.env.CELL_SLUG) throw badRequest('This stack serves a single client; create new clients from the control panel');
-      const { template: _t, ...input } = body;
+      const { template: _t, setup, ...input } = body;
       const tenant = await provisionTenant(ctx, { ...input, actorUserId: req.auth!.user.id });
-      if (template && tenant.status === 'active') await applyTemplate(ctx, tenant, template, body.name);
-      return { data: await getTenant(tenant.id) };
+      const result = (template || setup) && tenant.status === 'active' ? await applySetup(ctx, tenant, template, body.name, setup) : null;
+      // The site's type picks its bank of sample texts and photos later on.
+      await ctx.control.query('UPDATE tenants SET business_type = $2 WHERE id = $1', [tenant.id, template?.key ?? (setup ? GENERAL_BANK_TYPE : '')]);
+      // An empty site starts with no pages at all (not even the placeholder home page).
+      if (!template && !setup && tenant.status === 'active') {
+        const db = ctx.tenantPools.get({ id: tenant.id, dbName: tenant.db_name, dbUser: tenant.db_user, dbPasswordEnc: tenant.db_password_enc! });
+        await db.query('DELETE FROM pages');
+        // …and without the shop or the built-in tables (products, categories, services, projects…);
+        // the operator turns modules on in Settings when the site needs them.
+        await db.query(
+          `UPDATE site_settings SET settings = jsonb_set(settings, '{modules}', $1::jsonb) WHERE id = 1`,
+          [JSON.stringify({ services: false, products: false, projects: false, testimonials: false, faq: false, leads: true, orders: false })],
+        );
+      }
+      return { data: { ...(await getTenant(tenant.id)), setup: result } };
     },
   );
 
   r.route({ method: 'post', path: '/tenants/:id/refresh-photos', summary: 'Replace placeholder template photos with files now in var/demo-images', params: idParam }, async ({ params }) => {
-    const { rows } = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc, status FROM tenants WHERE id = $1', [params.id]);
-    const t = rows[0];
-    if (!t) throw notFound('Site');
-    if (t.status !== 'active') throw badRequest('Site is not active');
-    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
-    return { data: await refreshTemplatePhotos(ctx, db) };
+    return { data: await refreshTemplatePhotos(ctx, await activeDb(params.id)) };
   });
 
   r.route({ method: 'get', path: '/templates', summary: 'Business types a new site can start from' }, async () => ({
-    data: SITE_TEMPLATES.map((t) => ({ key: t.key, label: t.label })),
+    data: SITE_TEMPLATES.map((t) => ({ key: t.key, label: t.label, orders: t.orders, products: t.products.length })),
   }));
+
+  async function activeDb(id: string) {
+    const { rows } = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc, status FROM tenants WHERE id = $1', [id]);
+    const t = rows[0];
+    if (!t) throw notFound('Site');
+    if (t.status !== 'active') throw badRequest('Site is not active');
+    return ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+  }
+
+  r.route({ method: 'get', path: '/tenants/:id/demo-data', summary: 'Sample data on the site, its tables and its type', params: idParam }, async ({ params }) => {
+    const db = await activeDb(params.id);
+    const { rows: tables } = await db.query(
+      `SELECT c.slug, c.name, (SELECT count(*) FROM collection_items i WHERE i.collection_id = c.id)::int AS items FROM collections c ORDER BY c.position`,
+    );
+    const { rows } = await db.query(
+      `SELECT (SELECT count(*) FROM products)::int AS products, (SELECT count(*) FROM services)::int AS services, (SELECT count(*) FROM customers)::int AS customers,
+              (SELECT count(*) FROM orders)::int AS orders, (SELECT count(*) FROM leads)::int AS requests, settings->'modules' AS modules FROM site_settings WHERE id = 1`,
+    );
+    const type = (await ctx.control.query<{ business_type: string }>('SELECT business_type FROM tenants WHERE id = $1', [params.id])).rows[0].business_type;
+    const { modules, ...all } = rows[0];
+    return { data: { demo: await demoCounts(db), all, modules, tables, type: type || GENERAL_BANK_TYPE } };
+  });
+
+  r.route({ method: 'post', path: '/tenants/:id/demo-data', summary: 'Make sample data for the site from the content bank', params: idParam, body: demoRunSchema }, async ({ req, params, body }) => {
+    const db = await activeDb(params.id);
+    const t = await getTenant(params.id);
+    const made = await generateDemo(ctx, db, t.slug, body);
+    await ctx.control.query('UPDATE tenants SET business_type = $2 WHERE id = $1', [params.id, body.type]);
+    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, tenantId: params.id, action: 'tenant.demo_generated', metadata: { ...made, type: body.type, mode: body.mode } });
+    return { data: made };
+  });
+
+  r.route({ method: 'delete', path: '/tenants/:id/demo-data', summary: 'Remove all sample data (products, items, customers, orders, payments, requests)', params: idParam }, async ({ req, params }) => {
+    const removed = await clearDemoData(await activeDb(params.id));
+    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, tenantId: params.id, action: 'tenant.demo_cleared', metadata: { ...removed } });
+    return { data: removed };
+  });
 
   r.route({ method: 'get', path: '/tenants/:id', summary: 'Get a client site', params: idParam }, async ({ params }) => ({ data: await getTenant(params.id) }));
 
@@ -157,6 +205,24 @@ export function platformRoutes(ctx: AppContext) {
     },
   );
 
+  r.route(
+    {
+      method: 'delete',
+      path: '/tenants/:id',
+      summary: 'Delete a client site with its database and files (cannot be undone)',
+      params: idParam,
+      // The site id typed again, so a site is never deleted by a slip.
+      query: z.object({ confirm: z.string().max(64) }),
+    },
+    async ({ req, params, query }) => {
+      if (ctx.env.CELL_SLUG) throw badRequest('This stack serves a single client; its site cannot be deleted here');
+      const t = await getTenant(params.id);
+      if (query.confirm !== t.slug) throw badRequest('Type the site id to confirm');
+      const removed = await deleteTenant(ctx, params.id);
+      await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, tenantId: params.id, action: 'tenant.deleted', target: t.slug, metadata: { ...removed } });
+    },
+  );
+
   r.route({ method: 'get', path: '/users', summary: 'List users', query: paginationQuery }, async ({ query }) => {
     const { rows } = await ctx.control.query(
       `SELECT id, email, phone, display_name AS "displayName", is_platform_admin AS "isPlatformAdmin", status,
@@ -193,6 +259,17 @@ export function platformRoutes(ctx: AppContext) {
       await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'user.status_changed', target: params.id, metadata: body });
     },
   );
+
+  r.route({ method: 'delete', path: '/users/:id', summary: 'Delete a user (not yourself, nor a site owner)', params: idParam }, async ({ req, params }) => {
+    if (params.id === req.auth!.user.id) throw badRequest('You cannot delete your own account');
+    const { rows } = await ctx.control.query<{ email: string | null }>('SELECT email FROM users WHERE id = $1', [params.id]);
+    if (!rows[0]) throw notFound('User');
+    const owned = await ctx.control.query<{ slug: string }>(`SELECT t.slug FROM memberships m JOIN tenants t ON t.id = m.tenant_id WHERE m.user_id = $1 AND m.role = 'owner'`, [params.id]);
+    if (owned.rows.length) throw badRequest(`This user owns ${owned.rows.map((r) => r.slug).join(', ')}; assign another owner first`);
+    await revokeAllSessions(ctx, params.id);
+    await ctx.control.query('DELETE FROM users WHERE id = $1', [params.id]);
+    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'user.deleted', target: rows[0].email ?? params.id });
+  });
 
   r.route(
     { method: 'get', path: '/audit', summary: 'Platform audit log', query: paginationQuery.extend({ tenantId: z.string().uuid().optional() }) },

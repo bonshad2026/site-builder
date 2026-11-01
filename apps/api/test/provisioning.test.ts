@@ -24,7 +24,7 @@ describe('creating a client site', () => {
     const ownerEmail = `owner-${slug}@test.local`;
     const res = await platform.post('/api/v1/platform/tenants', { slug, name: 'New Client', ownerEmail, domain: `${slug}.example.com` });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    expect(res.body.data).toMatchObject({ slug, status: 'active', provisioningStep: 'done', schemaVersion: '002_payments.sql', ownerEmail, primaryDomain: `${slug}.example.com` });
+    expect(res.body.data).toMatchObject({ slug, status: 'active', provisioningStep: 'done', schemaVersion: '010_shop_extras.sql', ownerEmail, primaryDomain: `${slug}.example.com` });
 
     // The new owner gets a set-password link (acts as the invitation).
     expect(emails.outbox.some((m) => m.to === ownerEmail && /reset-password\?token=/.test(m.text))).toBe(true);
@@ -83,6 +83,42 @@ describe('creating a client site', () => {
       { email: `first-${slug}@test.local`, role: 'staff' },
       { email: `second-${slug}@test.local`, role: 'owner' },
     ]);
+  });
+});
+
+describe('deleting sites and users', () => {
+  it('starts an empty site with no pages, and deletes a site with its database after the id is typed', async () => {
+    const slug = `gone-${uid()}`;
+    const ownerEmail = `o-${slug}@test.local`;
+    const res = await platform.post('/api/v1/platform/tenants', { slug, name: 'Gone', ownerEmail });
+    expect(res.status).toBe(201);
+    expect((await request(app).get(`/api/v1/public/sites/${slug}/pages`)).body.data).toEqual([]);
+    const id = res.body.data.id;
+    const dbName = tenantDbName(ctx.env.TENANT_DB_PREFIX, slug);
+
+    expect((await platform.delete(`/api/v1/platform/tenants/${id}?confirm=wrong`)).status).toBe(400);
+    expect((await platform.delete(`/api/v1/platform/tenants/${id}?confirm=${slug}`)).status).toBe(204);
+    expect((await platform.get(`/api/v1/platform/tenants/${id}`)).status).toBe(404);
+    const admin = new pg.Client({ connectionString: ctx.env.PG_ADMIN_URL });
+    await admin.connect();
+    expect((await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName])).rowCount).toBe(0);
+    await admin.end();
+    expect((await request(app).get(`/api/v1/public/sites/${slug}/settings`)).status).toBe(404);
+
+    // Its owner owns nothing now and can be deleted; nobody can delete themselves.
+    const user = await ctx.control.query('SELECT id FROM users WHERE email = $1', [ownerEmail]);
+    expect((await platform.delete(`/api/v1/platform/users/${user.rows[0].id}`)).status).toBe(204);
+    expect((await ctx.control.query('SELECT 1 FROM users WHERE email = $1', [ownerEmail])).rowCount).toBe(0);
+  });
+
+  it('refuses to delete a user who still owns a site', async () => {
+    const slug = `own-${uid()}`;
+    const ownerEmail = `o-${slug}@test.local`;
+    expect((await platform.post('/api/v1/platform/tenants', { slug, name: 'Owned', ownerEmail })).status).toBe(201);
+    const user = await ctx.control.query('SELECT id FROM users WHERE email = $1', [ownerEmail]);
+    const res = await platform.delete(`/api/v1/platform/users/${user.rows[0].id}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain(slug);
   });
 });
 

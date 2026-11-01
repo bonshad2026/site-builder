@@ -7,6 +7,11 @@
 	handle /files/* {
 		reverse_proxy api:4000
 	}
+	# The sitemap is made live by the API, so products and pages added on this server are in it.
+	handle /sitemap.xml {
+		rewrite * /api/v1/public/sites/{$CELL_SLUG}/sitemap.xml
+		reverse_proxy api:4000
+	}
 	handle {
 		root * /srv/site
 		try_files {path} {path}/index.html /index.html

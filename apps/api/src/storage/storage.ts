@@ -18,6 +18,8 @@ export interface StorageAdapter {
   readonly driver: 'local' | 's3';
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   delete(key: string): Promise<void>;
+  /** The file's bytes (copying bank photos into a site). */
+  get(key: string): Promise<Buffer>;
   publicUrl(key: string): string;
   signedUrl(key: string, expiresInSeconds: number): Promise<string>;
 }
@@ -51,6 +53,10 @@ export class LocalStorage implements StorageAdapter {
 
   read(key: string): Promise<Buffer> {
     return readFile(this.resolve(key));
+  }
+
+  get(key: string): Promise<Buffer> {
+    return this.read(key);
   }
 
   publicUrl(key: string) {
@@ -87,6 +93,11 @@ export class S3Storage implements StorageAdapter {
 
   async delete(key: string) {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.env.S3_BUCKET, Key: key }));
+  }
+
+  async get(key: string) {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.env.S3_BUCKET, Key: key }));
+    return Buffer.from(await res.Body!.transformToByteArray());
   }
 
   publicUrl(key: string) {

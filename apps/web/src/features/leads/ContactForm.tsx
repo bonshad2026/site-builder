@@ -8,6 +8,7 @@ import { usePreferences } from '../../lib/preferences';
 import { useProducts, useSiteErrorLanguage, useSiteSettings } from '../public-site/data';
 import { budgets, createLeadSchema, projectTypes, type FormType, type Lead, type LeadInput } from './leadSchema';
 import { submitLead, type SubmitResult } from './submitLead';
+import { SubmittedNotice } from './SubmittedNotice';
 import { RequestItemNote } from './RequestItemNote';
 import { errorLine } from '../../lib/errorText';
 
@@ -77,6 +78,7 @@ function ContactFormInner({
   const schema = useMemo(() => createLeadSchema(m.form.errors, formType), [m, formType]);
   const [status, setStatus] = useState<'idle' | 'error' | SubmitResult['mode']>('idle');
   const [failure, setFailure] = useState('');
+  const [tracking, setTracking] = useState<{ code?: string; token?: string }>({});
   const errorLang = useSiteErrorLanguage();
 
   const {
@@ -107,6 +109,7 @@ function ContactFormInner({
       // Send the budget as its wording, so the inbox shows what the visitor picked.
       const budget = budgetChoices.find((b) => b.value === data.budget);
       const result = await submitLead({ ...data, budget: budget ? l(budget.label) : data.budget }, formType, requestType);
+      if (result.mode === 'sent') setTracking({ code: result.code, token: result.token });
       setStatus(result.mode);
     } catch (err) {
       setFailure(errorLine(err, errorLang));
@@ -114,8 +117,20 @@ function ContactFormInner({
     }
   };
 
-  if (status === 'sent' || status === 'simulated') {
-    const sent = status === 'sent';
+  if (status === 'sent') {
+    return (
+      <SubmittedNotice
+        code={tracking.code}
+        token={tracking.token}
+        onAnother={() => {
+          reset();
+          setStatus('idle');
+        }}
+      />
+    );
+  }
+  if (status === 'simulated') {
+    const sent = false;
     return (
       <div role="status" className="reveal border border-line bg-surface p-8 sm:p-12">
         {!sent && <p className="eyebrow mb-4">Demo</p>}

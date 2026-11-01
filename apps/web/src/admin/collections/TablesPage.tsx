@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import { useAdminSettings } from '../AdminRoot';
 import { Badge, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, NumberField, PageTitle, SelectField, Spinner, Table, Td, TextField, useErrorLine, useToast } from '../ui';
+import { useSaveStarter, useStarters } from '../starters';
 import { useAdminCollections, type AdminCollection } from './api';
 
 type Lbl = { en: string; fa: string };
@@ -218,6 +219,17 @@ export default function TablesPage({ siteId }: { siteId: string }) {
   const { data: tables, isLoading, error } = useAdminCollections(siteId);
   const [editing, setEditing] = useState<(CollectionInput & { id?: string }) | null>(null);
   const [preset, setPreset] = useState('');
+  // The studio's saved tables ("s:<id>") next to the built-in presets.
+  const starters = useStarters<CollectionInput>('table');
+  const saveStarter = useSaveStarter('table');
+  const removeStarter = useMutation({
+    mutationFn: (id: string) => api.delete(`/platform/starters/${id}`),
+    onSuccess: () => {
+      setPreset('');
+      qc.invalidateQueries({ queryKey: ['starters', 'table'] });
+    },
+  });
+  const starter = preset.startsWith('s:') ? starters.data?.find((x) => x.id === preset.slice(2)) : undefined;
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/sites/${siteId}/collections/${id}`),
     onSuccess: () => {
@@ -242,16 +254,25 @@ export default function TablesPage({ siteId }: { siteId: string }) {
               label={t(L('Start from', 'شروع از'))}
               value={preset}
               onChange={setPreset}
-              options={[{ value: '', label: t(L('Empty table', 'جدول خالی')) }, ...COLLECTION_PRESETS.map((p) => ({ value: p.id, label: t(p.label) }))]}
+              options={[
+                { value: '', label: t(L('Empty table', 'جدول خالی')) },
+                ...COLLECTION_PRESETS.map((p) => ({ value: p.id, label: t(p.label) })),
+                ...(starters.data ?? []).map((x) => ({ value: `s:${x.id}`, label: `★ ${x.name}` })),
+              ]}
             />
             <Button
               onClick={() => {
                 const p = COLLECTION_PRESETS.find((x) => x.id === preset);
-                setEditing(p ? collectionInputSchema.parse(p.collection) : blankTable());
+                setEditing(starter ? collectionInputSchema.parse(starter.data) : p ? collectionInputSchema.parse(p.collection) : blankTable());
               }}
             >
               {t(L('New table', 'جدول جدید'))}
             </Button>
+            {starter && (
+              <Button variant="ghost" onClick={() => window.confirm(t(L('Delete this starter?', 'این الگو حذف شود؟'))) && removeStarter.mutate(starter.id)}>
+                {t(L('Delete starter', 'حذف الگو'))}
+              </Button>
+            )}
           </div>
         }
       />
@@ -283,6 +304,9 @@ export default function TablesPage({ siteId }: { siteId: string }) {
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => edit(x)}>
                       {t(L('Edit', 'ویرایش'))}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => saveStarter.mutate({ name: l(x.name) || x.slug, data: () => collectionInputSchema.parse(x) })}>
+                      {t(L('Save as starter', 'ذخیره به‌عنوان الگو'))}
                     </Button>
                     <Button
                       size="sm"

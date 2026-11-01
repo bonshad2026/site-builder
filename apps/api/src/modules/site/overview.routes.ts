@@ -19,8 +19,8 @@ export function overviewRoutes() {
 
     const leads = t.permissions.has('leads:read')
       ? {
-          ...(await one(`SELECT count(*) FILTER (WHERE status = 'new')::int AS "new", count(*)::int AS total FROM leads`)),
-          recent: (await db.query(`SELECT id, name, type, status, created_at AS "createdAt" FROM leads ORDER BY created_at DESC LIMIT 5`)).rows,
+          ...(await one(`SELECT count(*) FILTER (WHERE unread)::int AS "new", count(*)::int AS total FROM leads`)),
+          recent: (await db.query(`SELECT id, number::text AS number, name, type, status, unread, created_at AS "createdAt" FROM leads ORDER BY created_at DESC LIMIT 5`)).rows,
         }
       : null;
 

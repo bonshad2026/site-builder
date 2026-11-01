@@ -34,6 +34,8 @@ export interface ProductDto {
   /** Percentage off; the server applies it to orders. */
   discountPercent?: number;
   colors?: { name: Localized; hex: string }[];
+  /** Sizes / models with their own price and stock (null = the product's). */
+  variants?: { name: Localized; priceMinor: number | null; stock: number | null }[];
   maxPerOrder?: number | null;
   featured: boolean;
   materials: Localized;

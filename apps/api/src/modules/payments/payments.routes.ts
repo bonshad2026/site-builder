@@ -1,5 +1,5 @@
 import { paymentSettingsSchema } from '@site-builder/shared';
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { badRequest } from '../../common/errors.js';
 import { ApiRouter } from '../../common/http.js';
@@ -19,6 +19,8 @@ export function paymentSettingsRoutes(ctx: AppContext) {
 
   r.route({ method: 'put', path: '/', summary: 'Update payment gateway settings', body: paymentSettingsSchema }, async ({ req, body }) => {
     if (body.provider === 'zarinpal' && !/^[0-9a-f-]{36}$/i.test(body.merchantId)) throw badRequest('Enter a valid Zarinpal merchant id (36 characters)');
+    if (body.provider === 'zibal' && !/^[A-Za-z0-9_-]{3,64}$/.test(body.merchantId)) throw badRequest('Enter your Zibal merchant code ("zibal" for testing)');
+    if (body.provider === 'idpay' && !/^[0-9a-f-]{36}$/i.test(body.merchantId)) throw badRequest('Enter a valid IDPay API key (36 characters)');
     if (body.provider === 'sandbox' && !ctx.env.paymentSandboxEnabled) throw badRequest('The test gateway is disabled on this server');
     await req.tenant!.db.query(
       'UPDATE payment_settings SET provider = $1, merchant_id = $2, use_sandbox_host = $3, allow_cod = $5, updated_by = $4, updated_at = now() WHERE id = 1',
@@ -38,17 +40,23 @@ export function paymentReturnRoutes(ctx: AppContext) {
   const router = Router({ mergeParams: true });
   const tenant = loadPublicTenant(ctx);
 
-  router.get('/callback/:siteSlug/:paymentId', tenant, async (req, res) => {
+  // Each gateway names its answer differently: Zarinpal Authority/Status, Zibal trackId/success, IDPay id/status (10 = paid, awaiting verify).
+  const callback = async (req: Request, res: Response) => {
     const params = z.object({ paymentId: z.string().uuid() }).safeParse(req.params);
     if (!params.success) return res.status(404).end();
-    const query = req.query as Record<string, string | undefined>;
-    const target = await completePayment(ctx, req.tenant!, { paymentId: params.data.paymentId, authority: query.Authority, status: query.Status });
+    const q = { ...(req.query as Record<string, string | undefined>), ...((req.body ?? {}) as Record<string, string | undefined>) };
+    const authority = q.Authority ?? q.trackId ?? q.id;
+    const status = q.Status ?? (q.success !== undefined ? (q.success === '1' ? 'OK' : 'NOK') : q.status !== undefined ? (String(q.status) === '10' ? 'OK' : 'NOK') : undefined);
+    const target = await completePayment(ctx, req.tenant!, { paymentId: params.data.paymentId, authority: authority ? String(authority) : undefined, status });
     res.redirect(303, target);
-  });
+  };
+  router.get('/callback/:siteSlug/:paymentId', tenant, callback);
+  router.post('/callback/:siteSlug/:paymentId', tenant, callback);
 
   router.get('/sandbox/:siteSlug/:authority', tenant, async (req, res) => {
     const { rows } = await req.tenant!.db.query(
-      `SELECT p.id, p.amount_minor::text AS amount, p.currency, p.status, o.number::text AS number FROM payments p JOIN orders o ON o.id = p.order_id
+      `SELECT p.id, p.amount_minor::text AS amount, p.currency, p.status, coalesce('Order #' || o.number::text, 'Request R' || l.number::text) AS subject
+         FROM payments p LEFT JOIN orders o ON o.id = p.order_id LEFT JOIN leads l ON l.id = p.lead_id
         WHERE p.authority = $1 AND p.provider = 'sandbox'`,
       [String(req.params.authority)],
     );
@@ -61,7 +69,7 @@ export function paymentReturnRoutes(ctx: AppContext) {
 main{background:#fff;border:1px solid #ddd4c7;padding:32px;max-width:420px;width:calc(100% - 32px)}h1{font-size:22px;margin:0 0 8px}
 .warn{background:#fff4d6;border:1px solid #e8c55c;padding:12px;margin:16px 0;font-size:14px}button{padding:12px 20px;border:0;border-radius:999px;font-size:15px;cursor:pointer;margin-inline-end:8px}
 .ok{background:#1d1b18;color:#fff}.no{background:#eee}</style></head><body><main>
-<h1>Sandbox payment gateway</h1><p>Order #${escapeHtml(p.number)} — ${escapeHtml(Number(p.amount).toLocaleString('en-US'))} ${escapeHtml(p.currency)}</p>
+<h1>Sandbox payment gateway</h1><p>${escapeHtml(p.subject)} — ${escapeHtml(Number(p.amount).toLocaleString('en-US'))} ${escapeHtml(p.currency)}</p>
 <p class="warn"><strong>Test only.</strong> No real money moves. Approved test payments are recorded as “test paid”, never as paid.</p>
 <form method="post" action="${action}"><button class="ok" name="decision" value="approved">Approve test payment</button><button class="no" name="decision" value="declined">Decline</button></form>
 </main></body></html>`);

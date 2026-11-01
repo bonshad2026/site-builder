@@ -9,12 +9,16 @@ const Dashboard = OPERATOR_UI ? lazy(() => import('./DashboardPage')) : null;
 const PagesList = OPERATOR_UI ? lazy(() => import('./PagesListPage')) : null;
 const Catalog = lazy(() => import('./CatalogPages'));
 const Inbox = lazy(() => import('./InboxPages'));
+const Customers = lazy(() => import('../interactions/CustomersPage'));
 const Files = lazy(() => import('./FilesPage'));
 const Settings = lazy(() => import('./SettingsPages'));
 const Content = lazy(() => import('./ContentPages'));
 // Defining tables is building the site; their items are the owner's content.
 const Tables = OPERATOR_UI ? lazy(() => import('../collections/TablesPage')) : null;
 const Items = lazy(() => import('../collections/ItemsPage'));
+const ShopExtras = lazy(() => import('./ShopExtrasPages'));
+// Server-wide e-mail / SMS: here too, since client builds have no platform pages.
+const Messaging = lazy(() => import('./MessagingPage'));
 
 /** A client's admin opens on its first data section. */
 function ClientHome({ siteId }: { siteId: string }) {
@@ -39,6 +43,11 @@ export default function SitePages({ account = false }: { account?: boolean }) {
       <Route path="items/:collectionId" element={<Items siteId={siteId} />} />
       <Route path="leads" element={<Inbox siteId={siteId} kind="leads" />} />
       <Route path="orders" element={<Inbox siteId={siteId} kind="orders" />} />
+      <Route path="customers" element={<Customers siteId={siteId} />} />
+      <Route path="coupons" element={<ShopExtras siteId={siteId} view="coupons" />} />
+      <Route path="reviews" element={<ShopExtras siteId={siteId} view="reviews" />} />
+      <Route path="subscribers" element={<ShopExtras siteId={siteId} view="subscribers" />} />
+      {operator && <Route path="messaging" element={<Messaging />} />}
       <Route path="files" element={<Files siteId={siteId} />} />
       <Route path="members" element={<Settings siteId={siteId} view="members" />} />
       <Route path="settings" element={<Settings siteId={siteId} view="settings" />} />

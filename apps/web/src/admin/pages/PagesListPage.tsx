@@ -1,6 +1,7 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { SYSTEM_PAGES, systemPageSections } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -9,6 +10,7 @@ import { api } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { Localized } from '../../types/site';
 import { useT } from '../i18n';
+import { StarterPicker, useSaveStarter, useStarters } from '../starters';
 import { Badge, ErrorNote, LocalizedField, Modal, PageTitle, Spinner, TextField, useErrorLine, useToast } from '../ui';
 
 export interface PageSummary {
@@ -36,7 +38,7 @@ const toSlug = (s: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-function SortableRow({ page, siteId, onDelete, onHome }: { page: PageSummary; siteId: string; onDelete: () => void; onHome: () => void }) {
+function SortableRow({ page, siteId, onDelete, onHome, onSave }: { page: PageSummary; siteId: string; onDelete: () => void; onHome: () => void; onSave: () => void }) {
   const t = useT();
   const { l } = usePreferences();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
@@ -55,12 +57,16 @@ function SortableRow({ page, siteId, onDelete, onHome }: { page: PageSummary; si
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {page.isHome && <Badge tone="accent">{t.home}</Badge>}
+        {page.slug === NOT_FOUND_SLUG && <Badge tone="accent">404</Badge>}
         {page.isPublished ? <Badge tone="good">{t.published}</Badge> : <Badge>{t.notPublished}</Badge>}
         {page.isPublished && page.hasUnpublishedChanges && <Badge tone="warn">{t.hasChanges}</Badge>}
         <ButtonLink to={`/admin/sites/${siteId}/pages/${page.id}/builder`} size="sm">
           {t.openBuilder}
         </ButtonLink>
-        {!page.isHome && (
+        <Button size="sm" variant="ghost" onClick={onSave}>
+          {l({ en: 'Save as starter', fa: 'ذخیره به‌عنوان الگو' })}
+        </Button>
+        {!page.isHome && page.slug !== NOT_FOUND_SLUG && (
           <Button size="sm" variant="ghost" onClick={onHome}>
             {t.setHome}
           </Button>
@@ -75,8 +81,12 @@ function SortableRow({ page, siteId, onDelete, onHome }: { page: PageSummary; si
   );
 }
 
+const NOT_FOUND_SLUG = SYSTEM_PAGES.find((p) => p.key === 'notFound')!.slug;
+const asDocument = (sections: { type: string; props: Record<string, unknown> }[]) => ({ schemaVersion: 1, sections: sections.map((x, i) => ({ id: `s${i + 1}`, ...x })) });
+
 export default function PagesListPage({ siteId }: { siteId: string }) {
   const t = useT();
+  const { l } = usePreferences();
   const toast = useToast();
   const errorText = useErrorLine();
   const qc = useQueryClient();
@@ -86,6 +96,9 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState<Localized>({ en: '', fa: '' });
   const [slug, setSlug] = useState('');
+  const [starter, setStarter] = useState('');
+  const starters = useStarters<{ document: unknown }>('page');
+  const saveStarter = useSaveStarter('page');
 
   useEffect(() => setOrder(data ?? []), [data]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
@@ -95,12 +108,29 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
   const remove = useMutation({ mutationFn: (id: string) => api.delete(`/sites/${siteId}/pages/${id}`), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
   const setHome = useMutation({ mutationFn: (id: string) => api.patch(`/sites/${siteId}/pages/${id}`, { isHome: true }), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
   const create = useMutation({
-    mutationFn: () => api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug, title, document: { schemaVersion: 1, sections: [] } }),
+    mutationFn: () =>
+      api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug, title, document: starters.data?.find((x) => x.id === starter)?.data.document ?? { schemaVersion: 1, sections: [] } }),
     onSuccess: (page) => {
       refresh();
       navigate(`/admin/sites/${siteId}/pages/${page.id}/builder`);
     },
   });
+
+  // The "page not found" page: the built-in text until the site has its own page at /not-found.
+  const createNotFound = useMutation({
+    mutationFn: async () => {
+      const def = SYSTEM_PAGES.find((p) => p.key === 'notFound')!;
+      const page = await api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug: def.slug, title: def.label, document: asDocument(systemPageSections('notFound')) });
+      await api.post(`/sites/${siteId}/pages/${page.id}/publish`, {});
+      return page;
+    },
+    onSuccess: (page) => {
+      refresh();
+      navigate(`/admin/sites/${siteId}/pages/${page.id}/builder`);
+    },
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
+  const hasNotFound = !!data?.some((p) => p.slug === NOT_FOUND_SLUG);
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -127,11 +157,27 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
                     siteId={siteId}
                     onHome={() => setHome.mutate(p.id)}
                     onDelete={() => window.confirm(t.confirmDelete) && remove.mutate(p.id)}
+                    onSave={() =>
+                      saveStarter.mutate({
+                        name: l(p.title) || p.slug,
+                        data: async () => ({ document: (await api.get<{ document: unknown }>(`/sites/${siteId}/pages/${p.id}`)).document }),
+                      })
+                    }
                   />
                 ))}
               </ul>
             </SortableContext>
           </DndContext>
+          {!hasNotFound && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border border-dashed border-line px-4 py-3">
+              <span className="text-sm text-ink-soft">
+                {l({ en: 'Page not found (404): the built-in page is shown.', fa: 'صفحه‌ی پیدا نشد (۴۰۴): فعلاً صفحه‌ی پیش‌فرض نشان داده می‌شود.' })}
+              </span>
+              <Button size="sm" variant="outline" disabled={createNotFound.isPending} onClick={() => createNotFound.mutate()}>
+                {l({ en: 'Make the 404 page editable', fa: 'ساخت صفحه‌ی ۴۰۴ قابل ویرایش' })}
+              </Button>
+            </div>
+          )}
         </>
       )}
       <Modal open={creating} onClose={() => setCreating(false)} title={t.newPage}>
@@ -151,6 +197,7 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
             }}
           />
           <TextField label={t.slug} dir="ltr" value={slug} onChange={(v) => setSlug(toSlug(v))} hint="about-us" required />
+          <StarterPicker kind="page" value={starter} onChange={setStarter} />
           <ErrorNote error={create.error} />
           <div className="flex justify-end">
             <Button type="submit" disabled={create.isPending}>

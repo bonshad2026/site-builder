@@ -47,6 +47,17 @@ export function useSiteErrorLanguage(): ErrorLanguage {
   return chosen === 'fa' || chosen === 'en' ? chosen : locale;
 }
 
+/** Slugs of the site's published pages (to know which built-in pages it replaced with its own). */
+export function usePublishedPageList(enabled = true) {
+  const site = useSiteId();
+  return useQuery({
+    enabled,
+    queryKey: ['public', site, 'pages'],
+    queryFn: () => (apiAvailable() ? api.get<{ slug: string }[]>(`/public/sites/${site}/pages`) : Promise.resolve(fallbackPages.map((p) => ({ slug: p.slug })))),
+    staleTime: 60_000,
+  });
+}
+
 export function usePublishedPage(slug: string, enabled = true) {
   const site = useSiteId();
   return useQuery({
@@ -81,6 +92,7 @@ export function useService(slug: string) {
       if (!s) throw notFound();
       return s;
     },
+    enabled: !!slug,
     retry: false,
   });
 }
@@ -105,6 +117,7 @@ export function useProduct(slug: string) {
       if (!p) throw notFound();
       return p;
     },
+    enabled: !!slug,
     retry: false,
   });
 }

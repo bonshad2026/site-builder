@@ -24,3 +24,22 @@ In this folder (`<slug>` is `CELL_SLUG` in `.env`):
 - The database and files are restored on the first install only.
 - `.env` holds this site's secrets. Keep it private and back it up; without
   `TENANT_SECRETS_KEY` the site's database cannot be opened.
+
+
+## Backups
+
+The installer schedules a nightly backup (03:30) of the database and the uploaded files into
+`backups/<date-time>/` (Linux: cron; Windows: Task Scheduler) and keeps the newest 14
+(`BACKUP_KEEP` in `.env`).
+
+- Back up now: `./backup.sh` (Windows: `powershell -ExecutionPolicy Bypass -File backup.ps1`)
+- Restore: `./restore.sh backups/<date-time>` (stops the site, replaces its data, starts it again)
+
+Copy `backups/` to another machine from time to time: a backup on the same disk does not survive
+a lost server.
+
+## E-mail and SMS
+
+Set in the installer, or later in the admin panel (Platform → Messaging) when the installer was
+told to (`EMAIL_PROVIDER=panel`, `SMS_PROVIDER=panel`). Settings saved in the panel win over the
+installer's.

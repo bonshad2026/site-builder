@@ -16,12 +16,14 @@ export interface CartLine {
   quantity: number;
   /** Chosen colour (name as shown), or '' when the product has no colours. */
   option?: string;
+  /** Chosen variant (size, model…), or '' when the product has none. */
+  variant?: string;
   /** Most units allowed for this product in one order. */
   max?: number;
 }
 
-/** One cart line per product and colour. */
-export const lineKey = (l: { productId: string; option?: string }) => `${l.productId}|${l.option ?? ''}`;
+/** One cart line per product, colour and variant. */
+export const lineKey = (l: { productId: string; option?: string; variant?: string }) => `${l.productId}|${l.option ?? ''}|${l.variant ?? ''}`;
 
 /** Hard ceiling; each line also carries its product and shop limit (`max`). */
 export const MAX_QUANTITY = 999;
@@ -37,9 +39,9 @@ export const cartOps = {
     if (existing) return lines.map((l) => (lineKey(l) === key ? { ...l, quantity: Math.min(cap, l.quantity + quantity) } : l));
     return [...lines, { ...line, quantity: Math.min(cap, quantity) }];
   },
-  /** `key` is a line key (see lineKey); a plain product id also works for lines without a colour. */
+  /** `key` is a line key (see lineKey); a plain product id (or "id|colour") also works for lines without a variant. */
   setQuantity(lines: CartLine[], key: string, quantity: number): CartLine[] {
-    const match = (l: CartLine) => lineKey(l) === key || lineKey(l) === `${key}|`;
+    const match = (l: CartLine) => [key, `${key}|`, `${key}||`].includes(lineKey(l));
     if (quantity <= 0) return lines.filter((l) => !match(l));
     return lines.map((l) => (match(l) ? { ...l, quantity: Math.min(MAX_QUANTITY, l.max ?? DEFAULT_LINE_MAX, Math.floor(quantity)) } : l));
   },

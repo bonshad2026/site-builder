@@ -119,7 +119,7 @@ function deploySecrets(site, operatorEmail) {
 let running = null;
 const stampNow = () => new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
 
-async function job(site, kind, operatorEmail) {
+async function job(site, kind, operatorEmail, opts = {}) {
   const { slug } = site;
   if (running) return;
   running = { slug, kind, name: site.name };
@@ -206,15 +206,19 @@ async function job(site, kind, operatorEmail) {
             `{ echo "SET session_replication_role = replica;"; echo "TRUNCATE $T CASCADE;"; ` +
             `docker exec ${STUDIO_DB} pg_dump -U sb_admin -d ${site.dbName} --data-only --exclude-table=schema_migrations; } ` +
             `| docker exec -i ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q >/dev/null && ` +
-            `docker exec -i ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q < ${REPO}/deploy/export/fix-sequences.sql`,
+            `docker exec -i ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q < ${REPO}/deploy/export/fix-sequences.sql && ` +
+            // Studio sign-ins and one-time codes never travel to the client's server.
+            `docker exec ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q -c "TRUNCATE public.customer_sessions, public.customer_codes"`,
           log,
         ),
       );
+      // Sample data made at setup (customers, orders, requests…) goes only when asked for.
+      if (!opts.keepDemo) await step('remove sample data', () => sh(`docker exec -i ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q < ${REPO}/deploy/export/drop-demo.sql`, log));
       await step('database export', () => shTo(`docker exec ${db} pg_dumpall -U sb_admin`, join(dir, 'data/db.sql'), log));
       await sh(cleanup.pop(), log);
       await step('server files', () =>
         sh(
-          `cd ${REPO}/deploy/export && cp docker-compose.yml Caddyfile README.md install.sh install.ps1 install.cmd ${dir}/ && cp restore-db.sh ${dir}/data/ && chmod 755 ${dir}/install.sh ${dir}/data/restore-db.sh`,
+          `cd ${REPO}/deploy/export && cp docker-compose.yml Caddyfile README.md install.sh install.ps1 install.cmd backup.sh backup.ps1 restore.sh ${dir}/ && cp restore-db.sh ${dir}/data/ && chmod 755 ${dir}/install.sh ${dir}/backup.sh ${dir}/restore.sh ${dir}/data/restore-db.sh`,
           log,
         ),
       );
@@ -232,6 +236,7 @@ async function job(site, kind, operatorEmail) {
           'SMS_PROVIDER=kavenegar',
           'KAVENEGAR_API_KEY=',
           'KAVENEGAR_OTP_TEMPLATE=',
+          'KAVENEGAR_SENDER=',
           'HTTP_PORT=80',
           'HTTPS_PORT=443',
           '',
@@ -256,15 +261,15 @@ async function job(site, kind, operatorEmail) {
             `echo "CREATE TEMP TABLE _known_collections AS SELECT id FROM public.collections;" && ` +
             `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('INSERT INTO public.collections (id, slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position) VALUES (%L, %L, %L, %L, %L, %L, %L, %L, %L, %s) ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, name = EXCLUDED.name, item_name = EXCLUDED.item_name, fields = EXCLUDED.fields, detail_page = EXCLUDED.detail_page, image_field = EXCLUDED.image_field, commerce = EXCLUDED.commerce, request_type = EXCLUDED.request_type, position = EXCLUDED.position, updated_at = now();', id, slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position) FROM collections" && ` +
             `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('DELETE FROM public.collections WHERE id <> ALL (%L::uuid[]);', coalesce(array_agg(id), '{}')) FROM collections" && ` +
-            `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('INSERT INTO public.collection_items (id, collection_id, slug, title, data, status, position) SELECT %L, %L, %L, %L, %L, %L, %s WHERE %L::uuid NOT IN (SELECT id FROM _known_collections) ON CONFLICT DO NOTHING;', id, collection_id, slug, title, data, status, position, collection_id) FROM collection_items" && ` +
-            `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('UPDATE public.site_settings SET settings = %1\\$L::jsonb || jsonb_strip_nulls(jsonb_build_object(''name'', settings->''name'', ''tagline'', settings->''tagline'', ''logoAssetId'', settings->''logoAssetId'', ''logoUrl'', settings->''logoUrl'', ''contact'', settings->''contact'', ''productCategories'', settings->''productCategories'')), updated_at = now() WHERE id = 1;', settings::text) FROM site_settings WHERE id = 1" && ` +
+            `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('INSERT INTO public.collection_items (id, collection_id, slug, title, data, status, position) SELECT %L, %L, %L, %L, %L, %L, %s WHERE %L::uuid NOT IN (SELECT id FROM _known_collections) ON CONFLICT DO NOTHING;', id, collection_id, slug, title, data, status, position, collection_id) FROM collection_items WHERE NOT demo" && ` +
+            `docker exec ${STUDIO_DB} psql -U sb_admin -d $D -tAc "SELECT format('UPDATE public.site_settings SET settings = %1\\$L::jsonb || jsonb_strip_nulls(jsonb_build_object(''name'', settings->''name'', ''tagline'', settings->''tagline'', ''logoAssetId'', settings->''logoAssetId'', ''logoUrl'', settings->''logoUrl'', ''contact'', settings->''contact'', ''productCategories'', settings->''productCategories'', ''notifications'', settings->''notifications'')), updated_at = now() WHERE id = 1;', settings::text) FROM site_settings WHERE id = 1" && ` +
             `cat ${REPO}/deploy/export/fix-sequences.sql && echo "COMMIT;"`,
           join(dir, 'data/design.sql'),
           log,
         ),
       );
       await step('update files', () =>
-        sh(`cd ${REPO}/deploy/export && cp update.sh update.ps1 update.cmd ${dir}/ && cp UPDATE.md ${dir}/README.md && chmod 755 ${dir}/update.sh`, log),
+        sh(`cd ${REPO}/deploy/export && cp update.sh update.ps1 update.cmd backup.sh backup.ps1 restore.sh ${dir}/ && cp UPDATE.md ${dir}/README.md && chmod 755 ${dir}/update.sh ${dir}/backup.sh ${dir}/restore.sh`, log),
       );
       writeFileSync(join(dir, 'update.env'), [`CELL_SLUG=${slug}`, `API_IMAGE=${apiImage}`, `OLD_SITE_URL=${STUDIO_URL}`, ''].join('\n'));
     }
@@ -333,7 +338,8 @@ function dashboard(list) {
     const preview = `http://${s.slug}.preview.localhost`;
     return `<tr><td><strong>${esc(s.name)}</strong><br><code>${esc(s.slug)}</code><br>${state}</td>
 <td><a class="btn primary" href="/admin/sites/${esc(s.slug)}/pages">ساخت و ویرایش</a> <a class="btn" href="${preview}" target="_blank">پیش‌نمایش</a><br><a class="mono muted" href="${preview}" target="_blank">${preview}</a></td>
-<td><form class="inline" method="post" action="/deploy/sites/${esc(s.slug)}/install"><button class="btn"${running ? ' disabled' : ''}>بسته‌ی نصب کامل</button></form>
+<td><form class="inline" method="post" action="/deploy/sites/${esc(s.slug)}/install"><button class="btn"${running ? ' disabled' : ''}>بسته‌ی نصب کامل</button>
+<label class="muted"><input type="checkbox" name="demo" value="1"> همراه داده‌ی نمونه</label></form>
 <form class="inline" method="post" action="/deploy/sites/${esc(s.slug)}/update"><button class="btn"${running ? ' disabled' : ''}>بسته‌ی به‌روزرسانی طراحی</button></form>
 <a class="btn" href="/deploy/sites/${esc(s.slug)}/log">لاگ</a>
 ${m.lastInstall ? `<div class="muted">نصب: <code>${esc(EXPORT_HOST_DIR)}/${esc(m.lastInstall)}</code> ${when(m.lastInstallAt)}</div>` : ''}
@@ -350,6 +356,7 @@ ${running ? `<div class="card warn">در حال ساخت ${running.kind === 'ins
         : '<p class="muted">هنوز سایتی ساخته نشده است. از «سایت مشتریان» در پنل یک سایت بسازید.</p>'
     }</div>
 <div class="card muted"><p><strong>بسته‌ی نصب کامل:</strong> برای اولین نصب روی سرور مشتری. شامل سایت، داده‌ها و installer (لینوکس و ویندوز).</p>
+<p><strong>داده‌ی نمونه:</strong> مشتری، سفارش، پرداخت، تقاضا و آیتم‌هایی که موقع راه‌اندازی سایت ساخته شده‌اند، به‌طور پیش‌فرض در بسته‌ی نصب نمی‌روند؛ برای نگه داشتن آن‌ها «همراه داده‌ی نمونه» را بزنید. در به‌روزرسانی طراحی هیچ‌وقت نمی‌روند.</p>
 <p><strong>بسته‌ی به‌روزرسانی طراحی:</strong> برای سایتی که قبلاً نصب شده. صفحه‌ها، طراحی و نسخه‌ی برنامه را عوض می‌کند؛ محصولات، سفارش‌ها، پیام‌ها، حساب‌ها، نام، لوگو، اطلاعات تماس و دسته‌بندی‌هایی که مشتری تنظیم کرده دست نمی‌خورند.</p>
 <p class="warn"><strong>توجه:</strong> متن و عکس‌هایی که مشتری روی سرور خودش در صفحه‌ها عوض کرده، با به‌روزرسانی طراحی با نسخه‌ی استودیو جایگزین می‌شوند.</p>
 <p>پیش‌نمایش، نسخه‌ی منتشرشده (Publish) هر سایت در استودیو را نشان می‌دهد؛ همان چیزی که در بسته قرار می‌گیرد.</p></div>`,
@@ -360,7 +367,7 @@ ${running ? `<div class="card warn">در حال ساخت ${running.kind === 'ins
 const when = (iso) => (iso ? `<span class="muted">(${esc(new Date(iso).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }))})</span>` : '');
 
 /** Asks before building a package that would supersede an earlier one. */
-function confirmPage(site, kind, previous, at) {
+function confirmPage(site, kind, previous, at, demo) {
   const what = kind === 'install' ? 'بسته‌ی نصب کامل' : 'بسته‌ی به‌روزرسانی طراحی';
   return page(
     'تأیید ساخت دوباره',
@@ -369,7 +376,7 @@ function confirmPage(site, kind, previous, at) {
 <p><code>${esc(EXPORT_HOST_DIR)}/${esc(previous)}</code> ${when(at)}</p>
 <p>اگر از آن زمان در استودیو تغییری نداده‌اید، همان بسته کافی است. بسته‌ی قبلی پاک نمی‌شود.</p>
 ${kind === 'install' ? '<p class="warn">اگر این سایت قبلاً روی سرور مشتری نصب شده، برای اعمال تغییرات از «بسته‌ی به‌روزرسانی طراحی» استفاده کنید؛ نصب دوباره داده‌های مشتری را جایگزین می‌کند.</p>' : ''}
-<form method="post" action="/deploy/sites/${esc(site.slug)}/${kind}"><input type="hidden" name="confirm" value="1">
+<form method="post" action="/deploy/sites/${esc(site.slug)}/${kind}"><input type="hidden" name="confirm" value="1">${demo ? '<input type="hidden" name="demo" value="1">' : ''}
 <button class="btn primary">بله، بسته‌ی جدید بساز</button> <a class="btn" href="/deploy/">انصراف</a></form></div>`,
   );
 }
@@ -418,8 +425,8 @@ createServer(async (req, res) => {
       }
       const mt = meta(site.slug);
       const previous = m[2] === 'install' ? mt.lastInstall : mt.lastUpdate;
-      if (previous && f.confirm !== '1') return send(res, 200, confirmPage(site, m[2], previous, m[2] === 'install' ? mt.lastInstallAt : mt.lastUpdateAt));
-      void job(site, m[2], user.email);
+      if (previous && f.confirm !== '1') return send(res, 200, confirmPage(site, m[2], previous, m[2] === 'install' ? mt.lastInstallAt : mt.lastUpdateAt, f.demo === '1'));
+      void job(site, m[2], user.email, { keepDemo: f.demo === '1' });
       return redirect(res, '/deploy/');
     }
     send(res, 404, page('یافت نشد', '<p>صفحه یافت نشد.</p>'));
