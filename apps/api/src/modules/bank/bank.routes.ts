@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { BUILT_IN_KINDS, bankEntryInputSchema, bankKeySchema, bankKindInputSchema, bankTypeInputSchema } from '@site-builder/shared';
+import { BANK_KINDS, BUILT_IN_KINDS, bankEntryInputSchema, bankKeySchema, bankTypeInputSchema, kitItemSchema, readStarterPack } from '@site-builder/shared';
 import { fileTypeFromBuffer } from 'file-type';
 import multer from 'multer';
 import { z } from 'zod';
@@ -9,12 +9,27 @@ import { AppError, badRequest, conflict, notFound } from '../../common/errors.js
 import { ApiRouter, idParam } from '../../common/http.js';
 import type { AppContext } from '../../context.js';
 import { auditPlatform } from '../audit/audit.js';
-import { BANK_STORAGE_ID, builtInEntries, builtInPhotos, builtInRef, hiddenBuiltIns, listKinds, listTypes, type PhotoRef } from './bank.service.js';
+import {
+  addKitTable,
+  bankStorageKey,
+  builtInEntries,
+  builtInPhotos,
+  builtInRef,
+  deleteKitTables,
+  getKitTable,
+  hiddenBuiltIns,
+  kitMainTable,
+  listTypes,
+  loadKitTables,
+  type KitTable,
+  type PhotoRef,
+} from './bank.service.js';
 
 const IMAGES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' };
 const LOCAL_DIR = process.env.DEMO_IMAGES_DIR || path.resolve(process.cwd(), '../../var/demo-images');
 const keyParam = z.object({ key: bankKeySchema });
 const listQuery = z.object({ type: bankKeySchema, kind: z.string().max(40).default('') });
+const typeQuery = z.object({ type: bankKeySchema });
 
 /** The studio's content bank: site types, content kinds, entries and photos (operators only). */
 export function bankRoutes(ctx: AppContext) {
@@ -51,34 +66,122 @@ export function bankRoutes(ctx: AppContext) {
     if (!rowCount) throw badRequest('Only types added in the studio can be deleted');
     await ctx.control.query('DELETE FROM bank_entries WHERE type_key = $1', [params.key]);
     await removePhotos('type_key = $1', [params.key]);
+    await deleteKitTables(ctx, 'type_key = $1', [params.key]);
     await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'bank.type_deleted', target: params.key });
   });
 
-  /* ----- kinds ----- */
+  /* ----- kinds (the plain lists) ----- */
 
-  r.route({ method: 'get', path: '/kinds', summary: 'Kinds of content (built-in and added)' }, async () => ({ data: await listKinds(ctx) }));
+  r.route({ method: 'get', path: '/kinds', summary: 'The plain lists a kit has (products, services, reviews, FAQ)' }, async () => ({ data: BUILT_IN_KINDS }));
 
-  r.route({ method: 'post', path: '/kinds', summary: 'Add a kind of content (its key matches a table key)', status: 201, body: bankKindInputSchema }, async ({ req, body }) => {
-    if ((await listKinds(ctx)).some((k) => k.key === body.key)) throw conflict('A kind with this key already exists');
-    if (!body.fields.some((f) => f.key === 'title')) body.fields.unshift({ key: 'title', type: 'text', label: { en: 'Title', fa: 'عنوان' } });
-    await ctx.control.query('INSERT INTO bank_kinds (key, label, fields) VALUES ($1, $2, $3)', [body.key, body.label, JSON.stringify(body.fields)]);
-    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'bank.kind_created', target: body.key });
-    return { data: { ...body, builtIn: false } };
+  /* ----- kit tables ----- */
+
+  /** A kit table for lists: its main table, how many items and photos it has. */
+  const tableSummary = (k: KitTable) => {
+    const main = kitMainTable(k.pack);
+    return {
+      id: k.id,
+      name: k.name,
+      slug: main?.slug ?? '',
+      label: main?.name ?? { en: k.name, fa: k.name },
+      others: k.pack.tables.filter((t) => t.slug !== main?.slug).map((t) => ({ slug: t.slug, name: t.name })),
+      items: Object.values(k.pack.samples.items).reduce((n, l) => n + l.length, 0),
+      photos: k.pack.photos.length,
+    };
+  };
+
+  r.route({ method: 'get', path: '/tables', summary: 'Tables of a kit (copies of table starters)', query: typeQuery }, async ({ query }) => ({
+    data: (await loadKitTables(ctx, [query.type])).map(tableSummary),
+  }));
+
+  r.route(
+    { method: 'post', path: '/tables', summary: 'Add a copy of a table starter (with its sample items and photos) to a kit', status: 201, body: z.object({ type: bankKeySchema, starter: z.string().uuid() }) },
+    async ({ req, body }) => {
+      const { rows } = await ctx.control.query<{ name: string; data: unknown }>(`SELECT name, data FROM starters WHERE id = $1 AND kind = 'table'`, [body.starter]);
+      if (!rows[0]) throw notFound('Table starter');
+      const pack = readStarterPack('table', rows[0].data);
+      const main = kitMainTable(pack);
+      if (!main) throw badRequest('This starter has no table');
+      const have = await loadKitTables(ctx, [body.type]);
+      if (have.some((k) => kitMainTable(k.pack)?.slug === main.slug)) throw conflict(`This kit already has a table with the address ${main.slug}`);
+      const added = await addKitTable(ctx, body.type, rows[0].name, pack);
+      await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'bank.table_added', target: `${body.type}/${main.slug}` });
+      return { data: tableSummary(added) };
+    },
+  );
+
+  r.route({ method: 'get', path: '/tables/:id', summary: 'A kit table: its tables, sample items and photos', params: idParam }, async ({ params }) => {
+    const k = await getKitTable(ctx, params.id);
+    if (!k) throw notFound('Kit table');
+    return {
+      data: {
+        ...tableSummary(k),
+        typeKey: k.typeKey,
+        tables: k.pack.tables,
+        items: k.pack.samples.items,
+        photos: k.pack.photos.map((p) => ({ id: p.id, url: ctx.storage.publicUrl(p.key) })),
+      },
+    };
   });
 
-  r.route({ method: 'put', path: '/kinds/:key', summary: 'Change an added kind', params: keyParam, body: bankKindInputSchema.omit({ key: true }) }, async ({ params, body }) => {
-    if (BUILT_IN_KINDS.some((k) => k.key === params.key)) throw badRequest('Built-in kinds cannot be changed');
-    const { rowCount } = await ctx.control.query('UPDATE bank_kinds SET label = $2, fields = $3 WHERE key = $1', [params.key, body.label, JSON.stringify(body.fields)]);
-    if (!rowCount) throw notFound('Kind');
-    return { data: { key: params.key, ...body, builtIn: false } };
-  });
+  r.route(
+    {
+      method: 'put',
+      path: '/tables/:id/items',
+      summary: 'Replace the sample items of the tables of a kit table (by table address)',
+      params: idParam,
+      body: z.object({ items: z.record(z.string().max(40), z.array(kitItemSchema).max(100)) }),
+    },
+    async ({ params, body }) => {
+      const k = await getKitTable(ctx, params.id);
+      if (!k) throw notFound('Kit table');
+      const items = { ...k.pack.samples.items };
+      for (const [slug, list] of Object.entries(body.items)) {
+        if (!k.pack.tables.some((t) => t.slug === slug)) throw badRequest(`The kit table has no table ${slug}`);
+        items[slug] = list.map((i, n) => ({ ...i, slug: i.slug || `${slug}-${n + 1}` }));
+      }
+      const pack = { ...k.pack, samples: { ...k.pack.samples, items } };
+      await ctx.control.query('UPDATE kit_tables SET pack = $2, updated_at = now() WHERE id = $1', [k.id, JSON.stringify(pack)]);
+      return { data: { items } };
+    },
+  );
 
-  r.route({ method: 'delete', path: '/kinds/:key', summary: 'Delete an added kind with its entries and photos', params: keyParam }, async ({ req, params }) => {
-    const { rowCount } = await ctx.control.query('DELETE FROM bank_kinds WHERE key = $1', [params.key]);
-    if (!rowCount) throw badRequest('Only kinds added in the studio can be deleted');
-    await ctx.control.query('DELETE FROM bank_entries WHERE kind = $1', [params.key]);
-    await removePhotos('kind = $1', [params.key]);
-    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'bank.kind_deleted', target: params.key });
+  r.route(
+    {
+      method: 'post',
+      path: '/tables/:id/photos',
+      summary: 'Upload photos for the items of a kit table (multipart/form-data: files)',
+      status: 201,
+      params: idParam,
+      rawBody: true,
+      middleware: [upload.array('files', 30)],
+    },
+    async ({ req, params }) => {
+      const k = await getKitTable(ctx, params.id);
+      if (!k) throw notFound('Kit table');
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      if (!files.length) throw badRequest('Attach photos in the "files" field');
+      if (k.pack.photos.length + files.length > 300) throw badRequest('A kit table holds at most 300 photos');
+      const added: { id: string; url: string }[] = [];
+      const photos = [...k.pack.photos];
+      for (const file of files) {
+        const detected = await fileTypeFromBuffer(file.buffer);
+        const ext = detected && IMAGES[detected.mime];
+        if (!ext) throw new AppError(415, 'unsupported_file', 'Only JPEG, PNG, WebP and AVIF photos are allowed');
+        const key = bankStorageKey(ext);
+        await ctx.storage.put(key, file.buffer, detected.mime);
+        const id = randomUUID();
+        photos.push({ id, key, contentType: detected.mime, url: ctx.storage.publicUrl(key) });
+        added.push({ id, url: ctx.storage.publicUrl(key) });
+      }
+      await ctx.control.query('UPDATE kit_tables SET pack = $2, updated_at = now() WHERE id = $1', [k.id, JSON.stringify({ ...k.pack, photos })]);
+      return { data: added };
+    },
+  );
+
+  r.route({ method: 'delete', path: '/tables/:id', summary: 'Remove a table (and its photos) from a kit', params: idParam }, async ({ req, params }) => {
+    await deleteKitTables(ctx, 'id = $1', [params.id]);
+    await auditPlatform(ctx.control, { actorUserId: req.auth!.user.id, action: 'bank.table_removed', target: params.id });
   });
 
   /* ----- entries ----- */
@@ -142,7 +245,7 @@ export function bankRoutes(ctx: AppContext) {
       );
       const shown = await hiddenBuiltIns(ctx, [query.type]);
       const out: Record<string, { entries: number; photos: number }> = { '': { entries: 0, photos: builtInPhotos(query.type).filter((p) => shown.photo(query.type, p)).length } };
-      for (const k of await listKinds(ctx)) out[k.key] = { entries: builtInEntries(query.type, k.key).filter(shown.entry).length, photos: 0 };
+      for (const kind of BANK_KINDS) out[kind] = { entries: builtInEntries(query.type, kind).filter(shown.entry).length, photos: 0 };
       for (const x of rows) {
         const c = (out[x.kind] ??= { entries: 0, photos: 0 });
         c.entries += x.entries;
@@ -187,8 +290,7 @@ export function bankRoutes(ctx: AppContext) {
         const ext = detected && IMAGES[detected.mime];
         if (!ext) throw new AppError(415, 'unsupported_file', 'Only JPEG, PNG, WebP and AVIF photos are allowed');
         const id = randomUUID();
-        const now = new Date();
-        const key = `public/tenants/${BANK_STORAGE_ID}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${id}.${ext}`;
+        const key = bankStorageKey(ext);
         await ctx.storage.put(key, file.buffer, detected.mime);
         await ctx.control.query('INSERT INTO bank_photos (id, type_key, kind, storage_key, content_type, size_bytes, original_name) VALUES ($1, $2, $3, $4, $5, $6, $7)', [
           id,

@@ -6,8 +6,8 @@ import {
   type Answers,
   type CollectionField,
   type FormField,
-  kindForTable,
   siteSettingsSchema,
+  starterApplySchema,
   withSettingDefaults,
   type DemoRun,
   type SiteSettings,
@@ -17,7 +17,8 @@ import {
 import type pg from 'pg';
 import { hashPassword } from '../../auth/auth.service.js';
 import type { AppContext } from '../../../context.js';
-import { listKinds, loadBank, photoStore, type Bank, type BankEntry, type EntryValue, type PhotoStore } from '../../bank/bank.service.js';
+import { getKitTable, loadBank, photoStore, type Bank, type BankEntry, type EntryValue, type PhotoStore } from '../../bank/bank.service.js';
+import { applyPack } from '../../starters/pack.service.js';
 import {
   ARTICLE_TITLES,
   CITIES,
@@ -89,11 +90,9 @@ interface Person {
 export interface DemoOptions {
   settings: SiteSettings;
   seed: string;
-  /** Texts and photos to draw from (the site's type, then general). */
+  /** Kit to draw from (the site's type, then general): table items, lists and photos. */
   bank: Bank;
   store: PhotoStore;
-  /** Kinds added in the studio (a table with the same key takes their entries). */
-  customKinds: { key: string }[];
   run: DemoRun;
   shop: { sells: boolean; online: boolean; cod: boolean; stock: boolean; discounts: boolean; colors: boolean };
 }
@@ -226,36 +225,55 @@ export async function addDemoData(db: pg.Pool, o: DemoOptions): Promise<DemoCoun
   const itemIds = new Map<string, string[]>();
   const { rows: known } = await db.query<{ slug: string; id: string }>('SELECT c.slug, i.id FROM collection_items i JOIN collections c ON c.id = i.collection_id ORDER BY i.position');
   for (const r of known) itemIds.set(r.slug, [...(itemIds.get(r.slug) ?? []), r.id]);
+  // Kit items point at each other by `ref`; filled in once every table has its new items.
+  const byRef = new Map<string, string>();
+  const pendingRefs: { id: string; refs: Record<string, string[]>; fallback: Record<string, unknown> }[] = [];
+  const kitPhoto = async (photos: Map<string, unknown>, id: unknown) => {
+    const p = typeof id === 'string' ? photos.get(id) : undefined;
+    return p ? (await o.store(p as Parameters<PhotoStore>[0])).id : null;
+  };
   for (const t of tables) {
     const want = d.tables[t.slug] ?? 0;
     if (!want) continue;
     const c = collectionInputSchema.safeParse({ slug: t.slug, name: t.name, itemName: t.item_name, fields: t.fields, imageField: t.image_field, commerce: t.commerce, requestType: t.request_type });
     if (!c.success) continue;
-    const kind = kindForTable(t.slug, o.customKinds) ?? '';
-    const entries = kind ? o.bank.entries(kind) : [];
+    // The kit table with the same address (the site's type first, then general), else made-up items.
+    const kit = o.bank.table(t.slug);
+    const entries = kit?.items ?? [];
     const first = itemIds.get(t.slug)?.length ?? 0;
     const ids: string[] = [];
     for (let k = 0; k < want; k++) {
       const i = first + k;
-      const { entry, round } = nth(entries, i);
-      const own = asL(entry?.data.title);
+      const entry = entries.length ? entries[i % entries.length] : null;
+      const round = entries.length ? Math.floor(i / entries.length) : i;
+      const own = entry && (entry.title.en || entry.title.fa) ? entry.title : null;
       const title = own ? (round ? { en: `${own.en} ${round + 1}`, fa: `${own.fa} ${round + 1}` } : own) : itemTitle(t.slug, c.data.itemName, i);
       const data: Record<string, unknown> = {};
+      const refs: Record<string, string[]> = {};
+      const fallback: Record<string, unknown> = {};
       let photoIndex = 0;
       for (const f of c.data.fields) {
         let v: unknown;
         const given = entry?.data[f.key];
-        if (f.type === 'image') v = await photoFor(entry, kind, i, photoIndex++);
+        const has = given !== undefined && given !== null && given !== '';
+        if (f.type === 'image') v = (has && kit ? await kitPhoto(kit.photos, given) : null) ?? (await photoFor(null, '', i, photoIndex++));
         else if (f.type === 'gallery') {
           const list: string[] = [];
-          for (let n = 0; n < 3; n++) {
-            const id = await photoFor(entry, kind, i, photoIndex++);
+          if (has && kit && Array.isArray(given)) for (const x of given) {
+            const id = await kitPhoto(kit.photos, x);
+            if (id && !list.includes(id)) list.push(id);
+          }
+          for (let n = 0; list.length < 3 && n < 3; n++) {
+            const id = await photoFor(null, '', i, photoIndex++);
             if (id && !list.includes(id)) list.push(id);
           }
           v = list;
-        } else if (given !== undefined && (f.type === 'text' || f.type === 'textarea') && asL(given)) v = asL(given);
-        else if (given !== undefined && (f.type === 'number' || f.type === 'price') && asNumber(given) !== null) v = f.type === 'price' ? Math.round(asNumber(given)!) : asNumber(given);
-        else if (given !== undefined && f.type === 'date' && typeof given === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(given)) v = given;
+        } else if (f.type === 'reference') {
+          // Moved to the new items' ids below; until then the site's own items fill in.
+          if (has) refs[f.key] = (Array.isArray(given) ? given : [given]).filter((x): x is string => typeof x === 'string');
+          v = fieldValue(f, i, rng, itemIds, title);
+          fallback[f.key] = v;
+        } else if (has && kitValueFits(f, given)) v = given;
         else v = fieldValue(f, i, rng, itemIds, title);
         if (v !== undefined && v !== null) data[f.key] = v;
       }
@@ -264,10 +282,21 @@ export async function addDemoData(db: pg.Pool, o: DemoOptions): Promise<DemoCoun
          VALUES ($1, $2, $3, $4, 'published', $5, true, $6) ON CONFLICT (collection_id, slug) DO NOTHING RETURNING id`,
         [t.id, `${t.slug}-${tag}-${i + 1}`, j(title), j(data), i, past()],
       );
-      if (rows[0]) ids.push(rows[0].id);
+      if (!rows[0]) continue;
+      ids.push(rows[0].id);
+      // The first round of a kit's items stands for the kit's own refs.
+      if (entry && round === 0) byRef.set(entry.ref, rows[0].id);
+      if (Object.keys(refs).length) pendingRefs.push({ id: rows[0].id, refs, fallback });
     }
     itemIds.set(t.slug, [...(itemIds.get(t.slug) ?? []), ...ids]);
     counts.items += ids.length;
+  }
+  for (const p of pendingRefs) {
+    const moved = Object.fromEntries(Object.entries(p.refs).map(([k, list]) => {
+      const ids = list.flatMap((r) => (byRef.has(r) ? [byRef.get(r)!] : []));
+      return [k, ids.length ? ids : p.fallback[k]];
+    }));
+    await db.query('UPDATE collection_items SET data = data || $2::jsonb WHERE id = $1', [p.id, j(moved)]);
   }
 
   /* ----- customers ----- */
@@ -534,6 +563,26 @@ export function itemTitle(table: string, itemName: L, i: number): L {
   return lx(`${itemName.en || 'Item'} ${n}`, `${itemName.fa || 'مورد'} ${n}`);
 }
 
+/** Whether a kit item's value suits a site table's field (the site's table may differ from the kit's). */
+function kitValueFits(f: CollectionField, v: unknown): boolean {
+  switch (f.type) {
+    case 'text':
+    case 'textarea':
+      return !!v && typeof v === 'object' && ('en' in v || 'fa' in v);
+    case 'number':
+    case 'price':
+      return typeof v === 'number';
+    case 'boolean':
+      return typeof v === 'boolean';
+    case 'select':
+      return typeof v === 'string' && f.options.some((o) => o.value === v);
+    case 'multiselect':
+      return Array.isArray(v) && v.every((x) => f.options.some((o) => o.value === x));
+    default:
+      return typeof v === 'string';
+  }
+}
+
 /** A value for one field of a sample item. */
 export function fieldValue(f: CollectionField, i: number, rng: ReturnType<typeof random>, items: Map<string, string[]>, title: L): unknown {
   const now = Date.now();
@@ -587,21 +636,28 @@ export function fieldValue(f: CollectionField, i: number, rng: ReturnType<typeof
 }
 
 /**
- * Sample data for a site that already exists (the "Sample data" window): from the bank of the
- * chosen type, with the site's own shop and payment options. `replace` removes earlier sample data first.
+ * Sample data for a site that already exists (the "Sample data" window): from the kit of the
+ * chosen type, with the site's own shop and payment options. Kit tables in `addTables` are added
+ * to the site first (with their item pages and forms). `replace` removes earlier sample data first.
  */
 export async function generateDemo(ctx: AppContext, db: pg.Pool, siteSlug: string, run: DemoRun) {
+  const tenantId = (await ctx.control.query<{ id: string }>('SELECT id FROM tenants WHERE slug = $1', [siteSlug])).rows[0].id;
+  for (const id of run.addTables) {
+    const kit = await getKitTable(ctx, id);
+    if (!kit) continue;
+    // Only the tables and what they need: a kit table never adds a page of its own as the main one.
+    const pack = { ...kit.pack, pages: kit.pack.pages.filter((p) => p.role !== 'main') };
+    await applyPack(ctx, tenantId, db, pack, starterApplySchema.parse({ samples: false }));
+  }
   if (run.mode === 'replace') await clearDemoData(db);
   const settings = withSettingDefaults(siteSettingsSchema.parse((await db.query('SELECT settings FROM site_settings WHERE id = 1')).rows[0].settings));
   const pay = (await db.query<{ provider: string; allow_cod: boolean }>('SELECT provider, allow_cod FROM payment_settings WHERE id = 1')).rows[0];
-  const tenantId = (await ctx.control.query<{ id: string }>('SELECT id FROM tenants WHERE slug = $1', [siteSlug])).rows[0].id;
   const sells = !!settings.modules.orders;
   return addDemoData(db, {
     settings,
     seed: `${siteSlug}-${Date.now()}`,
     bank: await loadBank(ctx, run.type),
     store: photoStore(ctx, db, tenantId),
-    customKinds: await listKinds(ctx),
     shop: { sells, online: sells && pay.provider !== 'none', cod: sells && pay.allow_cod, stock: true, discounts: true, colors: true },
     run,
   });

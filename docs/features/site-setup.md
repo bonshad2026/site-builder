@@ -1,4 +1,4 @@
-# New sites, built-in pages, sample data and the content bank
+# New sites, built-in pages, sample data and site kits
 
 ## Creating a site
 "New client site" opens `/admin/platform/sites/new`: one page of collapsible sections (business type,
@@ -55,16 +55,25 @@ payments, product reviews). "Sample data" on the sites list counts, adds and rem
 table, customers, orders, payments, requests). Code: `modules/platform/setup/demo.ts` (`addDemoData`,
 `clearDemoData`, `fieldValue`, `itemTitle`), word lists in `setup/pools.ts`.
 
-## Content bank
-Platform ← Content bank (`/admin/platform/bank`): texts and photos per site type for sample data.
-Built-in types (general + the 8 templates) and kinds (`BUILT_IN_KINDS` in shared `bank.ts`: product,
-service, article, portfolio, person, course, event, testimonial, faq) live in code
-(`modules/bank/bank.service.ts` `builtInEntries`); the studio's own types, kinds, entries and photos are
-in the control DB (`002_content_bank.sql`; photos under storage id `BANK_STORAGE_ID`). Built-in entries
-and photos can be hidden per type (`bank_hidden`, entry ref = hash of its texts; "Bring back removed
-built-ins" clears them). A table takes the kind with its key, else `kindForTable` by common names;
-fields without a bank value are made up. `tenants.business_type` remembers each site's type. Bank
-photos are copied into the site (`photoStore`).
-The page shows entry counts per kind (`GET /platform/bank/counts?type=`, built-ins included), opens
-on the first kind with entries, lists entries above photos, and explains where sample data looks
-when a kind is empty (General has no products or services: those come from the site's own type).
+## Site kits (content bank)
+Platform ← Site kits (`/admin/platform/bank`, `BankPage.tsx`): per site type (general + the 8 templates
++ the studio's own types, `bank_types`) what sample data is made from:
+- **Tables**: copies of table starters (control DB `kit_tables`, migration `006_kit_tables.sql`; `pack`
+  is a starter pack with its tables, item pages, forms, box designs, sample items and photo copies of
+  its own). Added with `POST /platform/bank/tables` (`addKitTable` copies the photos, so editing a kit
+  never touches the starter); items edited in the page (`PUT /platform/bank/tables/:id/items`, photos
+  `POST …/:id/photos`). The main table of a kit table is the one no other table of its pack points to
+  (`kitMainTable`). The general kit is filled once with the ready-made table starters
+  (`seedGeneralKit`, run by `cli add-sample-starters`; `app_settings.general_kit_seeded`).
+- **Lists**: products, services, reviews, FAQ (`BUILT_IN_KINDS` in shared `bank.ts`, `bank_entries`);
+  built-ins come from the templates (`builtInEntries`); general has reviews and FAQ only.
+- **Photos** for any content (`bank_photos`, kind '').
+
+Sample data (`setup/demo.ts`): a site table takes the items of the kit table with the same address
+(the type's kit first, then general — `loadBank().table(slug)`), in order, numbered on later rounds;
+values are used where they fit the site's field (`kitValueFits`), references are moved to the new
+items by `ref`, and everything else is made up (`fieldValue`). The "Sample data" window can add kit
+tables the site lacks first (`demoRunSchema.addTables` → `applyPack` without its samples).
+Built-in entries and photos can be hidden per type (`bank_hidden`; "Bring back removed built-ins").
+`tenants.business_type` remembers each site's type. Photos are copied into the site (`photoStore`).
+The page shows counts per list (`GET /platform/bank/counts?type=`) and explains empty parts.

@@ -1,12 +1,14 @@
-import { BANK_FIELD_TYPES, type BankField, type BankFieldType, type BankKind } from '@site-builder/shared';
+import { currencyDecimals, type BankKind, type Collection, type CollectionField, type KitItem } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { cn } from '../../lib/cn';
 import { api, uploadFile } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
+import { DatePickerButton } from '../../components/ui/Calendar';
 import { useT } from '../i18n';
-import { Badge, Card, ConfirmButton, Empty, ErrorNote, LocalizedField, Modal, NumberField, PageTitle, SelectField, Spinner, TextField, useErrorLine, useToast } from '../ui';
+import { StarterSelect, useStarters } from '../starters';
+import { Badge, Card, Checkbox, ConfirmButton, Empty, ErrorNote, Field, LocalizedField, Modal, NumberField, PageTitle, SelectField, Spinner, TextField, useAdminCalendar, useErrorLine, useToast } from '../ui';
 
 type Loc = { en: string; fa: string };
 interface BankType {
@@ -33,11 +35,12 @@ interface Entry {
 }
 
 const isLoc = (v: Value | undefined): v is Loc => !!v && typeof v === 'object';
-const localized = (t: BankFieldType) => t === 'text' || t === 'textarea';
+const localized = (t: string) => t === 'text' || t === 'textarea';
 
 /**
- * The studio's content bank: per site type, entries of each kind of content and photos. Sample
- * data for sites is made from it (see the "Sample data" window on the sites list).
+ * Site kits (the content bank): per site type, copies of table starters with their sample items,
+ * plain lists (products, services, reviews, FAQ) and photos. Sample data for sites is made from
+ * them (see the "Sample data" window on the sites list).
  */
 export default function BankPage() {
   const t = useT();
@@ -49,22 +52,17 @@ export default function BankPage() {
   const types = useQuery({ queryKey: ['bank', 'types'], queryFn: () => api.get<BankType[]>('/platform/bank/types') });
   const kinds = useQuery({ queryKey: ['bank', 'kinds'], queryFn: () => api.get<BankKind[]>('/platform/bank/kinds') });
   const [type, setType] = useState('general');
-  // '' = the type's photos for any kind; null = not chosen yet (the first kind that has entries).
-  const [chosenKind, setKind] = useState<string | null>(null);
-  const counts = useQuery({ queryKey: ['bank', 'counts', type], queryFn: () => api.get<Record<string, { entries: number; photos: number }>>(`/platform/bank/counts?type=${type}`) });
-  const kind = chosenKind ?? kinds.data?.find((k) => counts.data?.[k.key]?.entries)?.key ?? 'product';
-  const pickType = (key: string) => {
-    setType(key);
-    setKind(null);
-  };
+  // 'tables', a list kind (product, service…), or '' = the type's photos for any content.
+  const [tab, setTab] = useState('tables');
   const [newType, setNewType] = useState({ key: '', fa: '', en: '' });
-  const [kindModal, setKindModal] = useState(false);
+  const counts = useQuery({ queryKey: ['bank', 'counts', type], queryFn: () => api.get<Record<string, { entries: number; photos: number }>>(`/platform/bank/counts?type=${type}`) });
+  const tables = useQuery({ queryKey: ['bank', 'tables', type], queryFn: () => api.get<KitTableRow[]>(`/platform/bank/tables?type=${type}`) });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['bank'] });
   const addType = useMutation({
     mutationFn: () => api.post('/platform/bank/types', { key: newType.key, label: { en: newType.en, fa: newType.fa } }),
     onSuccess: () => {
-      pickType(newType.key);
+      setType(newType.key);
       setNewType({ key: '', fa: '', en: '' });
       refresh();
     },
@@ -72,7 +70,7 @@ export default function BankPage() {
   const removeType = useMutation({
     mutationFn: (key: string) => api.delete(`/platform/bank/types/${key}`),
     onSuccess: () => {
-      pickType('general');
+      setType('general');
       refresh();
     },
     onError: (e) => toast(errorText(e), 'bad'),
@@ -82,18 +80,16 @@ export default function BankPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bank'] }),
     onError: (e) => toast(errorText(e), 'bad'),
   });
-  const removeKind = useMutation({
-    mutationFn: (key: string) => api.delete(`/platform/bank/kinds/${key}`),
-    onSuccess: () => {
-      setKind(null);
-      refresh();
-    },
-    onError: (e) => toast(errorText(e), 'bad'),
-  });
 
   const current = types.data?.find((x) => x.key === type);
-  const currentKind = kinds.data?.find((k) => k.key === kind);
+  const currentKind = kinds.data?.find((k) => k.key === tab);
   if (types.isLoading || kinds.isLoading) return <Spinner />;
+  const chip = (id: string, label: string, n: number | undefined) => (
+    <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('rounded-full border px-3 py-1.5 text-sm', tab === id ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
+      {label}
+      {n !== undefined && <span className="ms-1.5 text-xs opacity-60">{n}</span>}
+    </button>
+  );
   return (
     <>
       <PageTitle title={b.title} subtitle={b.intro} />
@@ -105,11 +101,10 @@ export default function BankPage() {
                 <li key={x.key}>
                   <button
                     type="button"
-                    onClick={() => pickType(x.key)}
+                    onClick={() => setType(x.key)}
                     className={cn('flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-start text-sm', type === x.key ? 'bg-ink text-bg' : 'text-ink hover:bg-surface-2')}
                   >
                     <span>{l(x.label) || x.key}</span>
-                    {x.entries + x.photos > 0 && <span className="text-xs opacity-70">{x.entries + x.photos}</span>}
                   </button>
                 </li>
               ))}
@@ -143,36 +138,344 @@ export default function BankPage() {
             </span>
           </div>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label={b.kinds}>
-            {kinds.data?.map((k) => (
-              <button key={k.key} type="button" role="tab" aria-selected={kind === k.key} onClick={() => setKind(k.key)} className={cn('rounded-full border px-3 py-1.5 text-sm', kind === k.key ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
-                {l(k.label) || k.key}
-                {counts.data && <span className="ms-1.5 text-xs opacity-60">{counts.data[k.key]?.entries ?? 0}</span>}
-              </button>
-            ))}
-            <button type="button" role="tab" aria-selected={kind === ''} onClick={() => setKind('')} className={cn('rounded-full border px-3 py-1.5 text-sm', kind === '' ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
-              {b.typePhotos}
-              {counts.data && <span className="ms-1.5 text-xs opacity-60">{counts.data['']?.photos ?? 0}</span>}
-            </button>
-            <Button size="sm" variant="ghost" onClick={() => setKindModal(true)}>
-              + {b.addKind}
-            </Button>
+            {chip('tables', b.tables, tables.data?.length)}
+            {kinds.data?.map((k) => chip(k.key, l(k.label) || k.key, counts.data?.[k.key]?.entries))}
+            {chip('', b.typePhotos, counts.data?.['']?.photos)}
           </div>
-          {currentKind && !currentKind.builtIn && (
-            <div className="flex justify-end">
-              <ConfirmButton label={b.deleteKind} confirmText={b.deleteKindConfirm} variant="ghost" onConfirm={() => removeKind.mutate(kind)} />
-            </div>
-          )}
-          {/* Entries first: they are what sample data is made of; photos only fill in missing ones. */}
+          {tab === 'tables' && <KitTablesPanel type={type} list={tables.data ?? []} />}
           {currentKind && <EntriesPanel type={type} kind={currentKind} />}
-          <PhotosPanel type={type} kind={kind} />
+          {tab !== 'tables' && <PhotosPanel type={type} kind={tab} />}
         </div>
       </div>
-      <KindModal open={kindModal} onClose={() => setKindModal(false)} onSaved={(key) => {
-        setKind(key);
-        refresh();
-      }} />
     </>
   );
+}
+
+interface KitTableRow {
+  id: string;
+  name: string;
+  slug: string;
+  label: Loc;
+  others: { slug: string; name: Loc }[];
+  items: number;
+  photos: number;
+}
+
+/** The kit's tables: copies of table starters, each with its own sample items and photos. */
+function KitTablesPanel({ type, list }: { type: string; list: KitTableRow[] }) {
+  const t = useT();
+  const b = t.bk;
+  const { l } = usePreferences();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const errorText = useErrorLine();
+  const starters = useStarters('table');
+  const [starter, setStarter] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const add = useMutation({
+    mutationFn: () => api.post<KitTableRow>('/platform/bank/tables', { type, starter }),
+    onSuccess: (row) => {
+      setStarter('');
+      qc.invalidateQueries({ queryKey: ['bank'] });
+      setEditing(row.id);
+    },
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/platform/bank/tables/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bank'] }),
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
+  return (
+    <Card title={b.tables}>
+      <p className="mb-4 text-xs text-ink-soft">{type === 'general' ? b.tablesHintGeneral : b.tablesHint}</p>
+      <form
+        className="mb-4 flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (starter) add.mutate();
+        }}
+      >
+        <StarterSelect label={b.addTable} value={starter} onChange={setStarter} list={starters.data ?? []} empty={b.chooseStarter} className="min-w-64 flex-1" />
+        <Button type="submit" size="sm" disabled={!starter || add.isPending}>
+          {b.add}
+        </Button>
+      </form>
+      {list.length ? (
+        <ul className="flex flex-col divide-y divide-line">
+          {list.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span className="min-w-0">
+                <span className="block font-medium text-ink">{l(row.label) || row.name}</span>
+                <span className="block text-xs text-ink-soft" dir="auto">
+                  /{row.slug} · {b.itemsCount}: {row.items} · {b.photos}: {row.photos}
+                  {row.others.length > 0 && ` · ${b.withTables}: ${row.others.map((x) => l(x.name) || x.slug).join('، ')}`}
+                </span>
+              </span>
+              <span className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setEditing(row.id)}>
+                  {b.editItems}
+                </Button>
+                <ConfirmButton label={t.delete} confirmText={b.removeTableConfirm} variant="ghost" onConfirm={() => remove.mutate(row.id)} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty text={type === 'general' ? b.noTablesGeneral : b.noTables} />
+      )}
+      {editing && <KitTableEditor id={editing} onClose={() => setEditing(null)} />}
+    </Card>
+  );
+}
+
+interface KitTableFull extends Omit<KitTableRow, 'photos' | 'items'> {
+  tables: Collection[];
+  items: Record<string, KitItem[]>;
+  photos: { id: string; url: string }[];
+}
+
+const newRef = () => `k${Math.random().toString(36).slice(2, 10)}`;
+
+/** A kit table's sample items: a list per table, the chosen item's fields below, saved together. */
+function KitTableEditor({ id, onClose }: { id: string; onClose: () => void }) {
+  const t = useT();
+  const b = t.bk;
+  const { l, formatNumber } = usePreferences();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const errorText = useErrorLine();
+  const upload = useRef<HTMLInputElement>(null);
+  const kit = useQuery({ queryKey: ['bank', 'table', id], queryFn: () => api.get<KitTableFull>(`/platform/bank/tables/${id}`) });
+  const [items, setItems] = useState<Record<string, KitItem[]> | null>(null);
+  const [photos, setPhotos] = useState<{ id: string; url: string }[]>([]);
+  const [table, setTable] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  if (kit.data && items === null) {
+    setItems(kit.data.items);
+    setPhotos(kit.data.photos);
+    setTable(kit.data.slug || (kit.data.tables[0]?.slug ?? ''));
+  }
+  const save = useMutation({
+    mutationFn: () => api.put(`/platform/bank/tables/${id}/items`, { items }),
+    onSuccess: () => {
+      toast(t.saved);
+      qc.invalidateQueries({ queryKey: ['bank'] });
+      onClose();
+    },
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
+  const addPhotos = useMutation({
+    mutationFn: (files: FileList) => {
+      const form = new FormData();
+      for (const f of Array.from(files)) form.append('files', f);
+      return uploadFile(`/platform/bank/tables/${id}/photos`, form) as Promise<{ id: string; url: string }[]>;
+    },
+    onSuccess: (added) => setPhotos((list) => [...list, ...added]),
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
+  const current = kit.data?.tables.find((x) => x.slug === table);
+  const list = items?.[table] ?? [];
+  const item = list.find((x) => x.ref === selected) ?? null;
+  const setList = (next: KitItem[]) => setItems((all) => ({ ...(all ?? {}), [table]: next }));
+  const update = (patch: Partial<KitItem>) => setList(list.map((x) => (x.ref === selected ? { ...x, ...patch } : x)));
+  const shown = current?.fields.filter((f) => f.type === 'text' || f.type === 'textarea' || f.type === 'number' || f.type === 'price').slice(0, 2) ?? [];
+  return (
+    <Modal open onClose={onClose} title={kit.data ? `${b.editItems}: ${l(kit.data.label) || kit.data.name}` : b.editItems} wide>
+      {!kit.data || !items ? (
+        <Spinner />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-ink-soft">{b.itemsHint}</p>
+          {kit.data.tables.length > 1 && (
+            <div className="flex flex-wrap gap-2" role="tablist">
+              {kit.data.tables.map((x) => (
+                <button key={x.slug} type="button" role="tab" aria-selected={table === x.slug} onClick={() => { setTable(x.slug); setSelected(null); }} className={cn('rounded-full border px-3 py-1.5 text-sm', table === x.slug ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
+                  {l(x.name) || x.slug} <span className="text-xs opacity-60">{items[x.slug]?.length ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {list.map((x, i) => {
+                  const image = current?.fields.find((f) => f.type === 'image');
+                  const photo = image && typeof x.data[image.key] === 'string' ? photos.find((p) => p.id === x.data[image.key]) : undefined;
+                  return (
+                    <tr key={x.ref} className={cn('border-b border-line align-top', selected === x.ref && 'bg-surface-2')}>
+                      <td className="px-2 py-2">{photo ? <img src={photo.url} alt="" className="size-10 rounded object-cover" /> : <span className="block size-10 rounded bg-surface-2" />}</td>
+                      <td className="px-2 py-2 font-medium">{l(x.title) || `#${i + 1}`}</td>
+                      {shown.map((f) => (
+                        <td key={f.key} className="max-w-56 px-2 py-2 text-ink-soft">
+                          <span className="line-clamp-2">{valueText(x.data[f.key], l, formatNumber)}</span>
+                        </td>
+                      ))}
+                      <td className="flex justify-end gap-2 px-2 py-2 whitespace-nowrap">
+                        <Button size="sm" variant="ghost" onClick={() => setSelected(selected === x.ref ? null : x.ref)}>
+                          {t.edit}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-danger" onClick={() => { setList(list.filter((y) => y.ref !== x.ref)); if (selected === x.ref) setSelected(null); }}>
+                          {t.delete}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!list.length && <Empty text={b.noItems} />}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={list.length >= 100}
+              onClick={() => {
+                const ref = newRef();
+                setList([...list, { ref, slug: '', title: { en: '', fa: '' }, data: {}, status: 'published' }]);
+                setSelected(ref);
+              }}
+            >
+              + {b.addItem}
+            </Button>
+            <input ref={upload} type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple className="hidden" onChange={(e) => e.target.files?.length && addPhotos.mutate(e.target.files)} />
+            <Button size="sm" variant="ghost" disabled={addPhotos.isPending} onClick={() => upload.current?.click()}>
+              {addPhotos.isPending ? b.uploading : b.upload}
+            </Button>
+          </div>
+          {item && current && (
+            <section className="flex flex-col gap-4 rounded-md border border-line p-4">
+              <LocalizedField label={t.title} value={item.title} onChange={(title) => update({ title })} />
+              {current.fields.map((f) => (
+                <KitFieldInput
+                  key={f.key}
+                  field={f}
+                  table={current}
+                  value={item.data[f.key]}
+                  photos={photos}
+                  refs={kit.data!.tables.find((x) => x.slug === f.reference) ? items[f.reference] ?? [] : null}
+                  onChange={(v) => {
+                    const data = { ...item.data };
+                    if (v === null || v === undefined || v === '') delete data[f.key];
+                    else data[f.key] = v;
+                    update({ data });
+                  }}
+                />
+              ))}
+            </section>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={onClose}>
+              {t.cancel}
+            </Button>
+            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+              {t.save}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+const valueText = (v: unknown, l: (x: Loc | undefined) => string, num: (n: number) => string) =>
+  v === undefined || v === null ? '' : typeof v === 'number' ? num(v) : typeof v === 'object' && !Array.isArray(v) ? l(v as Loc) : String(v);
+const asIds = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : typeof v === 'string' && v ? [v] : []);
+
+/** One field of a kit item, by type. Images pick from the kit table's photos; references from its other tables' items. */
+function KitFieldInput({
+  field,
+  table,
+  value,
+  photos,
+  refs,
+  onChange,
+}: {
+  field: CollectionField;
+  table: Collection;
+  value: unknown;
+  photos: { id: string; url: string }[];
+  refs: KitItem[] | null;
+  onChange: (v: unknown) => void;
+}) {
+  const b = useT().bk;
+  const { l, locale } = usePreferences();
+  const cal = useAdminCalendar();
+  const label = l(field.label) || field.key;
+  switch (field.type) {
+    case 'text':
+    case 'textarea':
+      return <LocalizedField label={label} value={(value as Loc) ?? { en: '', fa: '' }} onChange={(v) => onChange(v.en || v.fa ? v : null)} multiline={field.type === 'textarea'} rows={field.type === 'textarea' ? 3 : undefined} />;
+    case 'number':
+      return <NumberField label={label} value={typeof value === 'number' ? value : null} onChange={onChange} />;
+    case 'price': {
+      const currency = table.commerce.currency;
+      const d = currencyDecimals(currency);
+      return <NumberField label={`${label} (${currency})`} min={0} value={typeof value === 'number' ? value / 10 ** d : null} onChange={(v) => onChange(v === null ? null : Math.round(v * 10 ** d))} />;
+    }
+    case 'date':
+      return <Field label={label}>{() => <DatePickerButton cal={cal} locale={locale} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} placeholder="—" />}</Field>;
+    case 'datetime':
+      return <TextField label={label} type="datetime-local" dir="ltr" value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v || null)} />;
+    case 'boolean':
+      return <Checkbox label={label} checked={!!value} onChange={onChange} />;
+    case 'select':
+      return <SelectField label={label} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} options={[{ value: '', label: '—' }, ...field.options.map((o) => ({ value: o.value, label: l(o.label) || o.value }))]} />;
+    case 'multiselect': {
+      const list = asIds(value);
+      return (
+        <fieldset className="flex flex-col gap-1 rounded-md border border-line p-3">
+          <legend className="px-1 text-xs font-medium text-ink-soft">{label}</legend>
+          {field.options.map((o) => (
+            <Checkbox key={o.value} label={l(o.label) || o.value} checked={list.includes(o.value)} onChange={(on) => onChange(on ? [...list, o.value] : list.filter((x) => x !== o.value))} />
+          ))}
+        </fieldset>
+      );
+    }
+    case 'image':
+    case 'gallery': {
+      const many = field.type === 'gallery';
+      const ids = asIds(value);
+      return (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-xs font-medium text-ink-soft">{label}</legend>
+          {photos.length ? (
+            <ul className="grid grid-cols-5 gap-2 sm:grid-cols-8">
+              {photos.map((p) => {
+                const on = ids.includes(p.id);
+                return (
+                  <li key={p.id}>
+                    <button type="button" aria-pressed={on} onClick={() => onChange(many ? (on ? ids.filter((x) => x !== p.id) : [...ids, p.id]) : on ? null : p.id)} className={cn('block w-full overflow-hidden rounded-md border-2', on ? 'border-accent' : 'border-transparent')}>
+                      <img src={p.url} alt="" className="aspect-square w-full object-cover" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-xs text-ink-soft">{b.noKitPhotos}</p>
+          )}
+        </fieldset>
+      );
+    }
+    case 'reference': {
+      if (!refs) return <p className="text-xs text-ink-soft">{label}: {b.refOutside}</p>;
+      const ids = asIds(value);
+      if (!field.multiple)
+        return <SelectField label={label} value={ids[0] ?? ''} onChange={(v) => onChange(v ? [v] : null)} options={[{ value: '', label: '—' }, ...refs.map((r) => ({ value: r.ref, label: l(r.title) || r.ref }))]} />;
+      return (
+        <fieldset className="flex flex-col gap-1 rounded-md border border-line p-3">
+          <legend className="px-1 text-xs font-medium text-ink-soft">{label}</legend>
+          {refs.map((r) => (
+            <Checkbox key={r.ref} label={l(r.title) || r.ref} checked={ids.includes(r.ref)} onChange={(on) => onChange(on ? [...ids, r.ref] : ids.filter((x) => x !== r.ref))} />
+          ))}
+        </fieldset>
+      );
+    }
+    default:
+      return <TextField label={label} dir="ltr" value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v || null)} />;
+  }
 }
 
 function PhotosPanel({ type, kind }: { type: string; kind: string }) {
@@ -444,70 +747,6 @@ function EntryModal({ type, kind, entry, onClose }: { type: string; kind: BankKi
           ) : (
             <p className="text-xs text-ink-soft">{b.noPhotos}</p>
           )}
-        </fieldset>
-        <ErrorNote error={save.error} />
-        <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
-            {t.cancel}
-          </Button>
-          <Button type="submit" disabled={save.isPending}>
-            {t.save}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function KindModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: (key: string) => void }) {
-  const t = useT();
-  const b = t.bk;
-  const [key, setKey] = useState('');
-  const [label, setLabel] = useState({ en: '', fa: '' });
-  const [fields, setFields] = useState<BankField[]>([{ key: 'title', type: 'text', label: { en: 'Title', fa: 'عنوان' } }]);
-  const typeLabel: Record<BankFieldType, string> = { text: b.tText, textarea: b.tTextarea, number: b.tNumber, price: b.tPrice, date: b.tDate };
-  const save = useMutation({
-    mutationFn: () => api.post('/platform/bank/kinds', { key, label, fields: fields.filter((f) => f.key) }),
-    onSuccess: () => {
-      onSaved(key);
-      setKey('');
-      setLabel({ en: '', fa: '' });
-      setFields([{ key: 'title', type: 'text', label: { en: 'Title', fa: 'عنوان' } }]);
-      onClose();
-    },
-  });
-  const up = (i: number, patch: Partial<BankField>) => setFields((list) => list.map((f, j) => (j === i ? { ...f, ...patch } : f)));
-  return (
-    <Modal open={open} onClose={onClose} title={b.addKind} wide>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
-        <p className="text-xs text-ink-soft">{b.kindHint}</p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <TextField label={b.key} dir="ltr" value={key} onChange={(v) => setKey(v.toLowerCase())} required />
-          <TextField label={b.labelFa} value={label.fa} onChange={(fa) => setLabel((x) => ({ ...x, fa }))} required />
-          <TextField label={b.labelEn} dir="ltr" value={label.en} onChange={(en) => setLabel((x) => ({ ...x, en }))} />
-        </div>
-        <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 text-xs font-medium text-ink-soft">{b.fields}</legend>
-          {fields.map((f, i) => (
-            <div key={i} className="grid items-end gap-2 sm:grid-cols-[1fr_1fr_1fr_8rem_auto]">
-              <TextField label={b.fieldKey} dir="ltr" value={f.key} onChange={(v) => up(i, { key: v.toLowerCase() })} />
-              <TextField label={b.labelFa} value={f.label.fa} onChange={(fa) => up(i, { label: { ...f.label, fa } })} />
-              <TextField label={b.labelEn} dir="ltr" value={f.label.en} onChange={(en) => up(i, { label: { ...f.label, en } })} />
-              <SelectField label={b.fieldType} value={f.type} onChange={(type) => up(i, { type })} options={BANK_FIELD_TYPES.map((x) => ({ value: x, label: typeLabel[x] }))} />
-              <Button size="sm" variant="ghost" disabled={f.key === 'title'} onClick={() => setFields((list) => list.filter((_, j) => j !== i))}>
-                ×
-              </Button>
-            </div>
-          ))}
-          <Button size="sm" variant="outline" className="w-fit" onClick={() => setFields((list) => [...list, { key: '', type: 'text', label: { en: '', fa: '' } }])}>
-            + {b.addField}
-          </Button>
         </fieldset>
         <ErrorNote error={save.error} />
         <div className="flex justify-end gap-3">

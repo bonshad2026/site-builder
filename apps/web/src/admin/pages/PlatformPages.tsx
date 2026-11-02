@@ -207,8 +207,9 @@ interface DemoInfo {
 }
 
 /**
- * Sample data of a site: how much there is, making more from the content bank (per table, with
- * customers, orders, payments and requests), and removing it before delivery.
+ * Sample data of a site: how much there is, making more from a site kit (per table, with
+ * customers, orders, payments and requests), and removing it before delivery. Kit tables the
+ * site does not have can be added on the way.
  */
 function DemoModal({ tenant, onClose }: { tenant: Tenant | null; onClose: () => void }) {
   const t = useT();
@@ -218,16 +219,29 @@ function DemoModal({ tenant, onClose }: { tenant: Tenant | null; onClose: () => 
   const errorText = useErrorLine();
   const info = useQuery({ queryKey: ['platform', 'demo', tenant?.id], queryFn: () => api.get<DemoInfo>(`/platform/tenants/${tenant!.id}/demo-data`), enabled: !!tenant });
   const types = useQuery({ queryKey: ['bank', 'types'], queryFn: () => api.get<{ key: string; label: { en: string; fa: string } }[]>('/platform/bank/types'), enabled: !!tenant });
-  const [run, setRun] = useState<{ type: string; mode: 'add' | 'replace'; counts: Record<string, number> }>({ type: '', mode: 'add', counts: {} });
+  const [run, setRun] = useState<{ type: string; mode: 'add' | 'replace'; counts: Record<string, number>; add: string[] }>({ type: '', mode: 'add', counts: {}, add: [] });
+  const kit = run.type || info.data?.type || 'general';
+  // The kit's tables, then the general kit's, that the site does not have yet (one per address).
+  const kitTables = useQuery({
+    queryKey: ['bank', 'tables', 'missing', kit],
+    queryFn: async () => {
+      const lists = await Promise.all([...new Set([kit, 'general'])].map((k) => api.get<{ id: string; slug: string; label: { en: string; fa: string }; items: number }[]>(`/platform/bank/tables?type=${k}`)));
+      return lists.flat().filter((x, i, all) => all.findIndex((y) => y.slug === x.slug) === i);
+    },
+    enabled: !!tenant && !!info.data,
+  });
+  const missing = (kitTables.data ?? []).filter((x) => !info.data?.tables.some((t) => t.slug === x.slug));
   const n = (key: string, fallback: number) => run.counts[key] ?? fallback;
   const setN = (key: string, v: number | null) => setRun((r) => ({ ...r, counts: { ...r.counts, [key]: Math.max(0, v ?? 0) } }));
   const generate = useMutation({
     mutationFn: () => {
       const d = info.data!;
-      const tables = Object.fromEntries(d.tables.map((x) => [x.slug, n(`table:${x.slug}`, 6)]));
+      const adding = missing.filter((x) => run.add.includes(x.id));
+      const tables = Object.fromEntries([...d.tables, ...adding].map((x) => [x.slug, n(`table:${x.slug}`, 6)]));
       return api.post<Record<string, number>>(`/platform/tenants/${tenant!.id}/demo-data`, {
         type: run.type || d.type,
         mode: run.mode,
+        addTables: adding.map((x) => x.id),
         products: d.modules.products ? n('products', 10) : 0,
         services: d.modules.services ? n('services', 4) : 0,
         tables,
@@ -240,6 +254,7 @@ function DemoModal({ tenant, onClose }: { tenant: Tenant | null; onClose: () => 
     },
     onSuccess: (r) => {
       toast(`${b.generated}: ${Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
+      setRun((x) => ({ ...x, add: [] }));
       info.refetch();
     },
     onError: (e) => toast(errorText(e), 'bad'),
@@ -253,7 +268,7 @@ function DemoModal({ tenant, onClose }: { tenant: Tenant | null; onClose: () => 
     onError: (e) => toast(errorText(e), 'bad'),
   });
   const close = () => {
-    setRun({ type: '', mode: 'add', counts: {} });
+    setRun({ type: '', mode: 'add', counts: {}, add: [] });
     onClose();
   };
   const d = info.data;
@@ -295,13 +310,28 @@ function DemoModal({ tenant, onClose }: { tenant: Tenant | null; onClose: () => 
           >
             <h3 className="font-medium text-ink">{b.genTitle}</h3>
             <div className="grid gap-4 sm:grid-cols-2">
-              <SelectField label={b.genType} value={run.type || d.type} onChange={(type) => setRun((r) => ({ ...r, type }))} options={(types.data ?? []).map((x) => ({ value: x.key, label: l(x.label) || x.key }))} />
+              <SelectField label={b.genType} value={run.type || d.type} onChange={(type) => setRun((r) => ({ ...r, type, add: [] }))} options={(types.data ?? []).map((x) => ({ value: x.key, label: l(x.label) || x.key }))} />
               <SelectField label={b.genMode} value={run.mode} onChange={(mode) => setRun((r) => ({ ...r, mode }))} options={[{ value: 'add', label: b.modeAdd }, { value: 'replace', label: b.modeReplace }]} />
             </div>
+            {missing.length > 0 && (
+              <fieldset className="flex flex-col gap-2 rounded-md border border-line p-3">
+                <legend className="px-1 text-xs font-medium text-ink-soft">{b.addKitTables}</legend>
+                {missing.map((x) => (
+                  <Checkbox
+                    key={x.id}
+                    label={`${l(x.label) || x.slug} (/${x.slug}, ${x.items} ${b.itemsCount})`}
+                    checked={run.add.includes(x.id)}
+                    onChange={(on) => setRun((r) => ({ ...r, add: on ? [...r.add, x.id] : r.add.filter((y) => y !== x.id) }))}
+                  />
+                ))}
+                <p className="text-xs text-ink-soft">{b.addKitTablesHint}</p>
+              </fieldset>
+            )}
             <div className="grid gap-4 sm:grid-cols-3">
               {d.modules.products && row('products', t.products, d.all.products, 10)}
               {d.modules.services && row('services', b.services, d.all.services, 4)}
               {d.tables.map((x) => row(`table:${x.slug}`, l(x.name) || x.slug, x.items, 6))}
+              {missing.filter((x) => run.add.includes(x.id)).map((x) => row(`table:${x.slug}`, `${l(x.label) || x.slug} (${b.newTable})`, undefined, 6))}
               {row('customers', b.customers, d.all.customers, 15)}
               {d.modules.orders && row('orders', t.orders, d.all.orders, 20)}
               {d.modules.leads && row('requests', t.su.dRequests, d.all.requests, 15)}

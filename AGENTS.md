@@ -81,9 +81,9 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
   catalog), `sections.ts` (section library, `SYSTEM_PAGES`, `contentOnlyChange`), `siteOptions.ts`
   (header, footer, design, form fields), `collections.ts` (content tables, filters, box blocks, presets),
   `interactions.ts` + `forms.ts` (request forms, workflows, accounts), `setup.ts` (new-site setup),
-  `bank.ts` (content bank), `starters.ts` (starter packs), `constants.ts`.
+  `bank.ts` (site kits / content bank), `starters.ts` (starter packs), `constants.ts`.
 - `apps/api` — Express 5 + pg. Control DB `sb_control` plus **one database per site** (tenant).
-  Migrations: `src/database/control-plane/migrations` (latest `005_starter_groups.sql`) and
+  Migrations: `src/database/control-plane/migrations` (latest `006_kit_tables.sql`) and
   `src/database/tenant/migrations` (latest `010_shop_extras.sql`); numbered, never edit an applied one.
   Modules in `src/modules/<name>/` (`*.routes.ts` + `*.service.ts`). Routes use `ApiRouter`
   (`src/common/http.ts`) with zod `body` / `query` / `params`. Site routes are `/api/v1/sites/:siteId/…`
@@ -117,7 +117,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 |---|---|
 | Current state, open items, next steps | [STATUS.md](docs/STATUS.md) |
 | Studio, deploy service, client packages, backups | [studio-and-delivery.md](docs/features/studio-and-delivery.md) |
-| New sites: setup, empty/default sites, built-in pages, sample data, content bank | [site-setup.md](docs/features/site-setup.md) |
+| New sites: setup, empty/default sites, built-in pages, sample data, site kits | [site-setup.md](docs/features/site-setup.md) |
 | Content tables, box designer, filters, item pages | [collections.md](docs/features/collections.md) |
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |

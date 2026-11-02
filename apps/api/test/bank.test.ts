@@ -17,36 +17,57 @@ beforeAll(async () => {
 });
 afterAll(() => closeContext(ctx));
 
-describe('content bank', () => {
-  it('keeps types, kinds, entries and photos, and makes a site sample data from them', async () => {
+/** Saves a table starter straight in the control DB (as the studio would from a site). */
+async function tableStarter(name: string, table: Record<string, unknown>, items: Record<string, unknown>[]) {
+  const pack = { version: 2, tables: [table], samples: { items: { [table.slug as string]: items } } };
+  const { rows } = await ctx.control.query<{ id: string }>(`INSERT INTO starters (kind, name, data) VALUES ('table', $1, $2) RETURNING id`, [name, JSON.stringify(pack)]);
+  return rows[0].id;
+}
+
+const L = (en: string, fa: string) => ({ en, fa });
+
+describe('site kits', () => {
+  it('keeps copies of table starters with editable items and photos, and makes a site sample data from them', async () => {
     const type = `school${uid()}`.replace(/[^a-z0-9]/g, '');
-    expect((await platform.post('/api/v1/platform/bank/types', { key: type, label: { en: 'School', fa: 'آموزشگاه' } })).status).toBe(201);
-    expect((await platform.post('/api/v1/platform/bank/types', { key: 'general', label: { en: 'x', fa: 'x' } })).status).toBe(409);
+    expect((await platform.post('/api/v1/platform/bank/types', { key: type, label: L('School', 'آموزشگاه') })).status).toBe(201);
+    expect((await platform.post('/api/v1/platform/bank/types', { key: 'general', label: L('x', 'x') })).status).toBe(409);
     const types = (await platform.get('/api/v1/platform/bank/types')).body.data;
     expect(types.map((t: { key: string }) => t.key)).toEqual(expect.arrayContaining(['general', 'cosmetics', type]));
+    expect((await platform.get('/api/v1/platform/bank/kinds')).body.data.map((k: { key: string }) => k.key)).toEqual(['product', 'service', 'testimonial', 'faq']);
 
-    // A kind for a table of the studio's own ("cars"): its key matches the table's.
-    const kind = await platform.post('/api/v1/platform/bank/kinds', { key: 'cars', label: { en: 'Cars', fa: 'خودروها' }, fields: [{ key: 'km', type: 'number', label: { en: 'Km', fa: 'کیلومتر' } }] });
-    expect(kind.status, JSON.stringify(kind.body)).toBe(201);
-    expect(kind.body.data.fields.map((f: { key: string }) => f.key)).toEqual(['title', 'km']);
+    // A copy of the courses starter goes into the kit; the same table twice is refused.
+    const courses = await tableStarter('Courses', {
+      slug: 'courses',
+      name: L('Courses', 'دوره‌ها'),
+      itemName: L('Course', 'دوره'),
+      imageField: 'image',
+      fields: [
+        { key: 'duration', type: 'text', label: L('Duration', 'مدت') },
+        { key: 'price', type: 'price', label: L('Price', 'قیمت') },
+        { key: 'image', type: 'image', label: L('Photo', 'عکس') },
+      ],
+    }, [{ ref: 'c1', slug: 'c1', title: L('Drawing', 'طراحی'), data: { duration: L('8 sessions', '۸ جلسه'), price: 10_000_000 } }]);
+    const added = await platform.post('/api/v1/platform/bank/tables', { type, starter: courses });
+    expect(added.status, JSON.stringify(added.body)).toBe(201);
+    expect(added.body.data).toMatchObject({ slug: 'courses', items: 1 });
+    expect((await platform.post('/api/v1/platform/bank/tables', { type, starter: courses })).status).toBe(409);
+    const kitId = added.body.data.id;
 
-    const upload = await platform.agent.post('/api/v1/platform/bank/photos').set('X-CSRF-Token', platform.csrf).field('type', type).field('kind', 'course').attach('files', PNG, 'class.png');
+    // Its items are edited in the kit (the starter keeps its own), with a photo of the kit's.
+    const upload = await platform.agent.post(`/api/v1/platform/bank/tables/${kitId}/photos`).set('X-CSRF-Token', platform.csrf).attach('files', PNG, 'class.png');
     expect(upload.status, JSON.stringify(upload.body)).toBe(201);
     const photoId = upload.body.data[0].id;
-    expect((await platform.get(`/api/v1/platform/bank/photos?type=${type}&kind=course`)).body.data).toHaveLength(1);
-
-    const added = await platform.post('/api/v1/platform/bank/entries', {
-      entries: [
-        { type, kind: 'course', data: { title: { en: 'Painting for kids', fa: 'نقاشی کودکان' }, duration: { en: '10 sessions', fa: '۱۰ جلسه' }, price: 30_000_000 }, photos: [photoId] },
-        { type, kind: 'cars', data: { title: { en: 'Blue sedan', fa: 'سدان آبی' }, km: 42000 } },
-      ],
+    const edited = await platform.put(`/api/v1/platform/bank/tables/${kitId}/items`, {
+      items: { courses: [{ ref: 'c1', title: L('Painting for kids', 'نقاشی کودکان'), data: { duration: L('10 sessions', '۱۰ جلسه'), price: 30_000_000, image: photoId } }] },
     });
-    expect(added.status, JSON.stringify(added.body)).toBe(201);
-    const listed = (await platform.get(`/api/v1/platform/bank/entries?type=${type}&kind=course`)).body.data;
-    expect(listed[0]).toMatchObject({ builtIn: false, data: { title: { fa: 'نقاشی کودکان' } } });
-    expect(listed[0].photos[0].url).toContain('/files/public/tenants/');
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    const kit = (await platform.get(`/api/v1/platform/bank/tables/${kitId}`)).body.data;
+    expect(kit.items.courses[0].title.fa).toBe('نقاشی کودکان');
+    expect(kit.photos[0].url).toContain('/files/public/tenants/');
+    const starter = (await ctx.control.query('SELECT data FROM starters WHERE id = $1', [courses])).rows[0].data;
+    expect(starter.samples.items.courses[0].title.fa).toBe('طراحی');
 
-    // A site with a courses table gets items from the type's entries, with the photo copied in.
+    // A site with a courses table gets the kit's items, with the photo copied in.
     const slug = `bank-${uid()}`;
     const site = await platform.post('/api/v1/platform/tenants', { slug, name: 'Bank site', ownerEmail: `o-${slug}@test.local`, setup: { pages: { contact: 'main' }, forms: [{ id: 'contact' }], tables: [{ id: 'courses' }], demo: { enabled: false } } });
     expect(site.status, JSON.stringify(site.body)).toBe(201);
@@ -64,24 +85,35 @@ describe('content bank', () => {
     const items = (await db.query(`SELECT title, data FROM collection_items ORDER BY position`)).rows;
     expect(items[0].title.fa).toBe('نقاشی کودکان');
     expect(items[0].data.duration.fa).toBe('۱۰ جلسه');
+    // More items than the kit has: the same ones again, numbered.
+    expect(items[1].title.fa).toBe('نقاشی کودکان 2');
     expect((await db.query('SELECT 1 FROM assets WHERE id = $1', [items[0].data.image])).rowCount).toBe(1);
+
+    // A kit table the site does not have is added first (table, then its items).
+    const cars = await tableStarter('Cars', { slug: 'cars', name: L('Cars', 'خودروها'), itemName: L('Car', 'خودرو'), fields: [{ key: 'km', type: 'number', label: L('Km', 'کیلومتر') }] }, [
+      { ref: 'x1', slug: 'x1', title: L('Blue sedan', 'سدان آبی'), data: { km: 42000 } },
+    ]);
+    const carKit = (await platform.post('/api/v1/platform/bank/tables', { type, starter: cars })).body.data;
+    const withCars = await platform.post(`/api/v1/platform/tenants/${id}/demo-data`, { type, addTables: [carKit.id], tables: { cars: 2 } });
+    expect(withCars.status, JSON.stringify(withCars.body)).toBe(200);
+    const carItems = (await db.query(`SELECT i.title, i.data FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE c.slug = 'cars' ORDER BY i.position`)).rows;
+    expect(carItems.map((r) => r.data.km)).toEqual([42000, 42000]);
 
     // "Replace" starts over; "add" keeps what is there.
     await platform.post(`/api/v1/platform/tenants/${id}/demo-data`, { type, mode: 'add', tables: { courses: 2 } });
-    expect((await platform.get(`/api/v1/platform/tenants/${id}/demo-data`)).body.data.demo.items).toBe(5);
+    expect((await platform.get(`/api/v1/platform/tenants/${id}/demo-data`)).body.data.demo.items).toBe(7);
     await platform.post(`/api/v1/platform/tenants/${id}/demo-data`, { type, mode: 'replace', tables: { courses: 1 } });
     expect((await platform.get(`/api/v1/platform/tenants/${id}/demo-data`)).body.data.demo).toMatchObject({ items: 1, customers: 0, requests: 0 });
 
-    // Deleting a type removes its entries and photos.
+    // Deleting a type removes its entries, photos and kit tables.
     expect((await platform.delete(`/api/v1/platform/bank/types/${type}`)).status).toBe(204);
-    expect((await platform.get(`/api/v1/platform/bank/entries?type=${type}&kind=course`)).body.data).toEqual([]);
-    expect((await platform.delete('/api/v1/platform/bank/kinds/cars')).status).toBe(204);
+    expect((await platform.get(`/api/v1/platform/bank/tables?type=${type}`)).body.data).toEqual([]);
   });
 
-  it('counts entries and photos per kind, built-in ones included', async () => {
+  it('counts entries and photos per list, built-in ones included', async () => {
     const general = (await platform.get('/api/v1/platform/bank/counts?type=general')).body.data;
-    // General has texts for articles, FAQ… but no products or services (those depend on the business).
-    expect(general.article.entries).toBeGreaterThan(0);
+    // General has reviews and FAQ but no products or services (those depend on the business).
+    expect(general.testimonial.entries).toBeGreaterThan(0);
     expect(general.faq.entries).toBeGreaterThan(0);
     expect(general.product.entries).toBe(0);
     expect(general[''].photos).toBe(0);
