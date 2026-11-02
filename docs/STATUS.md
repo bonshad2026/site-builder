@@ -7,7 +7,8 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - Branch `feature/review-fixes` (from `develop`, not merged): the owner's review list, one item at a time.
   Done: "Refresh photos" shows only for sites that still have placeholder photos; empty-site test
   covers modules, tables and photos; "Site texts" is operator-only (hidden for clients, ignored by the API);
-  new sites store version-2 forms and the "Consultation form choices" card is gone.
+  new sites store version-2 forms and the "Consultation form choices" card is gone; the Modules tab
+  shows only the four working switches with names and explanations.
   The owner deleted the studio sites that still had version-1 forms (`empty`, `3000`, `demo-beauty`,
   `871051`, `atelier-navar`) on 2026-11-02, without a backup.
 - Branch `develop` holds everything else; all feature branches below are merged into it.

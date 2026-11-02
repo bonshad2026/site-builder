@@ -17,6 +17,10 @@ Template photos come from `var/demo-images/<ref>.jpg`, else the network, else a 
 
 - **Empty site**: no setup, no pages, every module off except leads (built-in shop / service routes
   show "not found" while their module is off — `sections/BuiltInPage.tsx`).
+- **Modules** (Settings → Modules, operator only, `MODULE_SWITCHES` in `SettingsPages.tsx`): products,
+  orders, services and leads. A switch only opens that part (admin menus, built-in addresses, API); it
+  adds no pages, tables or sample items (starters and demo data do that). `projects`, `testimonials`
+  and `faq` are still in `MODULES` / stored settings but change nothing and are not shown.
 - **Default site**: the neutral setup (`genericTemplate`).
 - A site in one language always opens in it (`SiteLayout`).
 - Deleting: `DELETE /platform/tenants/:id?confirm=<slug>` (`deleteTenant`: files, database, role,
