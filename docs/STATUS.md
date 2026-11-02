@@ -4,6 +4,11 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- Branch `feature/user-guide` (not pushed or merged): the owner chose a Persian user guide with one
+  short video per task. Sample page `docs/guide/payment-gateways.md`; videos are recorded by
+  `tools/guide-videos` into `docs/guide/media/`, which is kept out of Git. Next: agree the list of
+  guide pages with the owner, then add a scene and a page for each. A technical guide (Persian,
+  task-based recipes) was also discussed and comes after the user guide.
 - Branch `feature/payment-gateways` (pushed and merged into `develop` on 2026-11-02): several gateways per
   site with the buyer choosing at checkout, a studio gateway catalog, operator control of which
   gateways each site may use, a transactions page with "check again", and "test connection". Gateways
