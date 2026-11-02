@@ -132,9 +132,13 @@ export function CheckoutPage() {
   const { data: settings } = useSiteSettings();
   const { data: payment } = usePaymentMethods(apiAvailable());
   const [error, setError] = useState<string | null>(null);
-  // Online when the gateway is set up, else payment on delivery when the shop offers it.
-  const [method, setMethod] = useState<'online' | 'cod' | null>(null);
-  const payBy = method ?? (payment?.online ? 'online' : payment?.cod ? 'cod' : 'online');
+  // The buyer picks a gateway (or payment on delivery); by default the site's first gateway, else on delivery.
+  const gateways = payment?.gateways ?? (payment?.online && payment.provider ? [{ provider: payment.provider, label: { en: '', fa: '' }, description: { en: '', fa: '' }, isTest: payment.isTest }] : []);
+  const [choice, setChoice] = useState<string | null>(null);
+  const chosen = choice ?? (gateways[0]?.provider ?? (payment?.cod ? 'cod' : null));
+  const payBy: 'online' | 'cod' = chosen === 'cod' ? 'cod' : 'online';
+  const chosenGateway = gateways.find((g) => g.provider === chosen);
+  const payOptions = [...gateways.map((g) => ({ value: g.provider, label: l(g.label) || m.shop.payOnline, note: l(g.description) })), ...(payment?.cod ? [{ value: 'cod', label: m.shop.payOnDelivery, note: '' }] : [])];
   const errorLang = useSiteErrorLanguage();
   usePageMeta(m.shop.checkout, undefined, { noIndex: true });
 
@@ -213,7 +217,7 @@ export function CheckoutPage() {
       });
       cart.clear();
       if (payBy === 'online' && payment?.online) {
-        const pay = await api.post<{ redirectUrl: string }>(`/public/sites/${site}/orders/${order.number}/pay`, { token: order.orderToken, locale });
+        const pay = await api.post<{ redirectUrl: string }>(`/public/sites/${site}/orders/${order.number}/pay`, { token: order.orderToken, locale, gateway: chosenGateway?.provider });
         window.location.assign(pay.redirectUrl);
         return;
       }
@@ -334,14 +338,17 @@ export function CheckoutPage() {
               </fieldset>
             )}
             {!apiAvailable() && <p className="text-sm text-danger sm:col-span-2">{m.shop.needsBackend}</p>}
-            {payment?.online && payment.cod && (
+            {payOptions.length > 1 && (
               <fieldset className="sm:col-span-2">
                 <legend className="mb-3 text-sm text-ink-soft">{m.shop.paymentMethod}</legend>
-                <div className="flex flex-wrap gap-6">
-                  {(['online', 'cod'] as const).map((value) => (
-                    <label key={value} className="flex items-center gap-2 text-ink">
-                      <input type="radio" name="payment-method" value={value} checked={payBy === value} onChange={() => setMethod(value)} className="accent-[var(--color-accent)]" />
-                      {value === 'online' ? m.shop.payOnline : m.shop.payOnDelivery}
+                <div className="flex flex-wrap gap-x-6 gap-y-3">
+                  {payOptions.map((o) => (
+                    <label key={o.value} className="flex items-start gap-2 text-ink">
+                      <input type="radio" name="payment-method" value={o.value} checked={chosen === o.value} onChange={() => setChoice(o.value)} className="mt-1 accent-[var(--color-accent)]" />
+                      <span>
+                        {o.label}
+                        {o.note && <span className="block text-xs text-ink-soft">{o.note}</span>}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -349,7 +356,7 @@ export function CheckoutPage() {
             )}
             {payment && !payment.online && payment.cod && <p className="text-sm text-ink-soft sm:col-span-2">{m.shop.codOnly}</p>}
             {payment && !payment.online && !payment.cod && apiAvailable() && <p className="text-sm text-ink-soft sm:col-span-2">{m.shop.noOnlinePayment}</p>}
-            {payment?.isTest && <p className="border border-dashed border-accent px-4 py-3 text-sm text-ink sm:col-span-2">{m.shop.testGateway}</p>}
+            {payBy === 'online' && chosenGateway?.isTest && <p className="border border-dashed border-accent px-4 py-3 text-sm text-ink sm:col-span-2">{m.shop.testGateway}</p>}
             {error && (
               <p role="alert" className="text-sm text-danger sm:col-span-2">
                 {error}

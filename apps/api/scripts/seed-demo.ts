@@ -18,6 +18,7 @@ import { createUser, hashPassword } from '../src/modules/auth/auth.service.js';
 import { provisionTenant } from '../src/modules/platform/provisioning.js';
 import { buildInsert } from '../src/common/sql.js';
 import { productsTable, servicesTable } from '../src/modules/catalog/catalog.js';
+import { enableGateway } from '../src/modules/payments/payments.service.js';
 
 const env = loadEnv();
 if (env.NODE_ENV === 'production') throw new Error('Refusing to seed demo data in production');
@@ -173,7 +174,7 @@ try {
     );
   }
   void pagesWithIds;
-  await db.query(`UPDATE payment_settings SET provider = 'sandbox' WHERE id = 1 AND provider = 'none'`);
+  if (!(await db.query('SELECT 1 FROM payment_gateways WHERE enabled')).rowCount) await enableGateway(db, 'sandbox', true);
 
   console.log(`seeded: admin ${adminEmail}, site atelier-navar (database ${t.db_name}), owner ${ownerEmail}`);
 } finally {

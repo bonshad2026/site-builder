@@ -59,8 +59,8 @@ Old `sb-platform_*` / `sb-cell-*` volumes are leftover backups: never delete wit
 On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator password, ready-made starters.
 
 ## Before you say a change is done
-1. `npm run typecheck` (a known error in `apps/api/test/shop.test.ts` about `amountMinor` predates this guide).
-2. Tests: all web and API tests pass as of 2026-11-02 (web 43, API 98). A new failure is yours to explain.
+1. `npm run typecheck` (clean as of 2026-11-02).
+2. Tests: all web and API tests pass as of 2026-11-02 (web 43, API 104). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").
@@ -84,7 +84,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
   `bank.ts` (site kits / content bank), `starters.ts` (starter packs), `constants.ts`.
 - `apps/api` — Express 5 + pg. Control DB `sb_control` plus **one database per site** (tenant).
   Migrations: `src/database/control-plane/migrations` (latest `006_kit_tables.sql`) and
-  `src/database/tenant/migrations` (latest `010_shop_extras.sql`); numbered, never edit an applied one.
+  `src/database/tenant/migrations` (latest `011_payment_gateways.sql`); numbered, never edit an applied one.
   Modules in `src/modules/<name>/` (`*.routes.ts` + `*.service.ts`). Routes use `ApiRouter`
   (`src/common/http.ts`) with zod `body` / `query` / `params`. Site routes are `/api/v1/sites/:siteId/…`
   where **`:siteId` is the site's slug**. CLI: `src/cli.ts`.

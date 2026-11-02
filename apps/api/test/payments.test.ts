@@ -28,7 +28,14 @@ async function placeOrder() {
   return res.body.data as { number: string; orderToken: string };
 }
 
-const setProvider = (provider: string, extra: object = {}) => owner.put(`${base}/payment-settings`, { provider, merchantId: '', useSandboxHost: false, ...extra });
+const setGateway = (provider: string, body: object = {}) => owner.put(`${base}/payment-settings/gateways/${provider}`, { enabled: true, ...body });
+
+/** Makes `provider` the site's only gateway that is on. */
+async function setProvider(provider: string, credentials: Record<string, string> = {}) {
+  const settings = await owner.get(`${base}/payment-settings`);
+  for (const g of settings.body.data.gateways) if (g.enabled && g.key !== provider) await setGateway(g.key, { enabled: false });
+  return setGateway(provider, { credentials });
+}
 
 describe('buyer order access', () => {
   it('lets the buyer read their order only with the token', async () => {
@@ -41,7 +48,7 @@ describe('buyer order access', () => {
 describe('payment availability', () => {
   it('refuses to start a payment when no gateway is configured', async () => {
     const order = await placeOrder();
-    expect((await request(app).get(`${pub}/payment-methods`)).body.data).toEqual({ online: false, cod: false, provider: null, isTest: false });
+    expect((await request(app).get(`${pub}/payment-methods`)).body.data).toEqual({ online: false, cod: false, provider: null, isTest: false, gateways: [] });
     const res = await request(app).post(`${pub}/orders/${order.number}/pay`).send({ token: order.orderToken });
     expect(res.status).toBe(409);
   });
@@ -52,6 +59,8 @@ describe('payment availability', () => {
     expect(ok.status).toBe(200);
     const publicSettings = await request(app).get(`${pub}/settings`);
     expect(JSON.stringify(publicSettings.body)).not.toContain('00000000-0000-0000-0000-000000000000');
+    expect(JSON.stringify((await request(app).get(`${pub}/payment-methods`)).body)).not.toContain('00000000-0000-0000-0000-000000000000');
+    await setGateway('zarinpal', { enabled: false });
   });
 
   it('only owners (or staff with payments:manage) can change payment settings', async () => {
@@ -59,7 +68,8 @@ describe('payment availability', () => {
     await owner.post(`${base}/members`, { email, permissions: ['orders:read'] });
     await ctx.control.query(`UPDATE users SET password_hash = (SELECT password_hash FROM users WHERE email = $1) WHERE email = $2`, [site.ownerEmail, email]);
     const staff = await signIn(app, email);
-    expect((await staff.put(`${base}/payment-settings`, { provider: 'none' })).status).toBe(403);
+    expect((await staff.put(`${base}/payment-settings`, { allowCod: true })).status).toBe(403);
+    expect((await staff.get(`${base}/payments`)).status).toBe(403);
   });
 });
 
@@ -158,6 +168,118 @@ describe('Zarinpal gateway (HTTP mocked)', () => {
   it('treats the Zarinpal sandbox host as a test gateway', () => {
     expect(new ZarinpalGateway('x', true).isTest).toBe(true);
     expect(new ZarinpalGateway('x', false).isTest).toBe(false);
+  });
+});
+
+describe('several gateways on one site', () => {
+  let admin: Client;
+  const zarinpalId = '22222222-2222-2222-2222-222222222222';
+  beforeAll(async () => {
+    const a = await createAdmin(ctx);
+    admin = await signIn(app, a.email!);
+    await setProvider('sandbox');
+    expect((await setGateway('zarinpal', { credentials: { merchantId: zarinpalId }, label: { en: 'Card (Zarinpal)', fa: 'کارت بانکی' } })).status).toBe(200);
+  });
+
+  it('lists every gateway that is on, in the site order, and pays with the chosen one', async () => {
+    let methods = (await request(app).get(`${pub}/payment-methods`)).body.data;
+    // New sites list the gateways in the order of the driver registry.
+    expect(methods.gateways.map((g: { provider: string }) => g.provider)).toEqual(['zarinpal', 'sandbox']);
+    expect(methods.gateways[0].label).toEqual({ en: 'Card (Zarinpal)', fa: 'کارت بانکی' });
+
+    const order = (await owner.get(`${base}/payment-settings`)).body.data.gateways.map((g: { key: string }) => g.key);
+    expect((await owner.put(`${base}/payment-settings/order`, { providers: ['sandbox', ...order.filter((k: string) => k !== 'sandbox')] })).status).toBe(200);
+    methods = (await request(app).get(`${pub}/payment-methods`)).body.data;
+    expect(methods.gateways.map((g: { provider: string }) => g.provider)).toEqual(['sandbox', 'zarinpal']);
+    expect(methods.provider).toBe('sandbox');
+
+    const placed = await placeOrder();
+    const start = await request(app).post(`${pub}/orders/${placed.number}/pay`).send({ token: placed.orderToken, gateway: 'sandbox' });
+    expect(start.status).toBe(200);
+    expect(start.body.data.isTest).toBe(true);
+    expect((await request(app).post(`${pub}/orders/${placed.number}/pay`).send({ token: placed.orderToken, gateway: 'idpay' })).status).toBe(400);
+  });
+
+  it('a payment still verifies after its gateway was turned off', async () => {
+    const placed = await placeOrder();
+    const start = await request(app).post(`${pub}/orders/${placed.number}/pay`).send({ token: placed.orderToken, gateway: 'sandbox' });
+    const page = new URL(start.body.data.redirectUrl).pathname;
+    const decision = await request(app).post(page).type('form').send({ decision: 'approved' });
+    await setGateway('sandbox', { enabled: false });
+    const callback = await request(app).get(decision.headers.location);
+    expect(callback.headers.location).toMatch(/payment=success$/);
+    await setGateway('sandbox', { enabled: true });
+  });
+
+  it('only the operator allows or forbids a gateway for a site', async () => {
+    expect((await owner.put(`${base}/payment-settings/gateways/zarinpal/access`, { allowed: false })).status).toBe(403);
+    const res = await admin.put(`${base}/payment-settings/gateways/zarinpal/access`, { allowed: false });
+    expect(res.status).toBe(200);
+    // Forbidden: off, hidden from the site's staff and from buyers, and cannot be turned on.
+    expect((await owner.get(`${base}/payment-settings`)).body.data.gateways.some((g: { key: string }) => g.key === 'zarinpal')).toBe(false);
+    expect((await request(app).get(`${pub}/payment-methods`)).body.data.gateways.map((g: { provider: string }) => g.provider)).toEqual(['sandbox']);
+    expect((await setGateway('zarinpal', { credentials: { merchantId: zarinpalId } })).status).toBe(403);
+    expect((await admin.put(`${base}/payment-settings/gateways/zarinpal/access`, { allowed: true })).status).toBe(200);
+    expect((await owner.get(`${base}/payment-settings`)).body.data.gateways.find((g: { key: string }) => g.key === 'zarinpal').enabled).toBe(false);
+  });
+
+  it('tests a gateway connection with its saved settings', async () => {
+    expect((await owner.post(`${base}/payment-settings/gateways/sandbox/test`)).body.data.ok).toBe(true);
+    ctx.httpFetch = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ data: [], errors: { code: -9, message: 'bad merchant' } })));
+    const bad = await owner.post(`${base}/payment-settings/gateways/zarinpal/test`);
+    expect(bad.body.data).toMatchObject({ ok: false });
+  });
+});
+
+describe('studio gateway catalog', () => {
+  let admin: Client;
+  let adminId: string;
+  beforeAll(async () => {
+    const a = await createAdmin(ctx);
+    adminId = a.id;
+    admin = await signIn(app, a.email!);
+  });
+
+  it('decides which gateways sites start with and which can be allowed', async () => {
+    expect((await owner.get('/api/v1/platform/payment-gateways')).status).toBe(403);
+    const list = (await admin.get('/api/v1/platform/payment-gateways')).body.data;
+    expect(list.map((g: { key: string }) => g.key)).toEqual(expect.arrayContaining(['zarinpal', 'zibal', 'idpay', 'sandbox']));
+
+    const entry = { enabled: true, defaultAllowed: false, label: { en: '', fa: '' }, description: { en: '', fa: '' } };
+    expect((await admin.put('/api/v1/platform/payment-gateways/idpay', entry)).status).toBe(200);
+    const other = await createTenant(ctx, adminId, { modules: { orders: true } });
+    const view = (await admin.get(`/api/v1/sites/${other.slug}/payment-settings`)).body.data;
+    expect(view.gateways.find((g: { key: string }) => g.key === 'idpay').allowed).toBe(false);
+    expect(view.gateways.find((g: { key: string }) => g.key === 'zibal').allowed).toBe(true);
+
+    // Off in the catalog: cannot be allowed for a site.
+    await admin.put('/api/v1/platform/payment-gateways/idpay', { ...entry, enabled: false });
+    expect((await admin.put(`/api/v1/sites/${other.slug}/payment-settings/gateways/idpay/access`, { allowed: true })).status).toBe(400);
+    await admin.put('/api/v1/platform/payment-gateways/idpay', { ...entry, defaultAllowed: true });
+  });
+});
+
+describe('payments list (transactions)', () => {
+  it('lists attempts with their order, filters them, and rechecks one that never came back', async () => {
+    await setProvider('sandbox');
+    const placed = await placeOrder();
+    const start = await request(app).post(`${pub}/orders/${placed.number}/pay`).send({ token: placed.orderToken });
+    const authority = decodeURIComponent(new URL(start.body.data.redirectUrl).pathname.split('/').pop()!);
+
+    const open = await owner.get(`${base}/payments?status=initiated&q=${placed.number}`);
+    expect(open.body.data).toHaveLength(1);
+    expect(open.body.data[0]).toMatchObject({ orderNumber: placed.number, provider: 'sandbox', isTest: true, status: 'initiated' });
+    const id = open.body.data[0].id;
+
+    // Not paid yet and still recent: stays open.
+    expect((await owner.post(`${base}/payments/${id}/recheck`)).body.data.status).toBe('initiated');
+    // The buyer approved on the gateway page but never came back.
+    await request(app).post(`/api/v1/payments/sandbox/${site.slug}/${encodeURIComponent(authority)}`).type('form').send({ decision: 'approved' });
+    expect((await owner.post(`${base}/payments/${id}/recheck`)).body.data.status).toBe('succeeded');
+    expect((await request(app).get(`${pub}/orders/${placed.number}?token=${placed.orderToken}`)).body.data.paymentStatus).toBe('test_paid');
+
+    expect((await owner.get(`${base}/payments?test=false`)).body.data.every((p: { isTest: boolean }) => !p.isTest)).toBe(true);
+    expect((await owner.get(`${base}/payments?provider=sandbox`)).body.meta.total).toBeGreaterThan(1);
   });
 });
 

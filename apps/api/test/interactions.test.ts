@@ -46,7 +46,7 @@ beforeAll(async () => {
     notifications: { staff: false, emails: [] },
   });
   expect(saved.status, JSON.stringify(saved.body)).toBe(200);
-  await owner.put(`${base}/payment-settings`, { provider: 'sandbox', merchantId: '', useSandboxHost: false, allowCod: false });
+  await owner.put(`${base}/payment-settings/gateways/sandbox`, { enabled: true });
 });
 afterAll(() => closeContext(ctx));
 

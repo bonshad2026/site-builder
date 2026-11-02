@@ -329,7 +329,8 @@ function SiteNav({ siteId }: { siteId: string }) {
           { to: settingsUrl, tab: 'notifications', label: L('Staff notifications', 'اطلاع‌رسانی به کارکنان'), show: site },
           { to: settingsUrl, tab: 'seo', label: L('SEO', 'سئو'), show: site && operator },
           { to: settingsUrl, tab: 'modules', label: L('Modules', 'ماژول‌ها'), show: site && operator },
-          { to: `${base}/payments`, label: L('Payment gateway', 'درگاه پرداخت'), show: can('payments:manage') && (shop || mod('leads')) },
+          { to: `${base}/payments`, label: L('Payment gateways', 'درگاه‌های پرداخت'), show: can('payments:manage') && (shop || mod('leads')) },
+          { to: `${base}/transactions`, label: L('Transactions', 'تراکنش‌ها'), show: can('payments:manage') && (shop || mod('leads')) },
           { to: `${base}/messaging`, label: t.su.messaging, show: operator },
           { to: `${base}/members`, label: t.members, show: owner },
         ]}
@@ -371,6 +372,7 @@ function AdminLayout({ me }: { me: Me }) {
               ]}
             />
             <NavItem item={{ to: "/admin/platform/messaging", label: t.su.messaging }} />
+            <NavItem item={{ to: "/admin/platform/payments", label: t.pg.catalog }} />
             <NavItem item={{ to: "/admin/platform/audit", label: t.audit }} />
             {/* Studio deploy service (served next to the admin by the edge proxy). */}
             <a href="/deploy/" className="block rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">

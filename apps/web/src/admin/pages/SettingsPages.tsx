@@ -427,77 +427,6 @@ const MODULE_SWITCHES: { id: ModuleId; en: string; fa: string; enHint: string; f
   },
 ];
 
-interface PaymentSettings {
-  provider: 'none' | 'zarinpal' | 'zibal' | 'idpay' | 'sandbox';
-  merchantId: string;
-  useSandboxHost: boolean;
-  allowCod: boolean;
-  sandboxAvailable: boolean;
-}
-
-function PaymentsView({ siteId }: { siteId: string }) {
-  const t = useT();
-  const toast = useToast();
-  const { data, isLoading, error } = useQuery({ queryKey: ['site', siteId, 'payment-settings'], queryFn: () => api.get<PaymentSettings>(`/sites/${siteId}/payment-settings`) });
-  const [form, setForm] = useState<PaymentSettings | null>(null);
-  useEffect(() => setForm(data ?? null), [data]);
-  const save = useMutation({
-    mutationFn: () => api.put<PaymentSettings>(`/sites/${siteId}/payment-settings`, { provider: form!.provider, merchantId: form!.merchantId, useSandboxHost: form!.useSandboxHost, allowCod: form!.allowCod }),
-    onSuccess: (r) => {
-      setForm(r);
-      toast(t.saved);
-    },
-  });
-  if (isLoading || !form) return error ? <ErrorNote error={error} /> : <Spinner />;
-  return (
-    <>
-      <PageTitle title={t.payments} subtitle={t.paymentsNote} />
-      <form
-        className="flex max-w-xl flex-col gap-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
-        <SelectField
-          label={t.provider}
-          value={form.provider}
-          onChange={(provider) => setForm({ ...form, provider })}
-          options={[
-            { value: 'none', label: t.providerNone },
-            { value: 'zarinpal', label: t.providerZarinpal },
-            { value: 'zibal', label: t.providerZibal },
-            { value: 'idpay', label: t.providerIdpay },
-            ...(form.sandboxAvailable || form.provider === 'sandbox' ? [{ value: 'sandbox' as const, label: t.providerSandbox }] : []),
-          ]}
-        />
-        {form.provider === 'zarinpal' && (
-          <>
-            <TextField label={t.merchantId} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-            <Checkbox label={t.useSandboxHost} checked={form.useSandboxHost} onChange={(useSandboxHost) => setForm({ ...form, useSandboxHost })} />
-          </>
-        )}
-        {form.provider === 'zibal' && <TextField label={t.merchantId} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint={t.zibalHint} />}
-        {form.provider === 'idpay' && (
-          <>
-            <TextField label={t.apiKey} dir="ltr" value={form.merchantId} onChange={(merchantId) => setForm({ ...form, merchantId })} hint="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-            <Checkbox label={t.useSandboxHost} checked={form.useSandboxHost} onChange={(useSandboxHost) => setForm({ ...form, useSandboxHost })} />
-          </>
-        )}
-        {form.provider === 'sandbox' && <p className="border border-dashed border-accent px-4 py-3 text-sm">{t.providerSandbox}</p>}
-        <Checkbox label={t.allowCod} checked={!!form.allowCod} onChange={(allowCod) => setForm({ ...form, allowCod })} />
-        {!form.sandboxAvailable && <p className="text-xs text-ink-soft">{t.sandboxUnavailable}</p>}
-        <ErrorNote error={save.error} />
-        <div>
-          <Button type="submit" disabled={save.isPending}>
-            {t.save}
-          </Button>
-        </div>
-      </form>
-    </>
-  );
-}
-
 interface Member {
   userId: string;
   email: string;
@@ -679,9 +608,8 @@ function AccountView() {
   );
 }
 
-export default function SettingsPages({ siteId, view }: { siteId: string; view: 'settings' | 'payments' | 'members' | 'account' }) {
+export default function SettingsPages({ siteId, view }: { siteId: string; view: 'settings' | 'members' | 'account' }) {
   if (view === 'account') return <AccountView />;
-  if (view === 'payments') return <PaymentsView siteId={siteId} />;
   if (view === 'members') return <MembersView siteId={siteId} />;
   return <SettingsView siteId={siteId} />;
 }

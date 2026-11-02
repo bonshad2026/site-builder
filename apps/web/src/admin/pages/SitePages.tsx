@@ -17,6 +17,7 @@ const Content = lazy(() => import('./ContentPages'));
 const Tables = OPERATOR_UI ? lazy(() => import('../collections/TablesPage')) : null;
 const Items = lazy(() => import('../collections/ItemsPage'));
 const ShopExtras = lazy(() => import('./ShopExtrasPages'));
+const Payments = lazy(() => import('./PaymentsPages'));
 // Server-wide e-mail / SMS: here too, since client builds have no platform pages.
 const Messaging = lazy(() => import('./MessagingPage'));
 
@@ -51,7 +52,8 @@ export default function SitePages({ account = false }: { account?: boolean }) {
       <Route path="files" element={<Files siteId={siteId} />} />
       <Route path="members" element={<Settings siteId={siteId} view="members" />} />
       <Route path="settings" element={<Settings siteId={siteId} view="settings" />} />
-      <Route path="payments" element={<Settings siteId={siteId} view="payments" />} />
+      <Route path="payments" element={<Payments siteId={siteId} view="gateways" />} />
+      <Route path="transactions" element={<Payments siteId={siteId} view="transactions" />} />
       <Route path="*" element={<Navigate to={`/admin/sites/${siteId}`} replace />} />
     </Routes>
   );

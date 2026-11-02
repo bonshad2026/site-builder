@@ -24,7 +24,7 @@ describe('creating a client site', () => {
     const ownerEmail = `owner-${slug}@test.local`;
     const res = await platform.post('/api/v1/platform/tenants', { slug, name: 'New Client', ownerEmail, domain: `${slug}.example.com` });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    expect(res.body.data).toMatchObject({ slug, status: 'active', provisioningStep: 'done', schemaVersion: '010_shop_extras.sql', ownerEmail, primaryDomain: `${slug}.example.com` });
+    expect(res.body.data).toMatchObject({ slug, status: 'active', provisioningStep: 'done', schemaVersion: '011_payment_gateways.sql', ownerEmail, primaryDomain: `${slug}.example.com` });
 
     // The new owner gets a set-password link (acts as the invitation).
     expect(emails.outbox.some((m) => m.to === ownerEmail && /reset-password\?token=/.test(m.text))).toBe(true);

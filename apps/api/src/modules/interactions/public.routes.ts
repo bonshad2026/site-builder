@@ -7,6 +7,7 @@ import {
   customerSignupSchema,
   normalizePhone,
   parseTrackingCode,
+  paymentProviderSchema,
   requestCode,
   requestTypeConfig,
   type SiteSettings,
@@ -31,7 +32,7 @@ import {
   verifiedCustomer,
 } from '../customers/customers.service.js';
 import { orderCustomerView } from '../orders/orders.service.js';
-import { gatewayFor, getPaymentSettings, startRequestPayment } from '../payments/payments.service.js';
+import { startRequestPayment, usableGateways } from '../payments/payments.service.js';
 import { accessValid, issueAccess, loadSettings, PHONE_SQL, siteBaseUrl } from './context.js';
 import { customerCancel, customerMessage, customerView, findRequestByNumber, stageLabel, type RequestRow } from './requests.service.js';
 import { addEvent } from './requests.service.js';
@@ -185,8 +186,8 @@ export function registerInteractionRoutes(r: ApiRouter, ctx: AppContext) {
   r.route({ method: 'get', path: '/requests/:number', summary: 'A request as its customer sees it', params: numberParam, query: tokenQuery }, async ({ req, params, query }) => {
     const lead = await openRequest(req, params.number, query.token, false);
     const settings = await loadSettings(req.tenant!.db);
-    const payments = await getPaymentSettings(req.tenant!.db);
-    return { data: { ...(await customerView(req.tenant!.db, settings, lead, query.locale)), files: await filesOf(ctx, req.tenant!.db, lead.id), onlinePayment: !!gatewayFor(ctx, payments, req.tenant!.slug) } };
+    const online = (await usableGateways(ctx, req.tenant!)).length > 0;
+    return { data: { ...(await customerView(req.tenant!.db, settings, lead, query.locale)), files: await filesOf(ctx, req.tenant!.db, lead.id), onlinePayment: online } };
   });
 
   r.route({ method: 'post', path: '/requests/:number/messages', summary: 'The customer writes on their request', params: numberParam, body: customerMessageSchema, status: 201, middleware: [actionLimiter] }, async ({ req, params, body }) => {
@@ -202,13 +203,13 @@ export function registerInteractionRoutes(r: ApiRouter, ctx: AppContext) {
   });
 
   r.route(
-    { method: 'post', path: '/requests/:number/pay', summary: 'Start paying the amount the request asks for; returns the gateway URL', params: numberParam, body: z.object({ token: z.string().max(200).optional(), locale: localeSchema }), middleware: [actionLimiter] },
+    { method: 'post', path: '/requests/:number/pay', summary: 'Start paying the amount the request asks for; returns the gateway URL', params: numberParam, body: z.object({ token: z.string().max(200).optional(), locale: localeSchema, gateway: paymentProviderSchema.optional() }), middleware: [actionLimiter] },
     async ({ req, params, body }) => {
       const lead = await openRequest(req, params.number, body.token, true);
       const base = await siteBaseUrl(ctx, req.tenant!);
       const back = issueAccess(ctx, req.tenant!.id, 'request', lead.id);
       const returnUrl = `${base}${body.locale === 'fa' ? '/fa' : ''}/track/${requestCode(lead.number)}?t=${encodeURIComponent(back)}`;
-      return { data: await startRequestPayment(ctx, req.tenant!, lead, returnUrl) };
+      return { data: await startRequestPayment(ctx, req.tenant!, lead, returnUrl, body.gateway) };
     },
   );
 
@@ -229,8 +230,8 @@ export function registerInteractionRoutes(r: ApiRouter, ctx: AppContext) {
   r.route({ method: 'get', path: '/orders/:number/view', summary: 'An order as its buyer sees it, with its timeline', params: numberParam, query: tokenQuery }, async ({ req, params, query }) => {
     const order = await openOrder(req, params.number, query.token, false);
     const settings: SiteSettings = await loadSettings(req.tenant!.db);
-    const payments = await getPaymentSettings(req.tenant!.db);
-    return { data: { ...(await orderCustomerView(req.tenant!.db, settings, order, query.locale)), onlinePayment: !!gatewayFor(ctx, payments, req.tenant!.slug) } };
+    const online = (await usableGateways(ctx, req.tenant!)).length > 0;
+    return { data: { ...(await orderCustomerView(req.tenant!.db, settings, order, query.locale)), onlinePayment: online } };
   });
 
   r.route({ method: 'post', path: '/orders/:number/messages', summary: 'The buyer writes on their order', params: numberParam, body: customerMessageSchema, status: 201, middleware: [actionLimiter] }, async ({ req, params, body }) => {
