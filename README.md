@@ -1,5 +1,9 @@
 # Site Builder
 
+> **Working on this project (people or agents): start with [`AGENTS.md`](AGENTS.md).** It describes the
+> current setup (the studio in `deploy/docker-compose.yml`). The sections below describe the first,
+> single-stack version (root `docker-compose.yml`) and are kept for history; see [`docs/README.md`](docs/README.md).
+
 A platform for building, customizing and delivering bespoke websites to business clients.
 It includes a drag-and-drop page builder, an admin panel and online payment. Each client gets
 their own PostgreSQL database.

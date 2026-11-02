@@ -1,5 +1,7 @@
 # Setup, operations and deployment
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 ## Docker (whole stack)
 `docker compose up -d --build` starts three containers from the root `Dockerfile` and `.env`:
 

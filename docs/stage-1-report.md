@@ -1,5 +1,7 @@
 # Stage 1 report: visual front-end demo
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 ## Implemented (working for real)
 - 11 routes: home, services, service detail, collection, product detail, studio (about),
   projects, clients (testimonials), FAQ, contact, and 404 (also used for unknown slugs).

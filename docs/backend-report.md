@@ -1,5 +1,7 @@
 # Backend report (stages 4–7)
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 ## Implemented
 - **Express 5 + TypeScript API** with modules for auth, platform, members, site settings,
   pages, services and products, leads, orders, assets, public routes and audit. Validation
