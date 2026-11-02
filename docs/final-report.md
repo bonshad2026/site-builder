@@ -1,5 +1,7 @@
 # Report: all stages (2, 3, 7 payments, 8, admin panel)
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 Earlier reports: [stage 1](stage-1-report.md) · [backend, stages 4–7](backend-report.md).
 
 ## What was added in this round

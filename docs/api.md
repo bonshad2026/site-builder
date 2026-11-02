@@ -1,5 +1,7 @@
 # API
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 The full machine-readable spec is served at **`GET /api/v1/openapi.json`** (OpenAPI 3,
 generated from the same Zod schemas that validate the requests).
 

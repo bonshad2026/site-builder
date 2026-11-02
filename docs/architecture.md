@@ -1,5 +1,7 @@
 # Architecture
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 ```
 apps/web      React + Vite. Public site (stage 1). Admin and page builder come later.
 apps/api      Node.js + Express 5 + TypeScript REST API (/api/v1)
