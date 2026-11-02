@@ -31,6 +31,15 @@ describe('creating a client site', () => {
 
     // The site works publicly straight away, resolved by its domain too.
     expect((await request(app).get(`/api/v1/public/sites/${slug}/settings`)).body.data.name.en).toBe('New Client');
+    // Its forms are stored with every question as an editable field (no older fixed forms).
+    const stored = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE slug = $1', [slug]);
+    const t = stored.rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    const types = (await db.query(`SELECT settings->'requestTypes' AS types FROM site_settings`)).rows[0].types;
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.every((x: { formVersion: number; fields: unknown[] }) => x.formVersion === 2 && x.fields.length > 0)).toBe(true);
+    const consultation = types.find((x: { slug: string }) => x.slug === 'consultation');
+    expect(consultation.fields.find((f: { id: string }) => f.id === 'budget').options.length).toBe(4);
     expect((await request(app).get(`/api/v1/public/resolve?domain=${slug}.example.com`)).body.data.siteId).toBe(slug);
 
     const audit = await ctx.control.query(`SELECT action FROM audit_events WHERE tenant_id = $1 ORDER BY id`, [res.body.data.id]);

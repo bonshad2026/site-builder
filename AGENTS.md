@@ -39,7 +39,6 @@ More: [studio and delivery](docs/features/studio-and-delivery.md).
 - Studio operator: `admin` / `123456` (`CONTROL_ADMIN_*` in `deploy/.env`; reset on every studio-api start).
 - New packages: operator `admin` / `123456`, client `owner` / `123456` (`SITE_OPERATOR_*`, `SITE_OWNER_*`).
 - Sample customers on sites with sample data: phones `0912100xxxx`, password `12345678`.
-  Firefighter site (`871051`): `09120000001` / `09120000002`, password `12345678`.
 - Reset a password: `docker exec sb-studio-api node dist/cli.js set-password --email <login> --password <pw> [--admin]`.
 
 ## Commands
@@ -61,7 +60,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Before you say a change is done
 1. `npm run typecheck` (a known error in `apps/api/test/shop.test.ts` about `amountMinor` predates this guide).
-2. Tests: all web and API tests pass as of 2026-11-02 (web 44, API 97). A new failure is yours to explain.
+2. Tests: all web and API tests pass as of 2026-11-02 (web 43, API 97). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").

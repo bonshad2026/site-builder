@@ -222,36 +222,6 @@ export function TextsTab({ s, set }: TabProps) {
   );
 }
 
-/* ---------- forms ---------- */
-
-export function FormChoicesEditor({ s, set }: TabProps) {
-  const t = useT();
-  const opts = s.formOptions;
-  const choices = (key: 'projectTypes' | 'budgets', label: string) => (
-    <ListEditor
-      label={label}
-      items={opts[key]}
-      max={30}
-      onChange={(v) => set('formOptions', { ...opts, [key]: v })}
-      create={() => ({ value: `option-${opts[key].length + 1}`, label: { ...empty } })}
-      render={(c, update) => (
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
-          <TextField label={t.choiceValue} dir="ltr" value={c.value} onChange={(value) => update({ ...c, value: toSlug(value) })} />
-          <LocalizedField label={t.label} value={c.label} onChange={(l) => update({ ...c, label: l })} />
-        </div>
-      )}
-    />
-  );
-  return (
-    <Card title={t.formChoices}>
-      <div className="flex flex-col gap-6">
-        {choices('projectTypes', t.projectTypesLabel)}
-        {choices('budgets', t.budgetsLabel)}
-      </div>
-    </Card>
-  );
-}
-
 /* ---------- header & footer ---------- */
 
 export function HeaderTab({ s, set, siteId }: TabProps) {

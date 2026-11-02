@@ -51,6 +51,29 @@ export const passwordSchema = z
 
 /* ---------- Site settings ---------- */
 
+/** A kind of customer request (consultation, booking, demo…) and its form. */
+const requestTypeSchema = z.object({
+  slug: requestTypeSlug,
+  label: localizedSchema,
+  form: z.enum(FORM_TYPES),
+  /** Own questions; when set they replace the built-in ones of `form` (name is always asked). */
+  fields: z.array(formFieldSchema).max(30).default([]),
+  /** Stages a request of this type goes through; null = the standard workflow. */
+  workflow: workflowSchema.nullable().default(null),
+  /** Which contact details the form asks for. */
+  contact: requestContactSchema,
+  /** Payment with the form. */
+  payment: requestPaymentSchema,
+  /** Who may send it. */
+  access: z.enum(REQUEST_ACCESS).default('anyone'),
+  layout: formLayoutSchema,
+  /** 2: every question, including name, phone, email and consent, is an editable field. */
+  formVersion: z.number().int().default(1),
+});
+
+/** New sites' request types, with every question already an editable field (version 2). */
+const defaultRequestTypes = () => DEFAULT_REQUEST_TYPES.map((t) => upgradeRequestType(requestTypeSchema.parse(t), formOptionsSchema.parse(undefined)));
+
 export const siteSettingsSchema = z.object({
   name: localizedRequiredSchema,
   tagline: localizedSchema,
@@ -117,28 +140,9 @@ export const siteSettingsSchema = z.object({
     .default([]),
   /** Kinds of customer request (consultation, booking, demo…); forms send one and the inbox filters by it. */
   requestTypes: z
-    .array(
-      z.object({
-        slug: requestTypeSlug,
-        label: localizedSchema,
-        form: z.enum(FORM_TYPES),
-        /** Own questions; when set they replace the built-in ones of `form` (name is always asked). */
-        fields: z.array(formFieldSchema).max(30).default([]),
-        /** Stages a request of this type goes through; null = the standard workflow. */
-        workflow: workflowSchema.nullable().default(null),
-        /** Which contact details the form asks for. */
-        contact: requestContactSchema,
-        /** Payment with the form. */
-        payment: requestPaymentSchema,
-        /** Who may send it. */
-        access: z.enum(REQUEST_ACCESS).default('anyone'),
-        layout: formLayoutSchema,
-        /** 2: every question, including name, phone, email and consent, is an editable field. */
-        formVersion: z.number().int().default(1),
-      }),
-    )
+    .array(requestTypeSchema)
     .max(30)
-    .default(DEFAULT_REQUEST_TYPES),
+    .default(defaultRequestTypes),
   /** Header button (default: a consultation request linking to /contact). */
   headerCta: z
     .object({ label: localizedSchema, href: z.string().max(200).regex(/^\/[a-z0-9/-]*$/, 'Use an internal path like /contact') })

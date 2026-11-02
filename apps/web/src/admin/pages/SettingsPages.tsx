@@ -13,7 +13,7 @@ import { ChromeStarters } from '../starters';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { LinkPicker } from '../links';
 import { ImagePicker } from './FilesPage';
-import { DesignTab, FooterTab, FormChoicesEditor, HeaderTab, ShopPageTab, ShopTab, ExtrasTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
+import { DesignTab, FooterTab, HeaderTab, ShopPageTab, ShopTab, ExtrasTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
 import { AccountsTab } from '../interactions/AccountsTab';
 import { RequestTypesEditor } from '../interactions/RequestTypesEditor';
 import { ExcelButton } from '../ExcelExport';
@@ -350,10 +350,7 @@ function SettingsView({ siteId }: { siteId: string }) {
           />
         )}
         {tab === 'requests' && (
-          <>
-            <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
-            {operator && <FormChoicesEditor {...tabProps} />}
-          </>
+          <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
         )}
         {tab === 'accounts' && <AccountsTab s={s} set={set} part="accounts" />}
         {tab === 'notifications' && <AccountsTab s={s} set={set} part="notifications" />}
