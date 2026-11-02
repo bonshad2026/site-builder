@@ -8,12 +8,13 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   Done: "Refresh photos" shows only for sites that still have placeholder photos; empty-site test
   covers modules, tables and photos; "Site texts" is operator-only (hidden for clients, ignored by the API);
   new sites store version-2 forms and the "Consultation form choices" card is gone; the Modules tab
-  shows only the four working switches with names and explanations.
+  shows only the four working switches with names and explanations; the content bank shows counts
+  per kind, opens on a kind with entries and explains empty kinds.
   The owner deleted the studio sites that still had version-1 forms (`empty`, `3000`, `demo-beauty`,
   `871051`, `atelier-navar`) on 2026-11-02, without a backup.
 - Branch `develop` holds everything else; all feature branches below are merged into it.
 - `main` is behind `develop` (`git rev-list --count main..develop`); it is updated only when the owner asks.
-- Tests: web 43/43, API 97/97 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
+- Tests: web 43/43, API 98/98 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
   (`amountMinor` on a type with only `authority`) — older than this file, not yet fixed.
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
 

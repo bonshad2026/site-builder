@@ -132,6 +132,26 @@ export function bankRoutes(ctx: AppContext) {
 
   /* ----- photos ----- */
 
+  r.route(
+    { method: 'get', path: '/counts', summary: 'How many entries and photos a type has for each kind (kind "" = photos for any kind)', query: z.object({ type: bankKeySchema }) },
+    async ({ query }) => {
+      const { rows } = await ctx.control.query<{ kind: string; entries: number; photos: number }>(
+        `SELECT kind, sum(e)::int AS entries, sum(p)::int AS photos FROM (
+           SELECT kind, 1 AS e, 0 AS p FROM bank_entries WHERE type_key = $1 UNION ALL SELECT kind, 0, 1 FROM bank_photos WHERE type_key = $1) x GROUP BY kind`,
+        [query.type],
+      );
+      const shown = await hiddenBuiltIns(ctx, [query.type]);
+      const out: Record<string, { entries: number; photos: number }> = { '': { entries: 0, photos: builtInPhotos(query.type).filter((p) => shown.photo(query.type, p)).length } };
+      for (const k of await listKinds(ctx)) out[k.key] = { entries: builtInEntries(query.type, k.key).filter(shown.entry).length, photos: 0 };
+      for (const x of rows) {
+        const c = (out[x.kind] ??= { entries: 0, photos: 0 });
+        c.entries += x.entries;
+        c.photos += x.photos;
+      }
+      return { data: out };
+    },
+  );
+
   r.route({ method: 'get', path: '/photos', summary: 'Photos of a type (kind empty = photos for any kind)', query: listQuery }, async ({ query }) => {
     const { rows } = await ctx.control.query<{ id: string; storage_key: string; original_name: string }>(
       'SELECT id, storage_key, original_name FROM bank_photos WHERE type_key = $1 AND kind = $2 ORDER BY created_at DESC',

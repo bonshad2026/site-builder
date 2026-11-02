@@ -49,8 +49,14 @@ export default function BankPage() {
   const types = useQuery({ queryKey: ['bank', 'types'], queryFn: () => api.get<BankType[]>('/platform/bank/types') });
   const kinds = useQuery({ queryKey: ['bank', 'kinds'], queryFn: () => api.get<BankKind[]>('/platform/bank/kinds') });
   const [type, setType] = useState('general');
-  // '' = the type's photos for any kind.
-  const [kind, setKind] = useState('product');
+  // '' = the type's photos for any kind; null = not chosen yet (the first kind that has entries).
+  const [chosenKind, setKind] = useState<string | null>(null);
+  const counts = useQuery({ queryKey: ['bank', 'counts', type], queryFn: () => api.get<Record<string, { entries: number; photos: number }>>(`/platform/bank/counts?type=${type}`) });
+  const kind = chosenKind ?? kinds.data?.find((k) => counts.data?.[k.key]?.entries)?.key ?? 'product';
+  const pickType = (key: string) => {
+    setType(key);
+    setKind(null);
+  };
   const [newType, setNewType] = useState({ key: '', fa: '', en: '' });
   const [kindModal, setKindModal] = useState(false);
 
@@ -58,7 +64,7 @@ export default function BankPage() {
   const addType = useMutation({
     mutationFn: () => api.post('/platform/bank/types', { key: newType.key, label: { en: newType.en, fa: newType.fa } }),
     onSuccess: () => {
-      setType(newType.key);
+      pickType(newType.key);
       setNewType({ key: '', fa: '', en: '' });
       refresh();
     },
@@ -66,7 +72,7 @@ export default function BankPage() {
   const removeType = useMutation({
     mutationFn: (key: string) => api.delete(`/platform/bank/types/${key}`),
     onSuccess: () => {
-      setType('general');
+      pickType('general');
       refresh();
     },
     onError: (e) => toast(errorText(e), 'bad'),
@@ -79,7 +85,7 @@ export default function BankPage() {
   const removeKind = useMutation({
     mutationFn: (key: string) => api.delete(`/platform/bank/kinds/${key}`),
     onSuccess: () => {
-      setKind('product');
+      setKind(null);
       refresh();
     },
     onError: (e) => toast(errorText(e), 'bad'),
@@ -99,7 +105,7 @@ export default function BankPage() {
                 <li key={x.key}>
                   <button
                     type="button"
-                    onClick={() => setType(x.key)}
+                    onClick={() => pickType(x.key)}
                     className={cn('flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-start text-sm', type === x.key ? 'bg-ink text-bg' : 'text-ink hover:bg-surface-2')}
                   >
                     <span>{l(x.label) || x.key}</span>
@@ -140,10 +146,12 @@ export default function BankPage() {
             {kinds.data?.map((k) => (
               <button key={k.key} type="button" role="tab" aria-selected={kind === k.key} onClick={() => setKind(k.key)} className={cn('rounded-full border px-3 py-1.5 text-sm', kind === k.key ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
                 {l(k.label) || k.key}
+                {counts.data && <span className="ms-1.5 text-xs opacity-60">{counts.data[k.key]?.entries ?? 0}</span>}
               </button>
             ))}
             <button type="button" role="tab" aria-selected={kind === ''} onClick={() => setKind('')} className={cn('rounded-full border px-3 py-1.5 text-sm', kind === '' ? 'border-ink bg-ink text-bg' : 'border-line text-ink hover:bg-surface-2')}>
               {b.typePhotos}
+              {counts.data && <span className="ms-1.5 text-xs opacity-60">{counts.data['']?.photos ?? 0}</span>}
             </button>
             <Button size="sm" variant="ghost" onClick={() => setKindModal(true)}>
               + {b.addKind}
@@ -154,8 +162,9 @@ export default function BankPage() {
               <ConfirmButton label={b.deleteKind} confirmText={b.deleteKindConfirm} variant="ghost" onConfirm={() => removeKind.mutate(kind)} />
             </div>
           )}
-          <PhotosPanel type={type} kind={kind} />
+          {/* Entries first: they are what sample data is made of; photos only fill in missing ones. */}
           {currentKind && <EntriesPanel type={type} kind={currentKind} />}
+          <PhotosPanel type={type} kind={kind} />
         </div>
       </div>
       <KindModal open={kindModal} onClose={() => setKindModal(false)} onSaved={(key) => {
@@ -217,7 +226,7 @@ function PhotosPanel({ type, kind }: { type: string; kind: string }) {
           ))}
         </ul>
       ) : (
-        <Empty text={b.noPhotos} />
+        <Empty text={`${b.noPhotos} ${type === 'general' ? b.noPhotosGeneral : b.noPhotosType}`} />
       )}
     </Card>
   );
@@ -358,7 +367,7 @@ function EntriesPanel({ type, kind }: { type: string; kind: BankKind }) {
           </table>
         </div>
       ) : (
-        <Empty text={b.noEntries} />
+        <Empty text={`${b.noEntries} ${type === 'general' ? b.noEntriesGeneral : b.noEntriesType}`} />
       )}
       <EntryModal type={type} kind={kind} entry={editing} onClose={() => setEditing(null)} />
     </Card>

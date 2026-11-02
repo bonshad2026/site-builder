@@ -65,3 +65,6 @@ and photos can be hidden per type (`bank_hidden`, entry ref = hash of its texts;
 built-ins" clears them). A table takes the kind with its key, else `kindForTable` by common names;
 fields without a bank value are made up. `tenants.business_type` remembers each site's type. Bank
 photos are copied into the site (`photoStore`).
+The page shows entry counts per kind (`GET /platform/bank/counts?type=`, built-ins included), opens
+on the first kind with entries, lists entries above photos, and explains where sample data looks
+when a kind is empty (General has no products or services: those come from the site's own type).

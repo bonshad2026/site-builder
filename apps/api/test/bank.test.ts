@@ -77,4 +77,16 @@ describe('content bank', () => {
     expect((await platform.get(`/api/v1/platform/bank/entries?type=${type}&kind=course`)).body.data).toEqual([]);
     expect((await platform.delete('/api/v1/platform/bank/kinds/cars')).status).toBe(204);
   });
+
+  it('counts entries and photos per kind, built-in ones included', async () => {
+    const general = (await platform.get('/api/v1/platform/bank/counts?type=general')).body.data;
+    // General has texts for articles, FAQ… but no products or services (those depend on the business).
+    expect(general.article.entries).toBeGreaterThan(0);
+    expect(general.faq.entries).toBeGreaterThan(0);
+    expect(general.product.entries).toBe(0);
+    expect(general[''].photos).toBe(0);
+    const cosmetics = (await platform.get('/api/v1/platform/bank/counts?type=cosmetics')).body.data;
+    expect(cosmetics.product.entries).toBeGreaterThan(0);
+    expect(cosmetics[''].photos).toBeGreaterThan(0);
+  });
 });
