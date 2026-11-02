@@ -5,7 +5,7 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 
 ## Now
 - Branch `develop` holds everything; all feature branches below are merged into it.
-- `main` is 14 commits behind `develop`; it is updated only when the owner asks.
+- `main` is behind `develop` (`git rev-list --count main..develop`); it is updated only when the owner asks.
 - Tests: web 44/44, API 95/95 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
   (`amountMinor` on a type with only `authority`) — older than this file, not yet fixed.
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
