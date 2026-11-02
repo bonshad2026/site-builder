@@ -4,7 +4,7 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
-- Branch `feature/payment-gateways` (from `develop`, not merged or pushed yet): several gateways per
+- Branch `feature/payment-gateways` (pushed and merged into `develop` on 2026-11-02): several gateways per
   site with the buyer choosing at checkout, a studio gateway catalog, operator control of which
   gateways each site may use, a transactions page with "check again", and "test connection". Gateways
   are drivers in `apps/api/src/modules/payments/drivers.ts`; see [features/shop.md](features/shop.md).
@@ -29,12 +29,12 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
 
 ## Next (in this order, unless the owner asks for something else)
-1. Ask the owner whether to push `feature/payment-gateways` and merge it into `develop`.
+1. Payment choice on the customer's order/request tracking page (today it pays with the first gateway).
 2. Sample data for **services** (setup and ready-made starters only turn the module on; service pages
    preview empty). See [features/site-setup.md](features/site-setup.md) and
    [features/starters.md](features/starters.md).
 3. Ask the owner whether to delete the merged branches (local and on GitHub):
-   `feature/studio-and-client-delivery`, `feature/builder-buttons-requests`, `feature/collections`,
+   `feature/payment-gateways`, `feature/studio-and-client-delivery`, `feature/builder-buttons-requests`, `feature/collections`,
    `feature/interactions`, `feature/starters-menu`, `feature/starter-packs`, `docs/agent-guide`, `docs/agent-start`.
 4. Ask the owner whether `develop` should be merged into `main`.
 
