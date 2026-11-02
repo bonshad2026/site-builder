@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { API_URL, ApiError, apiAvailable } from '../../lib/api';
+import { API_URL, ApiError, apiAvailable, mockedRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import { useSiteId, useSiteSettings } from '../public-site/data';
 
@@ -20,6 +20,8 @@ function customerCsrf(site: string): string | null {
 /** A request to this site's public API as the signed-in customer (if any). */
 export async function customerRequest<T>(site: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? 'GET';
+  const mocked = await mockedRequest(method, `/public/sites/${site}${path}`, init.body);
+  if (mocked !== undefined) return mocked.data as T;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') {

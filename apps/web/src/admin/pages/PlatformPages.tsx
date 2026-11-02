@@ -519,7 +519,7 @@ export default function PlatformPages() {
         }
       />
       <Route
-        path="starters"
+        path="starters/:kind?"
         element={
           <Suspense fallback={<Spinner />}>
             <StartersPage />

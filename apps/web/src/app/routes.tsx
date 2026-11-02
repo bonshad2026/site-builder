@@ -29,6 +29,8 @@ registerSystemPages({
 const AdminRoot = lazy(() => import('../admin/AdminRoot'));
 // The builder's preview frame; client builds (VITE_ADMIN_SCOPE=client) have no builder.
 const PreviewFrame = import.meta.env.VITE_ADMIN_SCOPE !== 'client' ? lazy(() => import('../admin/builder/PreviewFrame')) : null;
+// The studio's starter preview (a starter's page with its own sample data).
+const StarterPreviewFrame = import.meta.env.VITE_ADMIN_SCOPE !== 'client' ? lazy(() => import('../admin/StarterPreviewFrame')) : null;
 const ResetPassword = lazy(() => import('../admin/auth').then((m) => ({ default: m.ResetPasswordPage })));
 const VerifyEmail = lazy(() => import('../admin/auth').then((m) => ({ default: m.VerifyEmailPage })));
 
@@ -41,6 +43,7 @@ export const routes: RouteObject[] = [
   { path: 'reset-password', element: lazyEl(<ResetPassword />) },
   { path: 'verify-email', element: lazyEl(<VerifyEmail />) },
   ...(PreviewFrame ? [{ path: '__preview', element: lazyEl(<PreviewFrame />) }] : []),
+  ...(StarterPreviewFrame ? [{ path: '__starter-preview', element: lazyEl(<StarterPreviewFrame />) }] : []),
   {
     element: <SiteLayout />,
     children: [

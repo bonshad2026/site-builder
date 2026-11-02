@@ -157,5 +157,24 @@ Bank deletes and starters: built-in bank entries and photos can be removed too (
 `bank_hidden`, entry ref = hash of its texts; "Bring back removed built-ins" clears them). Starters
 (`starters` table, `/platform/starters`, web `src/admin/starters.tsx`): any page ("Save as starter" in
 Pages) or table (Tables) is saved to the studio; "New page" and "New table" on any site can start from one
-(tables: `s:<id>` in "Start from"); Platform ← Starters (`/admin/platform/starters`, `pages/StartersPage.tsx`) lists them to rename or delete. Photos in a page starter still point at the source site's files.
+(tables: `s:<id>` in "Start from"); Platform ← Starters (`/admin/platform/starters`, `pages/StartersPage.tsx`) lists them to rename or delete.
+Starters are self-contained packs (shared `starters.ts`, `starterPackSchema` version 2; older `{document}` / table
+data converted on read by `readStarterPack`): pages (role main / detail / linked), tables, forms, shared box designs,
+sample items and products, modules, `needs` (what was left out) and photos copied into the studio's storage
+(`BANK_STORAGE_ID` folder; deleted with the starter). API `modules/starters/pack.service.ts`: `POST
+/sites/:s/starters/scan` (tables shown or pointed to and item pages go in automatically, linked pages only when ticked,
+`skip` leaves things out), `POST /sites/:s/starters` (save, or `replace: <id>` to swap a starter's contents), `GET
+…/:id/check` and `POST …/:id/apply` (per page / table / form: create with a slug, use the site's own, or skip; slugs
+renamed everywhere; one transaction; main page as draft, other pages published; samples `demo = true`). Web dialogs in
+`admin/starters.tsx` (`SaveStarterDialog`, `ApplyStarterDialog`).
+Kinds: page, table, header, footer (`pack.site.header/footer`; saved and used from Settings ← Header / Footer,
+`ChromeStarters`). Each starter has one `group` (control migration `005_starter_groups.sql`); Platform ← Starters ←
+Pages / Tables / Headers / Footers (`/admin/platform/starters/:kind`) lists them by group with Preview / Edit / Delete.
+Preview: pages, headers and footers render in an iframe at `/__starter-preview` (`admin/StarterPreviewFrame.tsx`) with
+a chosen site's look; `setApiMock` in `lib/api.ts` answers the made-up site `starter-preview` from the pack (sample
+items, products, photos, a signed-in customer); tables preview as fields + sample items. Ready-made starters
+(`modules/starters/samples.ts`, ~50) are added by `node dist/cli.js add-sample-starters` in `api-start.sh`, each key
+once (`app_settings.starter_samples`, `starters.sample_key`); they share photo copies, so deleting a starter keeps
+photos another starter uses. The account's "Built-in content" section has `accountMenu` (tabs / sidebar / cards /
+none), `accountOpen` and `authStart` (sign-in / sign-up pages, "My orders" pages).
 The 404 page: Pages shows "Make the 404 page editable" until the site has its `not-found` page.

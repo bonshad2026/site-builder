@@ -8,6 +8,7 @@ import { cn } from '../../lib/cn';
 import { errorLine } from '../../lib/errorText';
 import { usePreferences } from '../../lib/preferences';
 import { useSiteErrorLanguage } from '../public-site/data';
+import { useSystemPageOptions } from '../../sections/BuiltInPage';
 import { CaseView } from './CaseView';
 import { L, useCustomer, useCustomerApi, useRefreshCustomer, useText, type Customer } from './customerApi';
 
@@ -23,7 +24,7 @@ function AuthPanel({ next }: { next?: string }) {
   const { accounts } = useCustomer();
   const byPhone = accounts?.identifier !== 'email';
   const passwords = accounts?.passwords !== false;
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>(useSystemPageOptions().authStart ?? 'login');
   const [withCode, setWithCode] = useState(!passwords);
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
@@ -240,95 +241,160 @@ function Profile({ customer }: { customer: Customer }) {
   );
 }
 
+type Part = 'requests' | 'orders' | 'profile';
+
+/**
+ * The signed-in customer's account: requests, orders and profile, offered as tabs, a side menu
+ * or cards (with counts), or only one part without a menu (a "My orders" page…). The builder
+ * page holding the account section chooses (`accountMenu`, `accountOpen`).
+ */
 function Dashboard({ customer }: { customer: Customer }) {
   const t = useText();
   const api = useCustomerApi();
   const refresh = useRefreshCustomer();
-  const { locale, l, formatMoney, formatDate } = usePreferences();
-  const [tab, setTab] = useState<'cases' | 'profile'>('cases');
-  const cases = useQuery({ queryKey: ['public', api.site, 'customer', 'cases', locale], queryFn: () => api.get<CasesList>(`/customer/cases?locale=${locale}`) });
+  const options = useSystemPageOptions();
+  const menu = options.accountMenu ?? 'tabs';
+  const { locale } = usePreferences();
+  const [part, setPart] = useState<Part>(options.accountOpen ?? 'requests');
+  const cases = useQuery({ queryKey: ['public', api.site, 'customer', 'cases', locale], queryFn: () => api.get<CasesList>(`/customer/cases?locale=${locale}`), enabled: part !== 'profile' || menu === 'cards' || menu === 'sidebar' });
   const logout = useMutation({ mutationFn: () => api.post('/customer/logout'), onSuccess: refresh });
-  const dot: Record<string, string> = { gray: 'bg-stone-400', blue: 'bg-sky-500', amber: 'bg-amber-500', violet: 'bg-violet-500', green: 'bg-emerald-500', red: 'bg-rose-500' };
-  const data = cases.data;
+  const parts: { id: Part; label: { en: string; fa: string }; count?: number }[] = [
+    { id: 'requests', label: L('My requests', 'درخواست‌های من'), count: cases.data?.requests.length },
+    { id: 'orders', label: L('My orders', 'سفارش‌های من'), count: cases.data?.orders.length },
+    { id: 'profile', label: L('Profile', 'مشخصات') },
+  ];
+  const signOut = (
+    <Button variant="outline" size="sm" onClick={() => logout.mutate()} disabled={logout.isPending}>
+      {t(L('Sign out', 'خروج'))}
+    </Button>
+  );
+  const head = (
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="eyebrow">{menu === 'none' ? t(parts.find((x) => x.id === part)!.label) : t(L('My account', 'حساب من'))}</p>
+        <h1 className="mt-2 font-display text-4xl text-ink">{customer.name}</h1>
+        <p className="mt-1 text-sm text-ink-soft" dir="ltr">
+          {customer.phone ?? customer.email}
+        </p>
+      </div>
+      {menu !== 'sidebar' && signOut}
+    </div>
+  );
+  const body =
+    part === 'profile' ? (
+      <Profile customer={customer} />
+    ) : cases.isLoading ? (
+      <p className="text-ink-soft">{t(L('Loading…', 'در حال بارگذاری…'))}</p>
+    ) : part === 'orders' ? (
+      <OrderList orders={cases.data?.orders ?? []} />
+    ) : (
+      <RequestList requests={cases.data?.requests ?? []} />
+    );
+
+  if (menu === 'sidebar')
+    return (
+      <div className="flex flex-col gap-8">
+        {head}
+        <div className="grid gap-8 md:grid-cols-[220px_1fr]">
+          <nav aria-label={t(L('My account', 'حساب من'))} className="flex flex-row flex-wrap gap-1 md:flex-col">
+            {parts.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                aria-current={part === x.id ? 'page' : undefined}
+                onClick={() => setPart(x.id)}
+                className={cn('flex items-center justify-between rounded-md px-3 py-2 text-start text-sm', part === x.id ? 'bg-ink text-bg' : 'text-ink-soft hover:bg-surface hover:text-ink')}
+              >
+                {t(x.label)}
+                {!!x.count && <span className="ms-3 text-xs opacity-70">{x.count}</span>}
+              </button>
+            ))}
+            <div className="md:mt-4">{signOut}</div>
+          </nav>
+          <div className="min-w-0">{body}</div>
+        </div>
+      </div>
+    );
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">{t(L('My account', 'حساب من'))}</p>
-          <h1 className="mt-2 font-display text-4xl text-ink">{customer.name}</h1>
-          <p className="mt-1 text-sm text-ink-soft" dir="ltr">
-            {customer.phone ?? customer.email}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => logout.mutate()} disabled={logout.isPending}>
-          {t(L('Sign out', 'خروج'))}
-        </Button>
-      </div>
-      <div role="tablist" className="flex gap-6 border-b border-line">
-        {(
-          [
-            ['cases', L('Requests and orders', 'درخواست‌ها و سفارش‌ها')],
-            ['profile', L('Profile', 'مشخصات')],
-          ] as const
-        ).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn('-mb-px border-b-2 pb-3 text-sm', tab === k ? 'border-ink text-ink' : 'border-transparent text-ink-soft hover:text-ink')}>
-            {t(label)}
-          </button>
-        ))}
-      </div>
-      {tab === 'profile' ? (
-        <Profile customer={customer} />
-      ) : cases.isLoading ? (
-        <p className="text-ink-soft">{t(L('Loading…', 'در حال بارگذاری…'))}</p>
-      ) : (
-        <div className="flex flex-col gap-10">
-          <section>
-            <h2 className="mb-4 text-sm font-medium text-ink-soft">{t(L('Requests', 'درخواست‌ها'))}</h2>
-            {data?.requests.length ? (
-              <ul className="divide-y divide-line border-y border-line">
-                {data.requests.map((r) => (
-                  <li key={r.number}>
-                    <Link to={`/track/${r.code}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 hover:bg-surface">
-                      <span className="w-20 font-medium" dir="ltr">
-                        {r.code}
-                      </span>
-                      <span className="min-w-32 flex-1">{l(r.typeLabel)}</span>
-                      <span className="inline-flex items-center gap-2 text-sm">
-                        <span className={cn('size-2 rounded-full', dot[r.stageColor] ?? dot.gray)} />
-                        {r.stageLabel}
-                      </span>
-                      {BigInt(r.amountDueMinor) > 0n && r.stageKind === 'open' && <span className="text-sm text-accent">💳 {formatMoney(r.amountDueMinor, r.currency)}</span>}
-                      <span className="text-xs text-ink-soft">{formatDate(r.updatedAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-ink-soft">{t(L('No requests yet.', 'هنوز درخواستی ثبت نکرده‌اید.'))}</p>
-            )}
-          </section>
-          {!!data?.orders.length && (
-            <section>
-              <h2 className="mb-4 text-sm font-medium text-ink-soft">{t(L('Orders', 'سفارش‌ها'))}</h2>
-              <ul className="divide-y divide-line border-y border-line">
-                {data.orders.map((o) => (
-                  <li key={o.number}>
-                    <Link to={`/track/${o.number}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 hover:bg-surface">
-                      <span className="w-20 font-medium" dir="ltr">
-                        {o.code}
-                      </span>
-                      <span className="flex-1 text-sm">{o.stageLabel}</span>
-                      <span className="text-sm">{formatMoney(o.totalMinor, o.currency)}</span>
-                      <span className="text-xs text-ink-soft">{formatDate(o.createdAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+      {head}
+      {menu === 'tabs' && (
+        <div role="tablist" className="flex gap-6 border-b border-line">
+          {parts.map((x) => (
+            <button key={x.id} type="button" role="tab" aria-selected={part === x.id} onClick={() => setPart(x.id)} className={cn('-mb-px border-b-2 pb-3 text-sm', part === x.id ? 'border-ink text-ink' : 'border-transparent text-ink-soft hover:text-ink')}>
+              {t(x.label)}
+            </button>
+          ))}
         </div>
       )}
+      {menu === 'cards' && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {parts.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              aria-pressed={part === x.id}
+              onClick={() => setPart(x.id)}
+              className={cn('flex flex-col items-start gap-2 rounded-xl border p-5 text-start transition-colors', part === x.id ? 'border-ink bg-surface' : 'border-line hover:border-ink-soft')}
+            >
+              <span className="text-sm text-ink-soft">{t(x.label)}</span>
+              <span className="font-display text-3xl text-ink">{x.id === 'profile' ? '✎' : (x.count ?? '—')}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {body}
     </div>
+  );
+}
+
+const DOT: Record<string, string> = { gray: 'bg-stone-400', blue: 'bg-sky-500', amber: 'bg-amber-500', violet: 'bg-violet-500', green: 'bg-emerald-500', red: 'bg-rose-500' };
+
+function RequestList({ requests }: { requests: CasesList['requests'] }) {
+  const t = useText();
+  const { l, formatMoney, formatDate } = usePreferences();
+  if (!requests.length) return <p className="text-sm text-ink-soft">{t(L('No requests yet.', 'هنوز درخواستی ثبت نکرده‌اید.'))}</p>;
+  return (
+    <ul className="divide-y divide-line border-y border-line">
+      {requests.map((r) => (
+        <li key={r.number}>
+          <Link to={`/track/${r.code}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 hover:bg-surface">
+            <span className="w-20 font-medium" dir="ltr">
+              {r.code}
+            </span>
+            <span className="min-w-32 flex-1">{l(r.typeLabel)}</span>
+            <span className="inline-flex items-center gap-2 text-sm">
+              <span className={cn('size-2 rounded-full', DOT[r.stageColor] ?? DOT.gray)} />
+              {r.stageLabel}
+            </span>
+            {BigInt(r.amountDueMinor) > 0n && r.stageKind === 'open' && <span className="text-sm text-accent">💳 {formatMoney(r.amountDueMinor, r.currency)}</span>}
+            <span className="text-xs text-ink-soft">{formatDate(r.updatedAt)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function OrderList({ orders }: { orders: CasesList['orders'] }) {
+  const t = useText();
+  const { formatMoney, formatDate } = usePreferences();
+  if (!orders.length) return <p className="text-sm text-ink-soft">{t(L('No orders yet.', 'هنوز سفارشی ثبت نکرده‌اید.'))}</p>;
+  return (
+    <ul className="divide-y divide-line border-y border-line">
+      {orders.map((o) => (
+        <li key={o.number}>
+          <Link to={`/track/${o.number}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 hover:bg-surface">
+            <span className="w-20 font-medium" dir="ltr">
+              {o.code}
+            </span>
+            <span className="flex-1 text-sm">{o.stageLabel}</span>
+            <span className="text-sm">{formatMoney(o.totalMinor, o.currency)}</span>
+            <span className="text-xs text-ink-soft">{formatDate(o.createdAt)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

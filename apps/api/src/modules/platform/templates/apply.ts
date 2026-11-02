@@ -116,7 +116,7 @@ function genericTemplate(siteName: string): SiteTemplate {
  * Boxes for list pages: products show category, price with discount and "add to cart"; a table
  * shows its main choice / date fields, price and seats left, and a buy or request button.
  */
-function productBox(sells: boolean): CardBlock {
+export function productBox(sells: boolean): CardBlock {
   return newBlock('stack', {
     border: true,
     radius: 12,
@@ -145,7 +145,7 @@ function productBox(sells: boolean): CardBlock {
   });
 }
 
-function tableBox(c: CollectionInput, sells: boolean): CardBlock {
+export function tableBox(c: CollectionInput, sells: boolean): CardBlock {
   const details = c.fields.filter((f) => ['select', 'date', 'datetime', 'reference'].includes(f.type) || ['duration', 'location', 'role', 'client'].includes(f.key)).slice(0, 3);
   const summary = c.fields.find((f) => f.key === 'summary' || f.key === 'bio');
   const buy = c.commerce.enabled && sells;

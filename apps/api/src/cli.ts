@@ -5,6 +5,7 @@ import { closeContext, createContext } from './context.js';
 import { initControlPlane } from './database/setup.js';
 import { createUser, hashPassword } from './modules/auth/auth.service.js';
 import { migrateAllTenants, provisionTenant } from './modules/platform/provisioning.js';
+import { addSampleStarters } from './modules/starters/samples.js';
 
 const USAGE = `Usage: npm run cli -- <command> [options]
 
@@ -14,7 +15,8 @@ const USAGE = `Usage: npm run cli -- <command> [options]
                                        set a sign-in name's password (creating the account if needed);
                                        --admin makes it a platform administrator. No password rules.
   provision --slug S --name N --owner EMAIL [--domain D]
-                                       create a client site with its own database`;
+                                       create a client site with its own database
+  add-sample-starters                  add the studio's ready-made starters not added before`;
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
@@ -51,6 +53,9 @@ async function main() {
       );
       if (!rows[0]) await createUser(ctx, { email: name, password: String(values.password), isPlatformAdmin: !!values.admin, displayName: values.admin ? 'Administrator' : '' });
       console.log(`password set for ${name}`);
+    } else if (command === 'add-sample-starters') {
+      const added = await addSampleStarters(ctx);
+      console.log(added ? `ready-made starters: ${added} added` : 'ready-made starters: up to date');
     } else if (command === 'create-admin') {
       const user = await createUser(ctx, { email: emailSchema.parse(values.email), password: passwordSchema.parse(values.password), isPlatformAdmin: true, displayName: 'Administrator' });
       console.log(`created platform admin ${user.email} (${user.id})`);

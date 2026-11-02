@@ -10,7 +10,7 @@ import { api } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { Localized } from '../../types/site';
 import { useT } from '../i18n';
-import { StarterPicker, useSaveStarter, useStarters } from '../starters';
+import { ApplyStarterDialog, SaveStarterDialog, StarterPicker, useStarters, type Starter } from '../starters';
 import { Badge, ErrorNote, LocalizedField, Modal, PageTitle, Spinner, TextField, useErrorLine, useToast } from '../ui';
 
 export interface PageSummary {
@@ -97,8 +97,10 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
   const [title, setTitle] = useState<Localized>({ en: '', fa: '' });
   const [slug, setSlug] = useState('');
   const [starter, setStarter] = useState('');
-  const starters = useStarters<{ document: unknown }>('page');
-  const saveStarter = useSaveStarter('page');
+  const starters = useStarters('page');
+  // "Save as starter" for a page, and a new page from a starter (after checking what it needs).
+  const [saving, setSaving] = useState<PageSummary | null>(null);
+  const [applying, setApplying] = useState<Starter | null>(null);
 
   useEffect(() => setOrder(data ?? []), [data]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
@@ -108,8 +110,7 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
   const remove = useMutation({ mutationFn: (id: string) => api.delete(`/sites/${siteId}/pages/${id}`), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
   const setHome = useMutation({ mutationFn: (id: string) => api.patch(`/sites/${siteId}/pages/${id}`, { isHome: true }), onSuccess: refresh, onError: (e) => toast(errorText(e), 'bad') });
   const create = useMutation({
-    mutationFn: () =>
-      api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug, title, document: starters.data?.find((x) => x.id === starter)?.data.document ?? { schemaVersion: 1, sections: [] } }),
+    mutationFn: () => api.post<{ id: string }>(`/sites/${siteId}/pages`, { slug, title, document: { schemaVersion: 1, sections: [] } }),
     onSuccess: (page) => {
       refresh();
       navigate(`/admin/sites/${siteId}/pages/${page.id}/builder`);
@@ -157,12 +158,7 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
                     siteId={siteId}
                     onHome={() => setHome.mutate(p.id)}
                     onDelete={() => window.confirm(t.confirmDelete) && remove.mutate(p.id)}
-                    onSave={() =>
-                      saveStarter.mutate({
-                        name: l(p.title) || p.slug,
-                        data: async () => ({ document: (await api.get<{ document: unknown }>(`/sites/${siteId}/pages/${p.id}`)).document }),
-                      })
-                    }
+                    onSave={() => setSaving(p)}
                   />
                 ))}
               </ul>
@@ -185,7 +181,12 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            create.mutate();
+            const chosen = starters.data?.find((x) => x.id === starter);
+            if (chosen) {
+              // A starter first shows what it needs from this site.
+              setCreating(false);
+              setApplying(chosen);
+            } else create.mutate();
           }}
         >
           <LocalizedField
@@ -197,7 +198,7 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
             }}
           />
           <TextField label={t.slug} dir="ltr" value={slug} onChange={(v) => setSlug(toSlug(v))} hint="about-us" required />
-          <StarterPicker kind="page" value={starter} onChange={setStarter} />
+          <StarterPicker kind="page" value={starter} onChange={setStarter} siteId={siteId} />
           <ErrorNote error={create.error} />
           <div className="flex justify-end">
             <Button type="submit" disabled={create.isPending}>
@@ -206,6 +207,21 @@ export default function PagesListPage({ siteId }: { siteId: string }) {
           </div>
         </form>
       </Modal>
+      {saving && <SaveStarterDialog siteId={siteId} kind="page" slug={saving.slug} name={l(saving.title) || saving.slug} onClose={() => setSaving(null)} />}
+      {applying && (
+        <ApplyStarterDialog
+          siteId={siteId}
+          starter={applying}
+          page={{ slug, title }}
+          onClose={() => setApplying(null)}
+          onDone={(result) => {
+            setApplying(null);
+            qc.invalidateQueries({ queryKey: ['site', siteId] });
+            qc.invalidateQueries({ queryKey: ['public'] });
+            if (result.pageId) navigate(`/admin/sites/${siteId}/pages/${result.pageId}/builder`);
+          }}
+        />
+      )}
     </>
   );
 }

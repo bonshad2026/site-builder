@@ -9,6 +9,7 @@ import { usePreferences } from '../../lib/preferences';
 import { useAdminSettings } from '../AdminRoot';
 import { useIsOperator, useMe } from '../auth';
 import { useT } from '../i18n';
+import { ChromeStarters } from '../starters';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { LinkPicker } from '../links';
 import { ImagePicker } from './FilesPage';
@@ -358,7 +359,9 @@ function SettingsView({ siteId }: { siteId: string }) {
         {tab === 'notifications' && <AccountsTab s={s} set={set} part="notifications" />}
         {tab === 'design' && <DesignTab {...tabProps} />}
         {tab === 'texts' && <TextsTab {...tabProps} />}
+        {tab === 'header' && operator && <ChromeStarters siteId={siteId} kind="header" />}
         {tab === 'header' && <HeaderTab {...tabProps} />}
+        {tab === 'footer' && operator && <ChromeStarters siteId={siteId} kind="footer" />}
         {tab === 'footer' && <FooterTab {...tabProps} />}
         {tab === 'shopPage' && <ShopPageTab {...tabProps} />}
         {tab === 'systemPages' && <SystemPagesTab {...tabProps} />}

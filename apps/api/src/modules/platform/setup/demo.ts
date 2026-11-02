@@ -49,7 +49,7 @@ export const DEMO_CUSTOMER_PASSWORD = '12345678';
 const DAY = 86_400_000;
 const j = (v: unknown) => JSON.stringify(v);
 
-function random(seed: string) {
+export function random(seed: string) {
   let h = 1779033703 ^ seed.length;
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
   let a = h >>> 0;
@@ -516,7 +516,7 @@ async function itemFor(db: pg.Pool, typeSlug: string, tables: { slug: string; na
   return rows[0] ? { collection: table.slug, id, slug: rows[0].slug, title: rows[0].title } : null;
 }
 
-function itemTitle(table: string, itemName: L, i: number): L {
+export function itemTitle(table: string, itemName: L, i: number): L {
   const n = i + 1;
   if (table === 'articles') return ARTICLE_TITLES[i % ARTICLE_TITLES.length];
   if (table === 'portfolio') return PROJECT_TITLES[i % PROJECT_TITLES.length];
@@ -535,7 +535,7 @@ function itemTitle(table: string, itemName: L, i: number): L {
 }
 
 /** A value for one field of a sample item. */
-function fieldValue(f: CollectionField, i: number, rng: ReturnType<typeof random>, items: Map<string, string[]>, title: L): unknown {
+export function fieldValue(f: CollectionField, i: number, rng: ReturnType<typeof random>, items: Map<string, string[]>, title: L): unknown {
   const now = Date.now();
   switch (f.type) {
     case 'text':

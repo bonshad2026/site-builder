@@ -63,13 +63,19 @@ function OwnPage({ document, title }: { document: Parameters<typeof PageSections
   );
 }
 
+/** The options of the "Built-in content" section showing a page (the account's menu layout…). */
+const OptionsContext = createContext<Partial<SectionProps<'system-page'>>>({});
+export const useSystemPageOptions = () => useContext(OptionsContext);
+
 /** "Built-in content" section: the cart, the current product, the checkout… inside a builder page. */
 export function SystemPageSection({ props }: { props: SectionProps<'system-page'> }) {
   const Page = components[props.page];
   if (!Page) return null;
   return (
     <EmbeddedContext.Provider value={true}>
-      <Page />
+      <OptionsContext.Provider value={props}>
+        <Page />
+      </OptionsContext.Provider>
     </EmbeddedContext.Provider>
   );
 }

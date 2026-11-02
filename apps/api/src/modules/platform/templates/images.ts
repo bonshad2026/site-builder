@@ -86,32 +86,38 @@ export interface StoredImage {
   url: string;
 }
 
-/** Stores template photos as the site's own assets; one download per photo per run. */
-export function templateImageStore(ctx: AppContext, db: pg.Pool, tenantId: string, palette: [string, string]) {
-  const cache = new Map<string, StoredImage>();
+/**
+ * A template photo's bytes: the local copy, else a download (skipped once the network failed),
+ * else a gradient placeholder in the given colours.
+ */
+export function templatePhotoLoader(ctx: AppContext, palette: [string, string]) {
   let offline = false;
-
-  return async function store(ref: string): Promise<StoredImage> {
-    const hit = cache.get(ref);
-    if (hit) return hit;
-    let body: Buffer | null = null;
-    let [ext, contentType] = ['jpg', 'image/jpeg'];
+  return async function load(ref: string): Promise<{ body: Buffer; ext: string; contentType: string }> {
     const local = path.join(LOCAL_DIR, `${ref}.jpg`);
-    if (existsSync(local)) body = readFileSync(local);
-    if (!body && !offline) {
+    if (existsSync(local)) return { body: readFileSync(local), ext: 'jpg', contentType: 'image/jpeg' };
+    if (!offline) {
       try {
         const res = await (ctx.httpFetch ?? fetch)(sourceUrl(ref), { signal: AbortSignal.timeout(15000) });
         if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) throw new Error(`HTTP ${res.status}`);
-        body = Buffer.from(await res.arrayBuffer());
+        return { body: Buffer.from(await res.arrayBuffer()), ext: 'jpg', contentType: 'image/jpeg' };
       } catch (err) {
         offline = true;
         ctx.log.warn(`template photos unavailable (${(err as Error).message}); using placeholders`);
       }
     }
-    if (!body) {
-      body = gradientPng(...palette);
-      [ext, contentType] = ['png', 'image/png'];
-    }
+    return { body: gradientPng(...palette), ext: 'png', contentType: 'image/png' };
+  };
+}
+
+/** Stores template photos as the site's own assets; one download per photo per run. */
+export function templateImageStore(ctx: AppContext, db: pg.Pool, tenantId: string, palette: [string, string]) {
+  const cache = new Map<string, StoredImage>();
+  const load = templatePhotoLoader(ctx, palette);
+
+  return async function store(ref: string): Promise<StoredImage> {
+    const hit = cache.get(ref);
+    if (hit) return hit;
+    const { body, ext, contentType } = await load(ref);
     const id = randomUUID();
     const now = new Date();
     const key = `public/tenants/${tenantId}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${id}.${ext}`;

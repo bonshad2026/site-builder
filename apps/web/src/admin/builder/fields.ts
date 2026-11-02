@@ -405,6 +405,36 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
         label: L('Content', 'محتوا'),
         options: SYSTEM_PAGES.map((p) => ({ value: p.key, label: p.label })),
       },
+      {
+        key: 'accountMenu',
+        kind: 'select',
+        label: L('Customer account: menu', 'حساب مشتری: منو'),
+        options: [
+          { value: 'tabs', label: L('Tabs', 'زبانه‌ها') },
+          { value: 'sidebar', label: L('Side menu', 'منوی کناری') },
+          { value: 'cards', label: L('Cards with counts', 'کارت‌ها با تعداد') },
+          { value: 'none', label: L('No menu: one part only', 'بدون منو: فقط یک بخش') },
+        ],
+      },
+      {
+        key: 'accountOpen',
+        kind: 'select',
+        label: L('Customer account: part shown first', 'حساب مشتری: بخش اول'),
+        options: [
+          { value: 'requests', label: L('My requests', 'درخواست‌های من') },
+          { value: 'orders', label: L('My orders', 'سفارش‌های من') },
+          { value: 'profile', label: L('Profile', 'مشخصات') },
+        ],
+      },
+      {
+        key: 'authStart',
+        kind: 'select',
+        label: L('Customer account, signed out: start on', 'حساب مشتری، پیش از ورود: شروع با'),
+        options: [
+          { value: 'login', label: L('Sign in', 'ورود') },
+          { value: 'signup', label: L('Create account', 'ثبت‌نام') },
+        ],
+      },
     ],
   },
   'contact-form': {

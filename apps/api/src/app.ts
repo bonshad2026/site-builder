@@ -22,7 +22,7 @@ import { membersRoutes } from './modules/members/members.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { pagesRoutes } from './modules/pages/pages.routes.js';
 import { bankRoutes } from './modules/bank/bank.routes.js';
-import { starterRoutes } from './modules/starters/starters.routes.js';
+import { siteStarterRoutes, starterRoutes } from './modules/starters/starters.routes.js';
 import { shopAdminRoutes, shopPublicRoutes } from './modules/shop/shop.routes.js';
 import { messagingRoutes } from './modules/platform/messaging.js';
 import { platformRoutes } from './modules/platform/platform.routes.js';
@@ -79,6 +79,8 @@ export function createApp(ctx: AppContext) {
   site.use('/assets', assetsRoutes(ctx));
   site.use('/members', membersRoutes(ctx));
   site.use('/shop', shopAdminRoutes());
+  // The studio's starters: operators only.
+  site.use('/starters', requirePlatformAdmin, siteStarterRoutes(ctx));
   app.use('/api/v1/sites/:siteId', site);
 
   app.use('/api/v1/payments', express.urlencoded({ extended: false, limit: '10kb' }), paymentReturnRoutes(ctx));
