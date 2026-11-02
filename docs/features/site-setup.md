@@ -11,6 +11,10 @@ WhatsApp / search, footer, shop, filters, content tables, accounts, sample data 
 tables, box designs (`box-products`, `box-<table>`) and then sample data. Eight business types live in
 `templates/catalog.ts` (photos via `templates/images.ts`).
 
+Template photos come from `var/demo-images/<ref>.jpg`, else the network, else a gradient placeholder
+(stored as `unsplash-<ref>.png`). The sites list returns `placeholderPhotos` per active site and shows
+"Refresh photos" only when it is above 0; that button swaps placeholders for files now in `var/demo-images`.
+
 - **Empty site**: no setup, no pages, every module off except leads (built-in shop / service routes
   show "not found" while their module is off — `sections/BuiltInPage.tsx`).
 - **Default site**: the neutral setup (`genericTemplate`).

@@ -84,6 +84,26 @@ describe('creating a client site', () => {
       { email: `second-${slug}@test.local`, role: 'owner' },
     ]);
   });
+
+  it('lists how many placeholder template photos each active site still has', async () => {
+    const slug = `ph-${uid()}`;
+    const created = await platform.post('/api/v1/platform/tenants', { slug, name: 'Placeholders', ownerEmail: `o-${slug}@test.local` });
+    const listed = async () => (await platform.get('/api/v1/platform/tenants?q=' + slug)).body.data[0];
+    expect((await listed()).placeholderPhotos).toBe(0);
+
+    const t = (await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE id = $1', [created.body.data.id])).rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    await db.query(
+      `INSERT INTO assets (id, storage_key, original_name, content_type, size_bytes, visibility, kind)
+       VALUES (gen_random_uuid(), 'public/x/a.png', 'unsplash-test-ref.png', 'image/png', 10, 'public', 'image'),
+              (gen_random_uuid(), 'public/x/b.jpg', 'unsplash-test-ref.jpg', 'image/jpeg', 10, 'public', 'image')`,
+    );
+    expect((await listed()).placeholderPhotos).toBe(1);
+
+    // Suspended sites are not checked.
+    await platform.patch(`/api/v1/platform/tenants/${t.id}`, { status: 'suspended' });
+    expect((await listed()).placeholderPhotos).toBeNull();
+  });
 });
 
 describe('deleting sites and users', () => {

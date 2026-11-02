@@ -49,6 +49,15 @@ function gradientPng(from: string, to: string) {
   ]);
 }
 
+/** Template photos stored as gradient placeholders (no local copy or network when the site was made). */
+const PLACEHOLDER_PHOTOS = `FROM assets WHERE original_name LIKE 'unsplash-%.png'`;
+
+/** How many placeholder photos a site still has; the studio offers "Refresh photos" only when > 0. */
+export async function countPlaceholderPhotos(db: pg.Pool) {
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n ${PLACEHOLDER_PHOTOS}`);
+  return rows[0].n;
+}
+
 /**
  * Swaps a site's placeholder template photos for real ones that have since been placed in
  * var/demo-images: new file, same asset id, and links in pages and settings updated.
@@ -56,7 +65,7 @@ function gradientPng(from: string, to: string) {
  */
 export async function refreshTemplatePhotos(ctx: AppContext, db: pg.Pool) {
   const { rows } = await db.query<{ id: string; storage_key: string; original_name: string }>(
-    `SELECT id, storage_key, original_name FROM assets WHERE original_name LIKE 'unsplash-%.png'`,
+    `SELECT id, storage_key, original_name ${PLACEHOLDER_PHOTOS}`,
   );
   let replaced = 0;
   const missing: string[] = [];

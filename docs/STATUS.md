@@ -4,9 +4,11 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
-- Branch `develop` holds everything; all feature branches below are merged into it.
+- Branch `feature/review-fixes` (from `develop`, not merged): the owner's review list, one item at a time.
+  Done: "Refresh photos" shows only for sites that still have placeholder photos.
+- Branch `develop` holds everything else; all feature branches below are merged into it.
 - `main` is behind `develop` (`git rev-list --count main..develop`); it is updated only when the owner asks.
-- Tests: web 44/44, API 95/95 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
+- Tests: web 44/44, API 96/96 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
   (`amountMinor` on a type with only `authority`) — older than this file, not yet fixed.
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
 
@@ -24,6 +26,8 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - None waiting.
 
 ## Log
+- **2026-11-02** — `feature/review-fixes`: the sites list reports `placeholderPhotos` per active site;
+  "Refresh photos" is shown only when it is above 0 (test in `provisioning.test.ts`).
 - **2026-11-02** — Agent guide: `AGENTS.md` (read by every agent; `CLAUDE.md` imports it), feature
   docs in `docs/features/`, docs index, legacy docs marked, this status file, pointer files for other
   tools ("Start here" routine). Commits on `docs/agent-guide` and `docs/agent-start`, merged into `develop`.

@@ -23,6 +23,8 @@ interface Tenant {
   primaryDomain: string | null;
   ownerEmail: string | null;
   createdAt: string;
+  /** Template photos still stored as gradient placeholders (null when unknown). */
+  placeholderPhotos: number | null;
 }
 
 const statusTone = { active: 'good', provisioning: 'warn', suspended: 'neutral', failed: 'bad' } as const;
@@ -54,10 +56,12 @@ function SitesPage() {
     onError: () => toast(t.error, 'bad'),
   });
   // Template photos that were placeholders (no internet) are swapped for files now in var/demo-images.
+  // Offered only for sites that still have placeholders; the button goes once none are left.
   const photos = useMutation({
     mutationFn: (tenant: Tenant) => api.post<{ replaced: number; missing: string[] }>(`/platform/tenants/${tenant.id}/refresh-photos`, {}),
     onSuccess: (r) => toast(`${t.photosReplaced}: ${r.replaced}${r.missing.length ? ` · ${t.photosMissing}: ${r.missing.length}` : ''}`, r.missing.length ? 'bad' : 'good'),
     onError: () => toast(t.error, 'bad'),
+    onSettled: refresh,
   });
   const retry = useMutation({
     mutationFn: (tenant: Tenant) => api.post(`/platform/tenants/${tenant.id}/retry`, {}),
@@ -119,7 +123,7 @@ function SitesPage() {
                     <Button size="sm" variant="ghost" onClick={() => setOwner(s)}>
                       {t.changeOwner}
                     </Button>
-                    {s.status === 'active' && (
+                    {s.status === 'active' && !!s.placeholderPhotos && (
                       <Button size="sm" variant="ghost" disabled={photos.isPending} onClick={() => photos.mutate(s)}>
                         {t.refreshPhotos}
                       </Button>

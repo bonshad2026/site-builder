@@ -32,7 +32,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ```
 عکس‌های قالب‌ها: `deploy/photos/download-photos.ps1` (یا `.sh`) → پوشه‌ی `var/demo-images`.
 اگر عکس‌ها دانلود نشدند، فایل زیپ عکس‌ها را در `var/demo-images` باز کنید و در Studio دکمه‌ی
-«Refresh photos» سایت را بزنید.
+«Refresh photos» سایت را بزنید (این دکمه فقط برای سایت‌هایی دیده می‌شود که هنوز عکس جایگزین دارند).
 
 ## کارهای روزمره
 | کار | کجا / چطور |
