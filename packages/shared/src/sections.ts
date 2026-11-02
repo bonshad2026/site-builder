@@ -157,6 +157,10 @@ export function systemPageSections(key: SystemPageKey): { type: string; props: R
   return [{ type: 'system-page', props: { page: key } }];
 }
 
+/** How a customer's account offers its parts, and the parts. */
+export const ACCOUNT_MENUS = ['tabs', 'sidebar', 'cards', 'none'] as const;
+export const ACCOUNT_PARTS = ['requests', 'orders', 'profile'] as const;
+
 export const FEATURE_MARKERS = ['roman', 'number', 'bullet', 'none'] as const;
 export const TEXT_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
 
@@ -302,7 +306,15 @@ export const sectionDefinitions = {
     card: cardDesignSchema.nullable().default(null),
   }),
   /** The built-in content of a system page (the cart, the current product…) inside a builder page. */
-  'system-page': z.object({ page: z.enum(SYSTEM_PAGE_KEYS).default('cart') }),
+  'system-page': z.object({
+    page: z.enum(SYSTEM_PAGE_KEYS).default('cart'),
+    /** Customer account: how its parts are offered (tabs, a side menu, cards, or one part only). */
+    accountMenu: z.enum(ACCOUNT_MENUS).default('tabs'),
+    /** Customer account: the part shown first (or the only one, without a menu). */
+    accountOpen: z.enum(ACCOUNT_PARTS).default('requests'),
+    /** Customer account, signed out: start on signing in or on creating an account. */
+    authStart: z.enum(['login', 'signup']).default('login'),
+  }),
   /** A map: an embed address (Neshan, Google Maps…) or a point shown on OpenStreetMap. */
   map: z.object({
     ...eyebrowHeading,

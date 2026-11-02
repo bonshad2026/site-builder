@@ -31,8 +31,21 @@ export interface Envelope<T> {
  * JSON request to the API. Sends the session cookie and, for state-changing
  * requests, the CSRF token. Throws ApiError with the server's error code.
  */
+/**
+ * Answers requests without the network (the studio's starter preview, which shows a starter's
+ * pages with its own sample data); undefined lets the request go to the API.
+ */
+export type ApiMock = (method: string, path: string, body: unknown) => Promise<Envelope<unknown> | undefined> | Envelope<unknown> | undefined;
+let apiMock: ApiMock | null = null;
+export const setApiMock = (mock: ApiMock | null) => {
+  apiMock = mock;
+};
+export const mockedRequest = (method: string, path: string, body: unknown) => apiMock?.(method, path, body);
+
 export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<Envelope<T>> {
   const method = init.method ?? 'GET';
+  const mocked = await mockedRequest(method, path, init.body);
+  if (mocked !== undefined) return mocked as Envelope<T>;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') {
