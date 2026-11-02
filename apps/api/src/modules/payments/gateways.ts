@@ -12,12 +12,20 @@ export interface PaymentRequest {
 export type VerifyResult = { ok: true; refId: string; cardPan?: string } | { ok: false; reason: string };
 
 export interface PaymentGateway {
-  readonly name: 'zarinpal' | 'zibal' | 'idpay' | 'sandbox';
+  /** The driver's key (see `drivers.ts`). */
+  readonly name: string;
   /** True when no real money moves. Such payments are recorded as `test_paid`. */
   readonly isTest: boolean;
   request(req: PaymentRequest): Promise<{ authority: string; redirectUrl: string }>;
   /** Server-to-server confirmation. The only thing that may mark a payment as succeeded. */
-  verify(args: { authority: string; amountMinor: bigint; currency: string; sandboxDecision?: string | null }): Promise<VerifyResult>;
+  verify(args: VerifyArgs): Promise<VerifyResult>;
+}
+
+export interface VerifyArgs {
+  authority: string;
+  amountMinor: bigint;
+  currency: string;
+  sandboxDecision?: string | null;
 }
 
 type Fetch = typeof fetch;
@@ -69,7 +77,7 @@ export class ZarinpalGateway implements PaymentGateway {
     return { authority: data.authority, redirectUrl: `${this.base}/pg/StartPay/${data.authority}` };
   }
 
-  async verify({ authority, amountMinor }: { authority: string; amountMinor: bigint }): Promise<VerifyResult> {
+  async verify({ authority, amountMinor }: VerifyArgs): Promise<VerifyResult> {
     const { data, errors } = await this.post('/pg/v4/payment/verify.json', { merchant_id: this.merchantId, amount: Number(amountMinor), authority });
     // 100 = verified now, 101 = already verified earlier (idempotent).
     if (data.code === 100 || data.code === 101) return { ok: true, refId: String(data.ref_id), cardPan: typeof data.card_pan === 'string' ? data.card_pan : undefined };
@@ -118,7 +126,7 @@ export class ZibalGateway implements PaymentGateway {
     return { authority: trackId, redirectUrl: `${this.base}/start/${trackId}` };
   }
 
-  async verify({ authority }: { authority: string }): Promise<VerifyResult> {
+  async verify({ authority }: VerifyArgs): Promise<VerifyResult> {
     const { json } = await postJson(this.http, `${this.base}/v1/verify`, { merchant: this.merchant, trackId: Number(authority) });
     // 100 = verified now, 201 = verified before.
     if (json.result === 100 || json.result === 201) return { ok: true, refId: String(json.refNumber ?? authority), cardPan: typeof json.cardNumber === 'string' ? json.cardNumber : undefined };
@@ -161,7 +169,7 @@ export class IdpayGateway implements PaymentGateway {
     return { authority: `${json.id}:${orderId}`, redirectUrl: json.link };
   }
 
-  async verify({ authority }: { authority: string }): Promise<VerifyResult> {
+  async verify({ authority }: VerifyArgs): Promise<VerifyResult> {
     const [id, orderId] = authority.split(':');
     const { json } = await postJson(this.http, `${this.base}/payment/verify`, { id, order_id: orderId }, this.headers());
     // 100 = verified now, 101 = verified before.
@@ -190,7 +198,7 @@ export class SandboxGateway implements PaymentGateway {
     return { authority, redirectUrl: this.pageUrl(authority) };
   }
 
-  async verify({ sandboxDecision }: { sandboxDecision?: string | null }): Promise<VerifyResult> {
+  async verify({ sandboxDecision }: VerifyArgs): Promise<VerifyResult> {
     return sandboxDecision === 'approved' ? { ok: true, refId: `TEST-${randomToken(6)}` } : { ok: false, reason: 'Declined on the sandbox page' };
   }
 }

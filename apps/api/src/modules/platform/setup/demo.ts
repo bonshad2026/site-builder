@@ -651,14 +651,14 @@ export async function generateDemo(ctx: AppContext, db: pg.Pool, siteSlug: strin
   }
   if (run.mode === 'replace') await clearDemoData(db);
   const settings = withSettingDefaults(siteSettingsSchema.parse((await db.query('SELECT settings FROM site_settings WHERE id = 1')).rows[0].settings));
-  const pay = (await db.query<{ provider: string; allow_cod: boolean }>('SELECT provider, allow_cod FROM payment_settings WHERE id = 1')).rows[0];
+  const pay = (await db.query<{ online: boolean; allow_cod: boolean }>('SELECT EXISTS (SELECT 1 FROM payment_gateways WHERE enabled AND allowed) AS online, allow_cod FROM payment_settings WHERE id = 1')).rows[0];
   const sells = !!settings.modules.orders;
   return addDemoData(db, {
     settings,
     seed: `${siteSlug}-${Date.now()}`,
     bank: await loadBank(ctx, run.type),
     store: photoStore(ctx, db, tenantId),
-    shop: { sells, online: sells && pay.provider !== 'none', cod: sells && pay.allow_cod, stock: true, discounts: true, colors: true },
+    shop: { sells, online: sells && pay.online, cod: sells && pay.allow_cod, stock: true, discounts: true, colors: true },
     run,
   });
 }

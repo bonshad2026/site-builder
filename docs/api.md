@@ -32,7 +32,9 @@ generated from the same Zod schemas that validate the requests).
 | Files | `GET/POST /assets` (multipart `file`, `visibility`, `altEn`, `altFa`) · `GET/DELETE /assets/:id` · `POST /assets/cleanup?dryRun=` |
 | Members (owner) | `GET/POST /members` · `PATCH/DELETE /members/:userId` |
 | Dashboard | `GET /overview` |
-| Payment settings (`payments:manage`) | `GET/PUT /payment-settings` (`provider`: `none`, `zarinpal` or `sandbox`; `merchantId`; `useSandboxHost`) |
+| Payment settings (`payments:manage`) | `GET/PUT /payment-settings` (`allowCod`; GET also lists the gateways) · `PUT /payment-settings/gateways/:provider` (`enabled`, `label`, `description`, `credentials`, `testMode`) · `PUT …/gateways/:provider/access` (`allowed`, operator only) · `POST …/gateways/:provider/test` · `PUT /payment-settings/order` (`providers`) |
+| Payments (`payments:manage`) | `GET /payments` (`status`, `provider`, `test`, `q`) · `POST /payments/:id/recheck` |
+| Gateway catalog (platform) | `GET /platform/payment-gateways` · `PUT /platform/payment-gateways/:provider` (`enabled`, `defaultAllowed`, `label`, `description`) |
 | Public `/public` | `GET /resolve?domain=` · `/sites/:siteSlug/` `settings`, `pages`, `pages/:slug`, `services[/:slug]`, `products[/:slug]` (filter `category`, `q`, `featured`, `sort`), `POST leads`, `POST orders` (returns `orderToken`), `GET orders/:number?token=`, `POST orders/:number/pay`, `GET payment-methods`, `GET sitemap.xml`, `GET robots.txt` |
 | Payment return `/payments` | `GET /callback/:site/:paymentId` (the gateway sends the buyer here; verified server-to-server) · `GET/POST /sandbox/:site/:authority` (test gateway page, development only) |
 

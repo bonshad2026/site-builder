@@ -122,14 +122,29 @@ export function useProduct(slug: string) {
   });
 }
 
+/** An online gateway the buyer can choose at checkout. */
+export interface PublicGateway {
+  provider: string;
+  label: { en: string; fa: string };
+  description: { en: string; fa: string };
+  isTest: boolean;
+}
+
+export interface PaymentMethods {
+  online: boolean;
+  cod: boolean;
+  /** The default (first) gateway. */
+  provider: string | null;
+  isTest: boolean;
+  gateways?: PublicGateway[];
+}
+
 export function usePaymentMethods(enabled: boolean) {
   const site = useSiteId();
   return useQuery({
     queryKey: ['public', site, 'payment-methods'],
     queryFn: () =>
-      apiAvailable()
-        ? api.get<{ online: boolean; cod: boolean; provider: string | null; isTest: boolean }>(`/public/sites/${site}/payment-methods`)
-        : Promise.resolve({ online: false, cod: false, provider: null, isTest: false }),
+      apiAvailable() ? api.get<PaymentMethods>(`/public/sites/${site}/payment-methods`) : Promise.resolve<PaymentMethods>({ online: false, cod: false, provider: null, isTest: false, gateways: [] }),
     enabled,
   });
 }

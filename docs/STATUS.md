@@ -4,6 +4,13 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- Branch `feature/payment-gateways` (from `develop`, not merged or pushed yet): several gateways per
+  site with the buyer choosing at checkout, a studio gateway catalog, operator control of which
+  gateways each site may use, a transactions page with "check again", and "test connection". Gateways
+  are drivers in `apps/api/src/modules/payments/drivers.ts`; see [features/shop.md](features/shop.md).
+  Checked in the studio browser (settings, checkout choice, transactions, catalog). Not done: the
+  customer's order/request tracking page still pays with the site's first gateway (no choice there);
+  new gateways (Saman/SEP, Mellat, PayPing…) and a no-code custom gateway are not written yet.
 - Branch `feature/review-fixes` (the owner's review list, one item at a time) is merged into `develop`.
   Done so far: "Refresh photos" shows only for sites that still have placeholder photos; empty-site test
   covers modules, tables and photos; "Site texts" is operator-only (hidden for clients, ignored by the API);
@@ -17,12 +24,12 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - Branch `develop` holds everything; all feature branches above and below are merged into it.
   New review items go on a new branch from `develop`.
 - `main` is behind `develop` (`git rev-list --count main..develop`); it is updated only when the owner asks.
-- Tests: web 43/43, API 98/98 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
-  (`amountMinor` on a type with only `authority`) — older than this file, not yet fixed.
+- Tests: web 43/43, API 104/104 (2026-11-02, on `feature/payment-gateways`). Typecheck is clean (the
+  old `shop.test.ts` error was fixed with the gateway `verify` signatures).
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
 
 ## Next (in this order, unless the owner asks for something else)
-1. Fix the typecheck error in `apps/api/test/shop.test.ts` so `npm run typecheck` is clean.
+1. Ask the owner whether to push `feature/payment-gateways` and merge it into `develop`.
 2. Sample data for **services** (setup and ready-made starters only turn the module on; service pages
    preview empty). See [features/site-setup.md](features/site-setup.md) and
    [features/starters.md](features/starters.md).
@@ -35,6 +42,9 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - None waiting.
 
 ## Log
+- **2026-11-02** — `feature/payment-gateways`: tenant migration `011_payment_gateways.sql` moves each
+  site's single gateway into `payment_gateways` (one row per driver) and drops the old columns of
+  `payment_settings`; studio catalog in `app_settings` (`payment_catalog`); tests in `payments.test.ts`.
 - **2026-11-02** — `feature/review-fixes`: site kits replace the content bank's kinds (control
   migration `006_kit_tables.sql`, `kit_tables`; see [features/site-setup.md](features/site-setup.md)).
 - **2026-11-02** — `feature/review-fixes`: the sites list reports `placeholderPhotos` per active site;

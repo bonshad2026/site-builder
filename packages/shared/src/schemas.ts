@@ -418,18 +418,41 @@ export const staffInviteSchema = z.object({
 
 /* ---------- Payments ---------- */
 
-export const PAYMENT_PROVIDERS = ['none', 'zarinpal', 'zibal', 'idpay', 'sandbox'] as const;
+/** A payment gateway's key: the name of its driver in the API (`zarinpal`, `zibal`, `sandbox`…). */
+export const paymentProviderSchema = z.string().regex(/^[a-z][a-z0-9_-]{1,31}$/);
 
 export const paymentSettingsSchema = z.object({
-  provider: z.enum(PAYMENT_PROVIDERS),
-  /** Zarinpal merchant id, Zibal merchant code or IDPay API key. Kept in a private table, never in public settings. */
-  merchantId: z.string().trim().max(64).default(''),
-  /** Test mode: Zarinpal's sandbox host, IDPay's sandbox header. */
-  useSandboxHost: z.boolean().default(false),
   /** Let buyers pay on delivery (cash or card at the door). */
   allowCod: z.boolean().default(false),
 });
 export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;
+
+/** Buyer-facing name and note of a gateway; empty means the gateway's own name. */
+const gatewayTextSchema = z.object({ en: z.string().trim().max(80), fa: z.string().trim().max(80) });
+
+/** One gateway of a site, as its staff set it up. */
+export const paymentGatewayInputSchema = z.object({
+  enabled: z.boolean(),
+  label: gatewayTextSchema.default({ en: '', fa: '' }),
+  description: gatewayTextSchema.default({ en: '', fa: '' }),
+  /** Merchant id, API key… as the gateway's driver lists them. Kept in a private table, never in public settings. */
+  credentials: z.record(z.string().regex(/^[a-zA-Z]{1,32}$/), z.string().trim().max(200)).default({}),
+  /** The gateway's own test mode, where it has one (no real money moves). */
+  testMode: z.boolean().default(false),
+});
+export type PaymentGatewayInput = z.infer<typeof paymentGatewayInputSchema>;
+
+/** The studio's gateway catalog: per gateway, whether sites may get it and the defaults a site starts with. */
+export const paymentCatalogEntrySchema = z.object({
+  /** Off: no site can be given this gateway (sites already using it keep it). */
+  enabled: z.boolean().default(true),
+  /** New sites (and sites that never had it set) are allowed this gateway. */
+  defaultAllowed: z.boolean().default(true),
+  label: gatewayTextSchema.default({ en: '', fa: '' }),
+  description: gatewayTextSchema.default({ en: '', fa: '' }),
+});
+export const paymentCatalogSchema = z.record(paymentProviderSchema, paymentCatalogEntrySchema);
+export type PaymentCatalogEntry = z.infer<typeof paymentCatalogEntrySchema>;
 
 /* ---------- request types ---------- */
 

@@ -11,6 +11,7 @@ const SiteSetupPage = lazy(() => import('./SiteSetup'));
 const BankPage = lazy(() => import('./BankPage'));
 const StartersPage = lazy(() => import('./StartersPage'));
 const MessagingPage = lazy(() => import('./MessagingPage'));
+const PaymentCatalogPage = lazy(() => import('./PaymentCatalogPage'));
 
 interface Tenant {
   id: string;
@@ -541,6 +542,14 @@ export default function PlatformPages() {
         element={
           <Suspense fallback={<Spinner />}>
             <MessagingPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="payments"
+        element={
+          <Suspense fallback={<Spinner />}>
+            <PaymentCatalogPage />
           </Suspense>
         }
       />

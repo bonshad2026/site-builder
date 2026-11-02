@@ -29,7 +29,8 @@ import { platformRoutes } from './modules/platform/platform.routes.js';
 import { publicRoutes, resolveRoutes } from './modules/public/public.routes.js';
 import { siteRoutes } from './modules/site/site.routes.js';
 import { filesRoutes } from './storage/files.routes.js';
-import { paymentReturnRoutes, paymentSettingsRoutes } from './modules/payments/payments.routes.js';
+import { paymentCatalogRoutes } from './modules/payments/catalog.js';
+import { paymentReturnRoutes, paymentSettingsRoutes, paymentsListRoutes } from './modules/payments/payments.routes.js';
 import { overviewRoutes } from './modules/site/overview.routes.js';
 import './types.js';
 
@@ -56,6 +57,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/v1/auth', authRoutes(ctx));
   app.use('/api/v1/platform/bank', requirePlatformAdmin, bankRoutes(ctx));
   app.use('/api/v1/platform/starters', requirePlatformAdmin, starterRoutes(ctx));
+  app.use('/api/v1/platform/payment-gateways', requirePlatformAdmin, paymentCatalogRoutes(ctx));
   app.use('/api/v1/platform', requirePlatformAdmin, messagingRoutes(ctx, () => ctx.resetMessaging()));
   app.use('/api/v1/platform', requirePlatformAdmin, platformRoutes(ctx));
 
@@ -72,6 +74,7 @@ export function createApp(ctx: AppContext) {
   site.use('/products', productsRoutes(ctx.storage));
   site.use('/collections', collectionsRoutes(ctx.storage, operatorOnly));
   site.use('/payment-settings', paymentSettingsRoutes(ctx));
+  site.use('/payments', paymentsListRoutes(ctx));
   site.use('/overview', operatorOnly, overviewRoutes());
   site.use('/leads', leadsRoutes(ctx));
   site.use('/orders', ordersRoutes(ctx));

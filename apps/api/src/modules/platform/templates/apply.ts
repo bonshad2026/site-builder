@@ -25,6 +25,7 @@ import type { AppContext } from '../../../context.js';
 import { productsTable, servicesTable } from '../../catalog/catalog.js';
 import { defaultSiteSettings } from '../provisioning.js';
 import { loadBank, photoStore } from '../../bank/bank.service.js';
+import { enableGateway } from '../../payments/payments.service.js';
 import { addDemoData } from '../setup/demo.js';
 import { ARTICLE_TITLES, CITIES, PARAGRAPHS, STREETS } from '../setup/pools.js';
 import { type L, type SiteTemplate } from './catalog.js';
@@ -596,7 +597,9 @@ export async function applySetup(ctx: AppContext, tenant: TenantRef, template: S
     ],
   });
   await db.query('UPDATE site_settings SET settings = $1, updated_at = now() WHERE id = 1', [settings]);
-  await db.query(`UPDATE payment_settings SET allow_cod = $1, provider = $2 WHERE id = 1`, [sells && setup.shop.cod, sells && setup.shop.online ? 'sandbox' : 'none']);
+  await db.query(`UPDATE payment_settings SET allow_cod = $1 WHERE id = 1`, [sells && setup.shop.cod]);
+  // Online payment starts on the test gateway until the client's own gateway is set up.
+  await enableGateway(db, 'sandbox', sells && setup.shop.online);
 
   const demo = setup.demo.enabled
     ? await addDemoData(db, {

@@ -1,4 +1,4 @@
-import { leadInputSchema, orderInputSchema, withSettingDefaults } from '@site-builder/shared';
+import { leadInputSchema, orderInputSchema, paymentProviderSchema, withSettingDefaults } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ import { withImageUrls } from '../assets/urls.js';
 import { registerPublicCollectionRoutes } from '../collections/collections.routes.js';
 import { availabilityOf, loadCollections, seatsTaken, type ItemRow } from '../collections/collections.service.js';
 import { createOrder, orderItems, type LowStock } from '../orders/orders.service.js';
-import { findOrderForBuyer, gatewayFor, getPaymentSettings, startPayment } from '../payments/payments.service.js';
+import { findOrderForBuyer, getPaymentSettings, startPayment, usableGateways } from '../payments/payments.service.js';
 import { verifiedCustomer } from '../customers/customers.service.js';
 import { accessValid, loadSettings, siteBaseUrl } from '../interactions/context.js';
 import { notifyStaff } from '../interactions/notify.js';
@@ -172,10 +172,18 @@ export function publicRoutes(ctx: AppContext) {
     },
   );
 
-  r.route({ method: 'get', path: '/payment-methods', summary: 'Whether online payment is available, and whether it is a test gateway', middleware: [requireModule('orders')] }, async ({ req }) => {
+  r.route({ method: 'get', path: '/payment-methods', summary: 'The online gateways a buyer can choose (first = default) and payment on delivery', middleware: [requireModule('orders')] }, async ({ req }) => {
     const settings = await getPaymentSettings(req.tenant!.db);
-    const gateway = gatewayFor(ctx, settings, req.tenant!.slug);
-    return { data: { online: !!gateway, cod: settings.allowCod, provider: gateway?.name ?? null, isTest: gateway?.isTest ?? false } };
+    const gateways = await usableGateways(ctx, req.tenant!);
+    return {
+      data: {
+        online: gateways.length > 0,
+        cod: settings.allowCod,
+        provider: gateways[0]?.provider ?? null,
+        isTest: gateways[0]?.gateway.isTest ?? false,
+        gateways: gateways.map((g) => ({ provider: g.provider, label: g.label, description: g.description, isTest: g.gateway.isTest })),
+      },
+    };
   });
 
   const orderLookup = z.object({ number: z.string().regex(/^\d{1,12}$/) });
@@ -209,7 +217,7 @@ export function publicRoutes(ctx: AppContext) {
       path: '/orders/:number/pay',
       summary: 'Start online payment; returns the gateway URL',
       params: orderLookup,
-      body: z.object({ token: z.string().max(200).default(''), locale: z.enum(['en', 'fa']).default('en') }),
+      body: z.object({ token: z.string().max(200).default(''), locale: z.enum(['en', 'fa']).default('en'), gateway: paymentProviderSchema.optional() }),
       middleware: [submitLimiter, requireModule('orders')],
     },
     async ({ req, params, body }) => {
@@ -222,7 +230,7 @@ export function publicRoutes(ctx: AppContext) {
       const returnUrl = verified
         ? `${base}${body.locale === 'fa' ? '/fa' : ''}/track/${params.number}${body.token ? `?t=${encodeURIComponent(body.token)}` : ''}`
         : `${base}${body.locale === 'fa' ? '/fa' : ''}/checkout/result?order=${params.number}&token=${encodeURIComponent(body.token)}`;
-      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl }, verified) };
+      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl, provider: body.gateway }, verified) };
     },
   );
 
