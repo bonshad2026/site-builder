@@ -9,6 +9,8 @@
 ## صفحه‌ها
 | کار | صفحه |
 |---|---|
+| **همه‌ی امکانات سایت‌ساز** (قبل از هر کار ببینید) | [features.md](features.md) |
+| **شروع یک سایت از حالت خالی** (روال قدم‌به‌قدم) | [start-empty-site.md](start-empty-site.md) |
 | روشن کردن درگاه پرداخت | [payment-gateways.md](payment-gateways.md) |
 
 </div>
