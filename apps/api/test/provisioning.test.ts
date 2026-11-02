@@ -113,7 +113,18 @@ describe('deleting sites and users', () => {
     const res = await platform.post('/api/v1/platform/tenants', { slug, name: 'Gone', ownerEmail });
     expect(res.status).toBe(201);
     expect((await request(app).get(`/api/v1/public/sites/${slug}/pages`)).body.data).toEqual([]);
+    // No shop, built-in tables, content tables or sample rows either; only requests stay on.
+    expect((await request(app).get(`/api/v1/public/sites/${slug}/settings`)).body.data.modules).toEqual({
+      services: false, products: false, projects: false, testimonials: false, faq: false, leads: true, orders: false,
+    });
     const id = res.body.data.id;
+    const t = (await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE id = $1', [id])).rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    const { rows: counts } = await db.query(
+      `SELECT (SELECT count(*) FROM collections)::int AS tables, (SELECT count(*) FROM products)::int AS products,
+              (SELECT count(*) FROM services)::int AS services, (SELECT count(*) FROM assets)::int AS photos`,
+    );
+    expect(counts[0]).toEqual({ tables: 0, products: 0, services: 0, photos: 0 });
     const dbName = tenantDbName(ctx.env.TENANT_DB_PREFIX, slug);
 
     expect((await platform.delete(`/api/v1/platform/tenants/${id}?confirm=wrong`)).status).toBe(400);
