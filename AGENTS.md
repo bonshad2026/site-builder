@@ -6,6 +6,21 @@ others read `AGENTS.md`). It describes how the project works **today**. Feature 
 
 The owner writes in Persian: **reply in Persian**; keep code, comments, commits and docs in English.
 
+## Start here (every session, without being asked)
+1. Read this file to the end.
+2. Read [`docs/STATUS.md`](docs/STATUS.md): where the work stands, what is open, what comes next.
+3. Run `git status` and `git branch --show-current`; work starts from `develop` (see Git below).
+   If there are uncommitted changes you did not make, ask the owner before touching them.
+4. For the area you are asked to change, read its doc in [`docs/features/`](docs/features/) before the code.
+5. If the owner only says "continue" (ادامه بده), continue with the first item under "Next" in `docs/STATUS.md`,
+   after saying in one line what you are about to do.
+
+## End of every session (or after any finished task)
+- Update [`docs/STATUS.md`](docs/STATUS.md): what you did (with the commit), what is unfinished, what is next.
+- If you changed how something works, update this file (facts every task needs) or the feature doc (details).
+- Agents' own memories (Claude's memory, chat history) are not seen by other agents or machines:
+  anything the next agent needs must be written in these files and committed.
+
 ## What it is
 A studio where an operator builds websites for business clients and delivers each one as its own
 installable package.
@@ -101,6 +116,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 ## Feature docs
 | Area | Doc |
 |---|---|
+| Current state, open items, next steps | [STATUS.md](docs/STATUS.md) |
 | Studio, deploy service, client packages, backups | [studio-and-delivery.md](docs/features/studio-and-delivery.md) |
 | New sites: setup, empty/default sites, built-in pages, sample data, content bank | [site-setup.md](docs/features/site-setup.md) |
 | Content tables, box designer, filters, item pages | [collections.md](docs/features/collections.md) |
@@ -110,5 +126,8 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Keeping this guide
 Any agent finishing a change that alters how something works updates this file (facts that every
-task needs) or the matching feature doc (details). Keep this file short; put details in the docs.
-Update the "Before you say a change is done" test counts when they change.
+task needs) or the matching feature doc (details), and always `docs/STATUS.md`. Keep this file short;
+put details in the docs. Update the test counts here and in `docs/STATUS.md` when they change.
+Other tools are pointed here by `CLAUDE.md` (Claude Code), `GEMINI.md` (Gemini CLI),
+`.github/copilot-instructions.md` (GitHub Copilot) and `.cursor/rules/project-guide.mdc` (Cursor);
+Codex and most others read `AGENTS.md` directly. Keep those pointer files as pointers only.

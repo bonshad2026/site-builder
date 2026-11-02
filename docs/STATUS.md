@@ -1,0 +1,36 @@
+# Status
+
+Where the work stands, for whoever (person or agent) continues it. Newest first. Keep it short:
+update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
+
+## Now
+- Branch `develop` holds everything; all feature branches below are merged into it.
+- `main` is 14 commits behind `develop`; it is updated only when the owner asks.
+- Tests: web 44/44, API 95/95 (2026-11-02). Known typecheck error in `apps/api/test/shop.test.ts`
+  (`amountMinor` on a type with only `authority`) — older than this file, not yet fixed.
+- The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
+
+## Next (in this order, unless the owner asks for something else)
+1. Fix the typecheck error in `apps/api/test/shop.test.ts` so `npm run typecheck` is clean.
+2. Sample data for **services** (setup and ready-made starters only turn the module on; service pages
+   preview empty). See [features/site-setup.md](features/site-setup.md) and
+   [features/starters.md](features/starters.md).
+3. Ask the owner whether to delete the merged branches (local and on GitHub):
+   `feature/studio-and-client-delivery`, `feature/builder-buttons-requests`, `feature/collections`,
+   `feature/interactions`, `feature/starters-menu`, `feature/starter-packs`, `docs/agent-guide`, `docs/agent-start`.
+4. Ask the owner whether `develop` should be merged into `main`.
+
+## Open questions for the owner
+- None waiting.
+
+## Log
+- **2026-11-02** — Agent guide: `AGENTS.md` (read by every agent; `CLAUDE.md` imports it), feature
+  docs in `docs/features/`, docs index, legacy docs marked, this status file, pointer files for other
+  tools ("Start here" routine). Commits on `docs/agent-guide` and `docs/agent-start`, merged into `develop`.
+- **2026-11-02** — Starter packs (`feature/starter-packs`, merged): self-contained starters (tables,
+  item pages, forms, box designs, photos, sample items), check-and-apply on any site incl. empty ones,
+  replace to update, groups, Starters menu per kind (pages / tables / headers / footers), live previews
+  with sample data, header and footer starters, account menu layouts, 52 ready-made starters.
+  Details: [features/starters.md](features/starters.md).
+- Earlier: studio and client delivery, content tables, interactions, site setup, content bank — see
+  `git log develop` and the feature docs.

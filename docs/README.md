@@ -6,6 +6,7 @@ Git, conventions and gotchas.
 ## Current
 | Doc | What |
 |---|---|
+| [STATUS.md](STATUS.md) | Where the work stands, what is open, what comes next (read at the start of every session) |
 | [features/studio-and-delivery.md](features/studio-and-delivery.md) | Studio, deploy service, client packages, cell mode, backups |
 | [features/site-setup.md](features/site-setup.md) | New sites, built-in pages, sample data, content bank |
 | [features/collections.md](features/collections.md) | Content tables, lists, box designer, item pages |
