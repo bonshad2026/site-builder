@@ -5,6 +5,7 @@ import { closeContext, createContext } from './context.js';
 import { initControlPlane } from './database/setup.js';
 import { createUser, hashPassword } from './modules/auth/auth.service.js';
 import { migrateAllTenants, provisionTenant } from './modules/platform/provisioning.js';
+import { seedGeneralKit } from './modules/bank/bank.service.js';
 import { addSampleStarters } from './modules/starters/samples.js';
 
 const USAGE = `Usage: npm run cli -- <command> [options]
@@ -16,7 +17,8 @@ const USAGE = `Usage: npm run cli -- <command> [options]
                                        --admin makes it a platform administrator. No password rules.
   provision --slug S --name N --owner EMAIL [--domain D]
                                        create a client site with its own database
-  add-sample-starters                  add the studio's ready-made starters not added before`;
+  add-sample-starters                  add the studio's ready-made starters not added before
+                                       (and, once, their tables to the general kit)`;
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
@@ -56,6 +58,9 @@ async function main() {
     } else if (command === 'add-sample-starters') {
       const added = await addSampleStarters(ctx);
       console.log(added ? `ready-made starters: ${added} added` : 'ready-made starters: up to date');
+      // The general kit starts with copies of the ready-made table starters (once).
+      const kit = await seedGeneralKit(ctx);
+      if (kit) console.log(`general kit: ${kit} tables added`);
     } else if (command === 'create-admin') {
       const user = await createUser(ctx, { email: emailSchema.parse(values.email), password: passwordSchema.parse(values.password), isPlatformAdmin: true, displayName: 'Administrator' });
       console.log(`created platform admin ${user.email} (${user.id})`);

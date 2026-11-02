@@ -8,8 +8,11 @@ question is a field, including name / phone / email (`role` marks the follow-up 
 (`min`/`max`), ready checks (`pattern`: national id, postal code, IBAN…), placeholders, conditions,
 width. Prices on choices, tick boxes and numbers (price × number) add up to `payment.amountMinor`
 (`computeTotal`, recomputed on the server). `layout`: columns, button and thank-you texts, step progress.
-Links can prefill questions (`?<key>=value`). Version-1 types and the old fixed forms are converted on
-read (shared `forms.ts`); old-style posts (name / email / message) still fill the converted questions.
+Links can prefill questions (`?<key>=value`). New sites store their default types as version 2 already
+(`defaultRequestTypes` in shared `schemas.ts`). Version-1 types (only in older client packages) are
+still converted on read (shared `forms.ts`), taking project-type and budget choices from
+`settings.formOptions`, which has no editor any more: choices are edited on each field.
+Old-style posts (name / email / message) still fill the converted questions.
 Ready-made forms for new sites: `SETUP_FORMS` / `setupRequestType` (shared `setup.ts`).
 
 ## Workflow

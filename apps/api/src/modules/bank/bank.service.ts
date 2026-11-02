@@ -1,28 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { BUILT_IN_KINDS, GENERAL_BANK_TYPE, type BankField, type BankKind } from '@site-builder/shared';
+import { collectionInputSchema, GENERAL_BANK_TYPE, readStarterPack, type CollectionInput, type KitItem, type StarterPack } from '@site-builder/shared';
 import type pg from 'pg';
 import type { AppContext } from '../../context.js';
 import { SITE_TEMPLATES, type L } from '../platform/templates/catalog.js';
 import { templateImageStore, type StoredImage } from '../platform/templates/images.js';
-import {
-  ARTICLE_TITLES,
-  CITIES,
-  COURSE_TITLES,
-  EVENT_TITLES,
-  FAQ,
-  FIRST_NAMES,
-  LAST_NAMES,
-  PARAGRAPHS,
-  PROJECT_TITLES,
-  ROLES,
-  TEAM_ROLES,
-  TESTIMONIALS,
-} from '../platform/setup/pools.js';
+import { FAQ, FIRST_NAMES, LAST_NAMES, ROLES, TESTIMONIALS } from '../platform/setup/pools.js';
 
 /**
- * The content bank (see `packages/shared/src/bank.ts`): built-in texts and photos from the
- * business templates and word lists, plus the studio's own types, kinds, entries and photos in
- * the control database. Photos are files in the studio's storage under a fixed "bank" folder.
+ * Site kits (see `packages/shared/src/bank.ts`): built-in texts and photos from the business
+ * templates and word lists, plus the studio's own types, list entries, photos and kit tables
+ * (copies of table starters) in the control database. Photos are files in the studio's storage
+ * under a fixed "bank" folder.
  */
 
 /** Bank photos live under this pseudo site id, so the usual storage keys and file routes apply. */
@@ -51,11 +39,6 @@ export async function listTypes(ctx: AppContext) {
   ];
 }
 
-export async function listKinds(ctx: AppContext): Promise<BankKind[]> {
-  const { rows } = await ctx.control.query<{ key: string; label: L; fields: BankField[] }>('SELECT key, label, fields FROM bank_kinds ORDER BY created_at');
-  return [...BUILT_IN_KINDS, ...rows.map((r) => ({ ...r, builtIn: false }))];
-}
-
 /** Entries the code ships with, for a type and kind. */
 /** A built-in entry's stable reference (it has no id): a hash of its texts. */
 export const builtInRef = (e: Pick<BankEntry, 'data'>) => createHash('sha1').update(JSON.stringify(e.data)).digest('hex').slice(0, 16);
@@ -82,31 +65,14 @@ export function builtInEntries(type: string, kind: string): BankEntry[] {
     return [];
   }
   if (type !== GENERAL_BANK_TYPE) return [];
-  const para = (i: number) => PARAGRAPHS[i % PARAGRAPHS.length];
-  const two = (i: number) => Lx(`${para(i).en}\n\n${para(i + 2).en}`, `${para(i).fa}\n\n${para(i + 2).fa}`);
   const person = (i: number) => {
     const first = FIRST_NAMES[(i * 5) % FIRST_NAMES.length];
     const last = LAST_NAMES[(i * 3 + 1) % LAST_NAMES.length];
     return Lx(`${first.en} ${last.en}`, `${first.fa} ${last.fa}`);
   };
-  switch (kind) {
-    case 'article':
-      return ARTICLE_TITLES.map((title, i) => entry({ title, summary: para(i), body: two(i) }));
-    case 'portfolio':
-      return PROJECT_TITLES.map((title, i) => entry({ title, summary: para(i), body: two(i) }));
-    case 'course':
-      return COURSE_TITLES.map((title, i) => entry({ title, summary: para(i), body: two(i), duration: [Lx('8 sessions', '۸ جلسه'), Lx('4 weeks', '۴ هفته'), Lx('One day', 'یک روز')][i % 3] }));
-    case 'event':
-      return EVENT_TITLES.map((title, i) => entry({ title, location: CITIES[i % CITIES.length], body: two(i) }));
-    case 'person':
-      return Array.from({ length: 10 }, (_, i) => entry({ title: person(i), role: TEAM_ROLES[i % TEAM_ROLES.length], bio: para(i) }));
-    case 'testimonial':
-      return TESTIMONIALS.map((quote, i) => entry({ title: person(i + 3), role: ROLES[i % ROLES.length], quote }));
-    case 'faq':
-      return FAQ.map((x) => entry({ title: x.question, answer: x.answer }));
-    default:
-      return [];
-  }
+  if (kind === 'testimonial') return TESTIMONIALS.map((quote, i) => entry({ title: person(i + 3), role: ROLES[i % ROLES.length], quote }));
+  if (kind === 'faq') return FAQ.map((x) => entry({ title: x.question, answer: x.answer }));
+  return [];
 }
 
 /** Photos the code ships with for a type (the template's photos, files in var/demo-images). */
@@ -135,8 +101,17 @@ export async function loadBank(ctx: AppContext, type: string) {
       .filter((e) => e.kind === kind && e.type_key === t)
       .map((e) => ({ id: e.id, type: t, kind, data: e.data, photos: e.photos.map((id) => byId.get(id)).filter((p): p is PhotoRow => !!p).map(photoRef), builtIn: false }));
   const shown = await hiddenBuiltIns(ctx, types);
+  // Kit tables by table address: the type's own first, then the general kit's.
+  const tables = new Map<string, KitTableSource>();
+  for (const k of await loadKitTables(ctx, types)) {
+    for (const t of k.pack.tables) if (!tables.has(t.slug)) tables.set(t.slug, { kitId: k.id, table: t, items: k.pack.samples.items[t.slug] ?? [], photos: kitPhotos(k.pack) });
+  }
   return {
     type,
+    /** The kit table (with its items and photos) for a table address, if the kit has one. */
+    table(slug: string): KitTableSource | null {
+      return tables.get(slug) ?? null;
+    },
     entries(kind: string): BankEntry[] {
       return types.flatMap((t) => [...own(kind, t), ...builtInEntries(t, kind).filter(shown.entry)]);
     },
@@ -148,6 +123,98 @@ export async function loadBank(ctx: AppContext, type: string) {
   };
 }
 export type Bank = Awaited<ReturnType<typeof loadBank>>;
+
+/* ---------- kit tables ---------- */
+
+export interface KitTable {
+  id: string;
+  typeKey: string;
+  name: string;
+  pack: StarterPack;
+  position: number;
+}
+/** One table of a kit, as sample data reads it. */
+export interface KitTableSource {
+  kitId: string;
+  table: CollectionInput;
+  items: KitItem[];
+  /** The kit's photos by id (item image fields hold these ids). */
+  photos: Map<string, PhotoRef>;
+}
+
+const kitPhotos = (pack: StarterPack) => new Map(pack.photos.map((p): [string, PhotoRef] => [p.id, { id: p.id, key: p.key, contentType: p.contentType }]));
+
+export async function loadKitTables(ctx: AppContext, types: string[]): Promise<KitTable[]> {
+  const { rows } = await ctx.control.query<{ id: string; type_key: string; name: string; pack: unknown; position: number }>(
+    'SELECT id, type_key, name, pack, position FROM kit_tables WHERE type_key = ANY($1) ORDER BY array_position($1, type_key), position, created_at',
+    [types],
+  );
+  return rows.map((r) => ({ id: r.id, typeKey: r.type_key, name: r.name, pack: readStarterPack('table', r.pack), position: r.position }));
+}
+
+export async function getKitTable(ctx: AppContext, id: string): Promise<KitTable | null> {
+  const { rows } = await ctx.control.query<{ id: string; type_key: string; name: string; pack: unknown; position: number }>('SELECT id, type_key, name, pack, position FROM kit_tables WHERE id = $1', [id]);
+  const r = rows[0];
+  return r ? { id: r.id, typeKey: r.type_key, name: r.name, pack: readStarterPack('table', r.pack), position: r.position } : null;
+}
+
+/** A new file key in the studio's storage. */
+export function bankStorageKey(ext: string) {
+  const now = new Date();
+  return `public/tenants/${BANK_STORAGE_ID}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}.${ext}`;
+}
+
+/**
+ * Adds a copy of a table starter to a kit. Its photos are copied too, so the kit keeps them
+ * when the starter changes or is deleted, and editing the kit never touches the starter.
+ */
+export async function addKitTable(ctx: AppContext, type: string, name: string, source: StarterPack): Promise<KitTable> {
+  let json = JSON.stringify(source);
+  const photos: StarterPack['photos'] = [];
+  for (const p of source.photos) {
+    try {
+      const key = bankStorageKey(p.key.split('.').pop() ?? 'jpg');
+      await ctx.storage.put(key, await ctx.storage.get(p.key), p.contentType);
+      const url = ctx.storage.publicUrl(key);
+      // Page texts of the pack hold photo addresses; item fields hold the (unchanged) photo id.
+      json = json.split(p.url).join(url).split(p.key).join(key);
+      photos.push({ ...p, key, url });
+    } catch {
+      // A photo the studio no longer has: items keep an empty place.
+    }
+  }
+  const pack = readStarterPack('table', { ...JSON.parse(json), photos });
+  const position = Number((await ctx.control.query('SELECT coalesce(max(position), -1) + 1 AS n FROM kit_tables WHERE type_key = $1', [type])).rows[0].n);
+  const { rows } = await ctx.control.query<{ id: string }>('INSERT INTO kit_tables (type_key, name, pack, position) VALUES ($1, $2, $3, $4) RETURNING id', [type, name, JSON.stringify(pack), position]);
+  return { id: rows[0].id, typeKey: type, name, pack, position };
+}
+
+/** Deletes kit tables (by a condition on kit_tables) with their photo copies. */
+export async function deleteKitTables(ctx: AppContext, where: string, values: unknown[]) {
+  const { rows } = await ctx.control.query<{ pack: unknown }>(`DELETE FROM kit_tables WHERE ${where} RETURNING pack`, values);
+  for (const r of rows) for (const p of readStarterPack('table', r.pack).photos) await ctx.storage.delete(p.key).catch(() => undefined);
+}
+
+/**
+ * A kit table's main table. Packs also hold the tables it points to (classes → courses, teachers),
+ * so the main one is the table no other table of the pack points to.
+ */
+export function kitMainTable(pack: StarterPack): CollectionInput | null {
+  const pointed = new Set(pack.tables.flatMap((t) => t.fields.filter((f) => f.type === 'reference' && f.reference !== t.slug).map((f) => f.reference)));
+  const main = pack.tables.find((t) => !pointed.has(t.slug)) ?? pack.tables[0];
+  return main ? collectionInputSchema.parse(main) : null;
+}
+
+const GENERAL_KIT_KEY = 'general_kit_seeded';
+
+/** Fills the general kit once with the ready-made table starters (run after they are added). */
+export async function seedGeneralKit(ctx: AppContext): Promise<number> {
+  if ((await ctx.control.query('SELECT 1 FROM app_settings WHERE key = $1', [GENERAL_KIT_KEY])).rowCount) return 0;
+  const { rows } = await ctx.control.query<{ name: string; data: unknown }>(`SELECT name, data FROM starters WHERE kind = 'table' AND sample_key IS NOT NULL ORDER BY created_at`);
+  for (const r of rows) await addKitTable(ctx, GENERAL_BANK_TYPE, r.name, readStarterPack('table', r.data));
+  await ctx.control.query(`INSERT INTO app_settings (key, value) VALUES ($1, 'true') ON CONFLICT (key) DO NOTHING`, [GENERAL_KIT_KEY]);
+  return rows.length;
+}
 
 /** Copies bank photos (and built-in template photos) into a site as its own files; one copy per photo per run. */
 export function photoStore(ctx: AppContext, db: pg.Pool, tenantId: string, palette: [string, string] = ['#ece6dc', '#cdbfa9'], templates?: (ref: string) => Promise<StoredImage>) {

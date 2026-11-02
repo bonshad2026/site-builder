@@ -39,7 +39,6 @@ More: [studio and delivery](docs/features/studio-and-delivery.md).
 - Studio operator: `admin` / `123456` (`CONTROL_ADMIN_*` in `deploy/.env`; reset on every studio-api start).
 - New packages: operator `admin` / `123456`, client `owner` / `123456` (`SITE_OPERATOR_*`, `SITE_OWNER_*`).
 - Sample customers on sites with sample data: phones `0912100xxxx`, password `12345678`.
-  Firefighter site (`871051`): `09120000001` / `09120000002`, password `12345678`.
 - Reset a password: `docker exec sb-studio-api node dist/cli.js set-password --email <login> --password <pw> [--admin]`.
 
 ## Commands
@@ -61,7 +60,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Before you say a change is done
 1. `npm run typecheck` (a known error in `apps/api/test/shop.test.ts` about `amountMinor` predates this guide).
-2. Tests: all web and API tests pass as of 2026-11-02 (web 44, API 95). A new failure is yours to explain.
+2. Tests: all web and API tests pass as of 2026-11-02 (web 43, API 98). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").
@@ -82,9 +81,9 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
   catalog), `sections.ts` (section library, `SYSTEM_PAGES`, `contentOnlyChange`), `siteOptions.ts`
   (header, footer, design, form fields), `collections.ts` (content tables, filters, box blocks, presets),
   `interactions.ts` + `forms.ts` (request forms, workflows, accounts), `setup.ts` (new-site setup),
-  `bank.ts` (content bank), `starters.ts` (starter packs), `constants.ts`.
+  `bank.ts` (site kits / content bank), `starters.ts` (starter packs), `constants.ts`.
 - `apps/api` — Express 5 + pg. Control DB `sb_control` plus **one database per site** (tenant).
-  Migrations: `src/database/control-plane/migrations` (latest `005_starter_groups.sql`) and
+  Migrations: `src/database/control-plane/migrations` (latest `006_kit_tables.sql`) and
   `src/database/tenant/migrations` (latest `010_shop_extras.sql`); numbered, never edit an applied one.
   Modules in `src/modules/<name>/` (`*.routes.ts` + `*.service.ts`). Routes use `ApiRouter`
   (`src/common/http.ts`) with zod `body` / `query` / `params`. Site routes are `/api/v1/sites/:siteId/…`
@@ -118,7 +117,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 |---|---|
 | Current state, open items, next steps | [STATUS.md](docs/STATUS.md) |
 | Studio, deploy service, client packages, backups | [studio-and-delivery.md](docs/features/studio-and-delivery.md) |
-| New sites: setup, empty/default sites, built-in pages, sample data, content bank | [site-setup.md](docs/features/site-setup.md) |
+| New sites: setup, empty/default sites, built-in pages, sample data, site kits | [site-setup.md](docs/features/site-setup.md) |
 | Content tables, box designer, filters, item pages | [collections.md](docs/features/collections.md) |
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |

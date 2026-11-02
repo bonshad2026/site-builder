@@ -32,7 +32,8 @@ On the client's server the API runs in cell mode (`CELL_SLUG` set, `src/cell-boo
 `deploy/cell/api-start.sh`): the client signs in at `/admin` and edits **content only** (text and
 images of existing pages, logo, contact, categories, catalog, orders, leads, payments). The API
 refuses structure changes for non-operators (`clientLocked`, `contentOnlyChange` in shared
-`sections.ts`); the web bundle is built with `VITE_ADMIN_SCOPE=client`, which leaves out the
+`sections.ts`; in site settings only the fields listed in `site.routes.ts` are taken from a client, so
+"Site texts" (`settings.texts`) is operator-only and hidden in the client panel); the web bundle is built with `VITE_ADMIN_SCOPE=client`, which leaves out the
 builder and platform pages. Operators reach a client's admin with SSO (`src/modules/auth/sso.ts`).
 
 ## Backups

@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app.js';
 import { closeContext } from '../src/context.js';
 import { createAdmin, createTenant, createTestServer, lead, product, signIn, type Client } from './helpers.js';
 
@@ -207,5 +208,22 @@ describe('API documentation', () => {
     expect(res.status).toBe(200);
     expect(res.body.paths['/api/v1/sites/{siteId}/products']).toBeDefined();
     expect(res.body.paths['/api/v1/public/sites/{siteSlug}/orders'].post).toBeDefined();
+  });
+});
+
+describe('site settings on a client server', () => {
+  it('keeps the built-in texts operator-only while the client edits their contact details', async () => {
+    // Same database, served as a client's own server (CELL_SLUG set): structure is the operator's.
+    const locked = createApp({ ...ctx, env: { ...ctx.env, CELL_SLUG: site.slug } });
+    const client = await signIn(locked, site.ownerEmail);
+    const current = (await client.get(`${base}/settings`)).body.data;
+    const res = await client.put(`${base}/settings`, {
+      ...current,
+      contact: { ...current.contact, email: 'client@test.local' },
+      texts: { 'cart.checkout': { en: 'Pay now', fa: 'پرداخت' } },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.data.contact.email).toBe('client@test.local');
+    expect(res.body.data.texts).toEqual(current.texts);
   });
 });

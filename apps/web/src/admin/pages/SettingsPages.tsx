@@ -1,4 +1,4 @@
-import { MODULES, PERMISSIONS, SOCIAL_ICONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
+import { PERMISSIONS, SOCIAL_ICONS, type ModuleId, type Permission, type SiteSettings } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -13,7 +13,7 @@ import { ChromeStarters } from '../starters';
 import { Badge, Card, Checkbox, ErrorNote, ListEditor, LocalizedField, Modal, PageTitle, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { LinkPicker } from '../links';
 import { ImagePicker } from './FilesPage';
-import { DesignTab, FooterTab, FormChoicesEditor, HeaderTab, ShopPageTab, ShopTab, ExtrasTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
+import { DesignTab, FooterTab, HeaderTab, ShopPageTab, ShopTab, ExtrasTab, SystemPagesTab, TextsTab } from './SiteOptionsTabs';
 import { AccountsTab } from '../interactions/AccountsTab';
 import { RequestTypesEditor } from '../interactions/RequestTypesEditor';
 import { ExcelButton } from '../ExcelExport';
@@ -78,7 +78,7 @@ function SettingsView({ siteId }: { siteId: string }) {
     ] as const
   )
     // Clients edit their own content and shop rules; the design is the operator's.
-    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'notifications', 'texts', 'footer', 'shop', 'extras'].includes(id))
+    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'notifications', 'footer', 'shop', 'extras'].includes(id))
     .filter(([id]) => (id === 'shopPage' || id === 'shop' ? !!s.modules.products : true));
   const tabProps = { s, set, siteId };
   // A section this person may not edit (or an unknown one) falls back to the general settings.
@@ -350,10 +350,7 @@ function SettingsView({ siteId }: { siteId: string }) {
           />
         )}
         {tab === 'requests' && (
-          <>
-            <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
-            {operator && <FormChoicesEditor {...tabProps} />}
-          </>
+          <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
         )}
         {tab === 'accounts' && <AccountsTab s={s} set={set} part="accounts" />}
         {tab === 'notifications' && <AccountsTab s={s} set={set} part="notifications" />}
@@ -371,8 +368,14 @@ function SettingsView({ siteId }: { siteId: string }) {
           <Card>
             <p className="mb-4 text-sm text-ink-soft">{t.modulesHint}</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {MODULES.map((m: ModuleId) => (
-                <Checkbox key={m} label={m} checked={!!s.modules[m]} onChange={(on) => set('modules', { ...s.modules, [m]: on })} />
+              {MODULE_SWITCHES.map((m) => (
+                <Checkbox
+                  key={m.id}
+                  label={locale === 'fa' ? m.fa : m.en}
+                  hint={locale === 'fa' ? m.faHint : m.enHint}
+                  checked={!!s.modules[m.id]}
+                  onChange={(on) => set('modules', { ...s.modules, [m.id]: on })}
+                />
               ))}
             </div>
           </Card>
@@ -387,6 +390,42 @@ function SettingsView({ siteId }: { siteId: string }) {
     </>
   );
 }
+
+/**
+ * The built-in parts a site can switch on. A switch only opens the part (admin menus, built-in
+ * addresses, API); it adds no pages, tables or sample items. `projects`, `testimonials` and `faq`
+ * are still stored but no longer change anything (those are builder pages and tables now).
+ */
+const MODULE_SWITCHES: { id: ModuleId; en: string; fa: string; enHint: string; faHint: string }[] = [
+  {
+    id: 'products',
+    en: 'Products & catalog',
+    fa: 'محصولات و کاتالوگ',
+    enHint: 'Products, categories and reviews in the admin; the shop list and product pages on the site.',
+    faHint: 'محصولات، دسته‌بندی‌ها و نظرات در پنل؛ فهرست فروشگاه و صفحه‌ی هر محصول در سایت.',
+  },
+  {
+    id: 'orders',
+    en: 'Cart & online orders',
+    fa: 'سبد خرید و سفارش آنلاین',
+    enHint: 'Visitors can buy and pay online: cart, checkout and the Orders menu. Needs Products.',
+    faHint: 'بازدیدکننده می‌تواند آنلاین بخرد و پرداخت کند: سبد خرید، تسویه و منوی سفارش‌ها. به «محصولات» نیاز دارد.',
+  },
+  {
+    id: 'services',
+    en: 'Services',
+    fa: 'خدمات',
+    enHint: 'A list of services with prices in the admin; the services list and service pages on the site.',
+    faHint: 'فهرست خدمات با قیمت در پنل؛ فهرست خدمات و صفحه‌ی هر خدمت در سایت.',
+  },
+  {
+    id: 'leads',
+    en: 'Forms & customer requests',
+    fa: 'فرم‌ها و درخواست‌های مشتری',
+    enHint: 'Forms on the site send requests (consultation, booking…) to Customer requests.',
+    faHint: 'فرم‌های سایت درخواست‌ها (مشاوره، رزرو…) را به «درخواست‌های مشتریان» می‌فرستند.',
+  },
+];
 
 interface PaymentSettings {
   provider: 'none' | 'zarinpal' | 'zibal' | 'idpay' | 'sandbox';

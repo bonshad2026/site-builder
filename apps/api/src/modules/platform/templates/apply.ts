@@ -24,7 +24,7 @@ import { buildInsert } from '../../../common/sql.js';
 import type { AppContext } from '../../../context.js';
 import { productsTable, servicesTable } from '../../catalog/catalog.js';
 import { defaultSiteSettings } from '../provisioning.js';
-import { listKinds, loadBank, photoStore } from '../../bank/bank.service.js';
+import { loadBank, photoStore } from '../../bank/bank.service.js';
 import { addDemoData } from '../setup/demo.js';
 import { ARTICLE_TITLES, CITIES, PARAGRAPHS, STREETS } from '../setup/pools.js';
 import { type L, type SiteTemplate } from './catalog.js';
@@ -604,7 +604,6 @@ export async function applySetup(ctx: AppContext, tenant: TenantRef, template: S
         seed: tenant.slug,
         bank,
         store: photoStore(ctx, db, tenant.id, t.palette, store),
-        customKinds: await listKinds(ctx),
         shop: { sells, online: sells && setup.shop.online, cod: sells && setup.shop.cod, stock: setup.shop.stock, discounts: setup.shop.discounts, colors: setup.shop.colors },
         // "Products in all" counts the business type's own products too.
         run: demoRunSchema.parse({

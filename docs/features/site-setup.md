@@ -1,4 +1,4 @@
-# New sites, built-in pages, sample data and the content bank
+# New sites, built-in pages, sample data and site kits
 
 ## Creating a site
 "New client site" opens `/admin/platform/sites/new`: one page of collapsible sections (business type,
@@ -11,8 +11,16 @@ WhatsApp / search, footer, shop, filters, content tables, accounts, sample data 
 tables, box designs (`box-products`, `box-<table>`) and then sample data. Eight business types live in
 `templates/catalog.ts` (photos via `templates/images.ts`).
 
+Template photos come from `var/demo-images/<ref>.jpg`, else the network, else a gradient placeholder
+(stored as `unsplash-<ref>.png`). The sites list returns `placeholderPhotos` per active site and shows
+"Refresh photos" only when it is above 0; that button swaps placeholders for files now in `var/demo-images`.
+
 - **Empty site**: no setup, no pages, every module off except leads (built-in shop / service routes
   show "not found" while their module is off — `sections/BuiltInPage.tsx`).
+- **Modules** (Settings → Modules, operator only, `MODULE_SWITCHES` in `SettingsPages.tsx`): products,
+  orders, services and leads. A switch only opens that part (admin menus, built-in addresses, API); it
+  adds no pages, tables or sample items (starters and demo data do that). `projects`, `testimonials`
+  and `faq` are still in `MODULES` / stored settings but change nothing and are not shown.
 - **Default site**: the neutral setup (`genericTemplate`).
 - A site in one language always opens in it (`SiteLayout`).
 - Deleting: `DELETE /platform/tenants/:id?confirm=<slug>` (`deleteTenant`: files, database, role,
@@ -47,13 +55,25 @@ payments, product reviews). "Sample data" on the sites list counts, adds and rem
 table, customers, orders, payments, requests). Code: `modules/platform/setup/demo.ts` (`addDemoData`,
 `clearDemoData`, `fieldValue`, `itemTitle`), word lists in `setup/pools.ts`.
 
-## Content bank
-Platform ← Content bank (`/admin/platform/bank`): texts and photos per site type for sample data.
-Built-in types (general + the 8 templates) and kinds (`BUILT_IN_KINDS` in shared `bank.ts`: product,
-service, article, portfolio, person, course, event, testimonial, faq) live in code
-(`modules/bank/bank.service.ts` `builtInEntries`); the studio's own types, kinds, entries and photos are
-in the control DB (`002_content_bank.sql`; photos under storage id `BANK_STORAGE_ID`). Built-in entries
-and photos can be hidden per type (`bank_hidden`, entry ref = hash of its texts; "Bring back removed
-built-ins" clears them). A table takes the kind with its key, else `kindForTable` by common names;
-fields without a bank value are made up. `tenants.business_type` remembers each site's type. Bank
-photos are copied into the site (`photoStore`).
+## Site kits (content bank)
+Platform ← Site kits (`/admin/platform/bank`, `BankPage.tsx`): per site type (general + the 8 templates
++ the studio's own types, `bank_types`) what sample data is made from:
+- **Tables**: copies of table starters (control DB `kit_tables`, migration `006_kit_tables.sql`; `pack`
+  is a starter pack with its tables, item pages, forms, box designs, sample items and photo copies of
+  its own). Added with `POST /platform/bank/tables` (`addKitTable` copies the photos, so editing a kit
+  never touches the starter); items edited in the page (`PUT /platform/bank/tables/:id/items`, photos
+  `POST …/:id/photos`). The main table of a kit table is the one no other table of its pack points to
+  (`kitMainTable`). The general kit is filled once with the ready-made table starters
+  (`seedGeneralKit`, run by `cli add-sample-starters`; `app_settings.general_kit_seeded`).
+- **Lists**: products, services, reviews, FAQ (`BUILT_IN_KINDS` in shared `bank.ts`, `bank_entries`);
+  built-ins come from the templates (`builtInEntries`); general has reviews and FAQ only.
+- **Photos** for any content (`bank_photos`, kind '').
+
+Sample data (`setup/demo.ts`): a site table takes the items of the kit table with the same address
+(the type's kit first, then general — `loadBank().table(slug)`), in order, numbered on later rounds;
+values are used where they fit the site's field (`kitValueFits`), references are moved to the new
+items by `ref`, and everything else is made up (`fieldValue`). The "Sample data" window can add kit
+tables the site lacks first (`demoRunSchema.addTables` → `applyPack` without its samples).
+Built-in entries and photos can be hidden per type (`bank_hidden`; "Bring back removed built-ins").
+`tenants.business_type` remembers each site's type. Photos are copied into the site (`photoStore`).
+The page shows counts per list (`GET /platform/bank/counts?type=`) and explains empty parts.

@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
 /**
- * The content bank: texts and photos the studio keeps per site type (cosmetics, furniture, a
- * school…, plus "general" for every type), sorted by kind of content (products, articles,
- * people…). Sample data for a site is made from it: each table of the site takes entries of its
- * kind, and fields the bank has no value for are made up from their type.
+ * Site kits (the content bank): per site type (cosmetics, furniture, a school…, plus "general"
+ * for every type) the studio keeps copies of table starters with their sample items, plain lists
+ * of products, services, reviews and FAQ, and photos. Sample data for a site is made from the kit
+ * of its type: each table takes the items of the kit table with the same address (else the
+ * general kit's), and fields without a value are made up from their type.
  */
 
 type Lbl = { en: string; fa: string };
@@ -38,58 +39,35 @@ export interface BankKind {
 const f = (key: string, type: BankFieldType, en: string, fa: string): BankField => ({ key, type, label: L(en, fa) });
 const title = (en: string, fa: string) => f('title', 'text', en, fa);
 
-/** Kinds every bank has. Custom kinds (for tables like "cars") are added in the studio. */
+/** The plain lists every kit has (tables come from table starters instead). */
 export const BUILT_IN_KINDS: BankKind[] = [
   { key: 'product', label: L('Products', 'محصولات'), fields: [title('Name', 'نام'), f('description', 'textarea', 'Description', 'توضیحات'), f('category', 'text', 'Category', 'دسته'), f('price', 'price', 'Price', 'قیمت')] },
   { key: 'service', label: L('Services', 'خدمات'), fields: [title('Title', 'عنوان'), f('summary', 'textarea', 'Summary', 'خلاصه'), f('body', 'textarea', 'Description', 'توضیحات')] },
-  { key: 'article', label: L('Articles', 'مطالب'), fields: [title('Title', 'عنوان'), f('summary', 'textarea', 'Summary', 'خلاصه'), f('body', 'textarea', 'Text', 'متن')] },
-  { key: 'portfolio', label: L('Portfolio', 'نمونه‌کارها'), fields: [title('Title', 'عنوان'), f('client', 'text', 'Client', 'کارفرما'), f('summary', 'textarea', 'Summary', 'خلاصه'), f('body', 'textarea', 'Description', 'توضیحات')] },
-  { key: 'person', label: L('People (team, teachers)', 'افراد (تیم، مدرسان)'), fields: [title('Name', 'نام'), f('role', 'text', 'Role', 'سمت'), f('bio', 'textarea', 'About', 'درباره')] },
-  { key: 'course', label: L('Courses and classes', 'دوره‌ها و کلاس‌ها'), fields: [title('Title', 'عنوان'), f('summary', 'textarea', 'Summary', 'خلاصه'), f('body', 'textarea', 'Description', 'توضیحات'), f('duration', 'text', 'Duration', 'مدت'), f('price', 'price', 'Price', 'قیمت')] },
-  { key: 'event', label: L('Events', 'رویدادها'), fields: [title('Title', 'عنوان'), f('location', 'text', 'Location', 'محل'), f('body', 'textarea', 'Description', 'توضیحات')] },
   { key: 'testimonial', label: L('Reviews', 'نظرات مشتریان'), fields: [title('Customer name', 'نام مشتری'), f('role', 'text', 'Role', 'عنوان'), f('quote', 'textarea', 'Review', 'متن نظر')] },
   { key: 'faq', label: L('FAQ', 'سؤالات متداول'), fields: [title('Question', 'سؤال'), f('answer', 'textarea', 'Answer', 'پاسخ')] },
 ].map((k) => ({ ...k, builtIn: true }));
-
-/** The kind a table takes its entries from: a custom kind with the table's key, else by common names. */
-export function kindForTable(slug: string, customKinds: { key: string }[] = []): string | null {
-  if (customKinds.some((k) => k.key === slug)) return slug;
-  const map: Record<string, string> = {
-    products: 'product',
-    services: 'service',
-    articles: 'article',
-    news: 'article',
-    blog: 'article',
-    posts: 'article',
-    portfolio: 'portfolio',
-    projects: 'portfolio',
-    team: 'person',
-    teachers: 'person',
-    staff: 'person',
-    doctors: 'person',
-    courses: 'course',
-    classes: 'course',
-    workshops: 'course',
-    events: 'event',
-  };
-  return map[slug] ?? null;
-}
+export const BANK_KINDS = BUILT_IN_KINDS.map((k) => k.key);
 
 /** The type every site can use; its entries mix in with any other type's. */
 export const GENERAL_BANK_TYPE = 'general';
 
 export const bankTypeInputSchema = z.object({ key: bankKeySchema, label: z.object({ en: z.string().trim().max(80).default(''), fa: z.string().trim().max(80).default('') }) });
-export const bankKindInputSchema = z.object({
-  key: bankKeySchema,
-  label: z.object({ en: z.string().trim().max(80).default(''), fa: z.string().trim().max(80).default('') }),
-  fields: z.array(bankFieldSchema).min(1).max(30),
+
+/** A kit table's sample item, as in a starter pack (`ref` links references between items). */
+export const kitItemSchema = z.object({
+  ref: z.string().min(1).max(64),
+  slug: z.string().max(80).default(''),
+  title: z.object({ en: z.string().max(300).default(''), fa: z.string().max(300).default('') }),
+  data: z.record(z.unknown()).default({}),
+  status: z.enum(['draft', 'published']).default('published'),
 });
+export type KitItem = z.output<typeof kitItemSchema>;
 
 const localized = z.object({ en: z.string().max(8000).default(''), fa: z.string().max(8000).default('') });
 /** An entry: values by field key ({ en, fa } for texts, numbers otherwise) and its photos (bank photo ids). */
 export const bankEntryInputSchema = z.object({
   type: bankKeySchema,
-  kind: bankKeySchema,
+  kind: z.enum(['product', 'service', 'testimonial', 'faq']),
   data: z.record(z.string().max(40), z.union([localized, z.number(), z.string().max(40)])).default({}),
   photos: z.array(z.string().uuid()).max(12).default([]),
 });
@@ -97,12 +75,14 @@ export type BankEntryInput = z.input<typeof bankEntryInputSchema>;
 
 /** What a sample-data run makes for a site (see the "Sample data" window). */
 export const demoRunSchema = z.object({
-  /** Bank type to take texts and photos from. */
+  /** Kit (site type) to take items, texts and photos from. */
   type: bankKeySchema.default(GENERAL_BANK_TYPE),
   /** `add` keeps earlier sample data; `replace` removes it first. */
   mode: z.enum(['add', 'replace']).default('add'),
   products: z.number().int().min(0).max(500).default(0),
   services: z.number().int().min(0).max(100).default(0),
+  /** Kit tables to add to the site first (kit table ids), with their item pages and forms. */
+  addTables: z.array(z.string().uuid()).max(20).default([]),
   /** Items per content table, by table slug. */
   tables: z.record(z.string().max(40), z.number().int().min(0).max(500)).default({}),
   customers: z.number().int().min(0).max(1000).default(0),

@@ -8,7 +8,7 @@ import { createUser, requestPasswordReset, revokeAllSessions } from '../auth/aut
 import { deleteTenant, provisionTenant } from './provisioning.js';
 import { clearDemoData, demoCounts, generateDemo } from './setup/demo.js';
 import { applySetup } from './templates/apply.js';
-import { refreshTemplatePhotos } from './templates/images.js';
+import { countPlaceholderPhotos, refreshTemplatePhotos } from './templates/images.js';
 import { SITE_TEMPLATES, templateByKey } from './templates/catalog.js';
 
 // Never select db_password_enc here: connection secrets are not returned by any API.
@@ -43,7 +43,24 @@ export function platformRoutes(ctx: AppContext) {
         [filter, query.pageSize, (query.page - 1) * query.pageSize],
       );
       const total = rows[0]?.total ?? 0;
-      return { data: rows.map(({ total: _t, ...row }) => row), meta: pageMeta(query.page, query.pageSize, total) };
+      // Active sites on this page say how many placeholder photos they still have (null if their database is unreachable).
+      const placeholders = new Map<string, number | null>();
+      const active = rows.filter((t) => t.status === 'active').map((t) => t.id);
+      if (active.length) {
+        const { rows: conns } = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE id = ANY($1)', [active]);
+        await Promise.all(
+          conns.map(async (t) => {
+            const count = await Promise.resolve()
+              .then(() => countPlaceholderPhotos(ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc })))
+              .catch(() => null);
+            placeholders.set(t.id, count);
+          }),
+        );
+      }
+      return {
+        data: rows.map(({ total: _t, ...row }) => ({ ...row, placeholderPhotos: placeholders.get(row.id) ?? null })),
+        meta: pageMeta(query.page, query.pageSize, total),
+      };
     },
   );
 

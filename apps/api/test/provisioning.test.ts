@@ -31,6 +31,15 @@ describe('creating a client site', () => {
 
     // The site works publicly straight away, resolved by its domain too.
     expect((await request(app).get(`/api/v1/public/sites/${slug}/settings`)).body.data.name.en).toBe('New Client');
+    // Its forms are stored with every question as an editable field (no older fixed forms).
+    const stored = await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE slug = $1', [slug]);
+    const t = stored.rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    const types = (await db.query(`SELECT settings->'requestTypes' AS types FROM site_settings`)).rows[0].types;
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.every((x: { formVersion: number; fields: unknown[] }) => x.formVersion === 2 && x.fields.length > 0)).toBe(true);
+    const consultation = types.find((x: { slug: string }) => x.slug === 'consultation');
+    expect(consultation.fields.find((f: { id: string }) => f.id === 'budget').options.length).toBe(4);
     expect((await request(app).get(`/api/v1/public/resolve?domain=${slug}.example.com`)).body.data.siteId).toBe(slug);
 
     const audit = await ctx.control.query(`SELECT action FROM audit_events WHERE tenant_id = $1 ORDER BY id`, [res.body.data.id]);
@@ -84,6 +93,26 @@ describe('creating a client site', () => {
       { email: `second-${slug}@test.local`, role: 'owner' },
     ]);
   });
+
+  it('lists how many placeholder template photos each active site still has', async () => {
+    const slug = `ph-${uid()}`;
+    const created = await platform.post('/api/v1/platform/tenants', { slug, name: 'Placeholders', ownerEmail: `o-${slug}@test.local` });
+    const listed = async () => (await platform.get('/api/v1/platform/tenants?q=' + slug)).body.data[0];
+    expect((await listed()).placeholderPhotos).toBe(0);
+
+    const t = (await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE id = $1', [created.body.data.id])).rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    await db.query(
+      `INSERT INTO assets (id, storage_key, original_name, content_type, size_bytes, visibility, kind)
+       VALUES (gen_random_uuid(), 'public/x/a.png', 'unsplash-test-ref.png', 'image/png', 10, 'public', 'image'),
+              (gen_random_uuid(), 'public/x/b.jpg', 'unsplash-test-ref.jpg', 'image/jpeg', 10, 'public', 'image')`,
+    );
+    expect((await listed()).placeholderPhotos).toBe(1);
+
+    // Suspended sites are not checked.
+    await platform.patch(`/api/v1/platform/tenants/${t.id}`, { status: 'suspended' });
+    expect((await listed()).placeholderPhotos).toBeNull();
+  });
 });
 
 describe('deleting sites and users', () => {
@@ -93,7 +122,18 @@ describe('deleting sites and users', () => {
     const res = await platform.post('/api/v1/platform/tenants', { slug, name: 'Gone', ownerEmail });
     expect(res.status).toBe(201);
     expect((await request(app).get(`/api/v1/public/sites/${slug}/pages`)).body.data).toEqual([]);
+    // No shop, built-in tables, content tables or sample rows either; only requests stay on.
+    expect((await request(app).get(`/api/v1/public/sites/${slug}/settings`)).body.data.modules).toEqual({
+      services: false, products: false, projects: false, testimonials: false, faq: false, leads: true, orders: false,
+    });
     const id = res.body.data.id;
+    const t = (await ctx.control.query('SELECT id, db_name, db_user, db_password_enc FROM tenants WHERE id = $1', [id])).rows[0];
+    const db = ctx.tenantPools.get({ id: t.id, dbName: t.db_name, dbUser: t.db_user, dbPasswordEnc: t.db_password_enc });
+    const { rows: counts } = await db.query(
+      `SELECT (SELECT count(*) FROM collections)::int AS tables, (SELECT count(*) FROM products)::int AS products,
+              (SELECT count(*) FROM services)::int AS services, (SELECT count(*) FROM assets)::int AS photos`,
+    );
+    expect(counts[0]).toEqual({ tables: 0, products: 0, services: 0, photos: 0 });
     const dbName = tenantDbName(ctx.env.TENANT_DB_PREFIX, slug);
 
     expect((await platform.delete(`/api/v1/platform/tenants/${id}?confirm=wrong`)).status).toBe(400);
