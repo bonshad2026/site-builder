@@ -306,7 +306,7 @@ function SiteNav({ siteId }: { siteId: string }) {
           { to: settingsUrl, tab: 'shopPage', label: L('Shop page', 'صفحه‌ی فروشگاه'), show: site && operator && mod('products') },
           { to: settingsUrl, tab: 'systemPages', label: L('Built-in pages (cart, 404…)', 'صفحه‌های آماده (سبد خرید، ۴۰۴…)'), show: site && operator },
           { to: `${base}/files`, label: t.files },
-          { to: settingsUrl, tab: 'texts', label: L('Site texts', 'متن‌های سایت'), show: site },
+          { to: settingsUrl, tab: 'texts', label: L('Site texts', 'متن‌های سایت'), show: site && operator },
         ]}
       />
       <NavGroup

@@ -78,7 +78,7 @@ function SettingsView({ siteId }: { siteId: string }) {
     ] as const
   )
     // Clients edit their own content and shop rules; the design is the operator's.
-    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'notifications', 'texts', 'footer', 'shop', 'extras'].includes(id))
+    .filter(([id]) => operator || ['brand', 'contact', 'categories', 'requests', 'notifications', 'footer', 'shop', 'extras'].includes(id))
     .filter(([id]) => (id === 'shopPage' || id === 'shop' ? !!s.modules.products : true));
   const tabProps = { s, set, siteId };
   // A section this person may not edit (or an unknown one) falls back to the general settings.

@@ -51,12 +51,12 @@ export function siteRoutes(clientLocked = false) {
         const current = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
         if (!current.rows[0]) throw notFound('Site settings');
         // Clients edit their name, tagline, logo, contact details, social links, product categories,
-        // request type names and customer texts, form choices, texts, footer, shop rules and who is
-        // notified; the rest (forms, workflows, accounts) is the design.
+        // request type names and customer texts, form choices, footer, shop rules and who is notified;
+        // the rest (forms, workflows, accounts, the site's built-in texts) is the operator's.
         // The announcement bar and popup are content too; page code (meta) stays the operator's.
-        const { name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, formOptions, texts, footer, shop, exportOptions, notifications, announcement, popup } = body;
+        const { name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, formOptions, footer, shop, exportOptions, notifications, announcement, popup } = body;
         const requestTypes = clientRequestTypes(current.rows[0].settings.requestTypes, body.requestTypes);
-        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, texts, footer, shop, exportOptions, notifications, announcement, popup };
+        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, footer, shop, exportOptions, notifications, announcement, popup };
       }
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO site_settings (id, settings, updated_by, updated_at) VALUES (1, $1, $2, now())
