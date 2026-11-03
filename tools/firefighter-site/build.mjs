@@ -50,7 +50,7 @@ function client() {
     }
     if (res.status === 204) return null;
     const json = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${JSON.stringify(json?.error ?? json).slice(0, 600)}`);
+    if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${JSON.stringify(json?.error ?? json).slice(0, 4000)}`);
     return json?.data;
   };
   return {
@@ -103,7 +103,7 @@ const body = (children) => b('stack', { direction: 'column', gap: 2, padding: 5 
 const designs = [
   {
     id: 'box-course',
-    name: fa('دوره'),
+    name: 'دوره',
     design: card([
       b('image', { field: '', ratio: 'wide' }),
       body([
@@ -117,7 +117,7 @@ const designs = [
   },
   {
     id: 'box-trainer',
-    name: fa('مربی'),
+    name: 'مربی',
     design: card([
       b('image', { field: '', ratio: 'square', position: 'top' }),
       body([
@@ -130,7 +130,7 @@ const designs = [
   },
   {
     id: 'box-article',
-    name: fa('دستورالعمل / خبر'),
+    name: 'دستورالعمل / خبر',
     design: card([
       b('image', { field: '', ratio: 'landscape' }),
       body([
@@ -343,7 +343,7 @@ const contactType = {
 const settings = await staff.get(`${site}/settings`);
 const nav = (label, href, children = []) => ({ label: fa(label), href, children: children.map(([l, h]) => ({ label: fa(l), href: h })) });
 Object.assign(settings, {
-  name: fa('فایرفایتر'),
+  name: { en: 'FireFighter', fa: 'فایرفایتر' },
   tagline: fa('مرکز آموزش‌های تخصصی آتش‌نشانی و ایمنی'),
   defaultLocale: 'fa',
   locales: ['fa'],
@@ -425,7 +425,7 @@ const eq = (field, value) => ({ field, op: 'eq', value, valueFrom: 'static' });
 const btn = (label, href, style = 'primary') => ({ label: fa(label), href, style });
 const rich = (heading, text, width = 'narrow') => s('rich-text', { heading: fa(heading), body: fa(text), width });
 const pages = [];
-const page = (slug, title, sections, extra = {}) => pages.push({ slug, title: fa(title), document: { schemaVersion: 1, sections }, seo: {}, ...extra });
+const page = (slug, title, sections, extra = {}) => pages.push({ slug, title: { en: title, fa: title }, document: { schemaVersion: 1, sections }, seo: {}, ...extra });
 
 page('home', 'خانه', [
   s('hero', {
@@ -470,10 +470,13 @@ page('fire-world', 'دنیای آتش‌نشانی', [
 
 page('gallery', 'گالری عکس', [
   header('گالری عکس', 'تصاویری از تمرین‌ها و عملیات آتش‌نشانی. منبع و مجوز هر تصویر در صفحه‌ی «منابع تصاویر» آمده است.', 'تجهیزات'),
+  // The brief wants 20 photos; there are 10 scene photos, so each is shown twice (sample content).
   s('gallery', {
-    items: Object.keys(photos)
-      .filter((k) => !k.startsWith('trainer-'))
-      .map((k) => ({ imageUrl: photos[k].url, title: fa(GALLERY_TITLES[k] ?? 'آتش‌نشانی'), caption: fa(GALLERY_TITLES[k] ?? '') })),
+    items: [1, 2].flatMap(() =>
+      Object.keys(photos)
+        .filter((k) => !k.startsWith('trainer-'))
+        .map((k) => ({ imageUrl: photos[k].url, title: fa(GALLERY_TITLES[k] ?? 'آتش‌نشانی'), caption: fa(GALLERY_TITLES[k] ?? '') })),
+    ),
   }),
 ]);
 

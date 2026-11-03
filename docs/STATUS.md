@@ -4,6 +4,17 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **FireFighter client site** — continued on `feature/firefighter-requirements` (made from `develop`
+  and fast-forwarded to `feature/firefighter-site`; not pushed, not merged). 2026-11-03: the build script
+  ran and the site is up at http://firefighter.preview.localhost (40 pages, 13 courses, 6 sample trainers,
+  6 sample requests, 4 reviews, a trainer waiting for approval). Fixes: settings/page titles need an
+  English value, saved card names are strings, the gallery shows the 10 scene photos twice (20 items;
+  the owner said sample photos may repeat), and rich text keeps a list under a lead-in line
+  (`RichText` in `SmartLink.tsx`). Checked in the browser: home, courses, a course page, a trainer page
+  (files, rating, reviews), gallery, footer socials, sign-in as a sample customer and their requests.
+  Sample customers here use the password `firefighter-demo` (phones `0912100000x`).
+  Still open: the docs (`docs/clients/firefighter/`, feature docs, `docs/dev/`) and the install package.
+  The earlier notes:
 - **FireFighter client site** (`feature/firefighter-site`, pushed, not merged; paused 2026-11-03 at the
   owner's request). The owner's brief: a Persian fire-safety training site (menus, courses, trainer
   panels, training requests, reviews, guides, news, NFPA, FAQ, terms).

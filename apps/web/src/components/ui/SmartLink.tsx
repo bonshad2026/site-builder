@@ -60,22 +60,30 @@ export function RichText({ text, className }: { text: string; className?: string
             </h4>
           );
         }
-        if (lines.every((l) => /^\d+[.)]\s/.test(l.trim()))) {
-          return (
-            <ol key={i} className="my-4 list-decimal space-y-1 ps-6">
-              {lines.map((l, j) => (
+        const list = (items: string[], key: string | number) =>
+          items.every((l) => /^\d+[.)]\s/.test(l.trim())) ? (
+            <ol key={key} className="my-4 list-decimal space-y-1 ps-6">
+              {items.map((l, j) => (
                 <li key={j}>{inline(l.trim().replace(/^\d+[.)]\s+/, ''))}</li>
               ))}
             </ol>
-          );
-        }
-        if (lines.every((l) => l.trim().startsWith('- '))) {
-          return (
-            <ul key={i} className="my-4 list-disc space-y-1 ps-5">
-              {lines.map((l, j) => (
+          ) : items.every((l) => l.trim().startsWith('- ')) ? (
+            <ul key={key} className="my-4 list-disc space-y-1 ps-5">
+              {items.map((l, j) => (
                 <li key={j}>{inline(l.trim().slice(2))}</li>
               ))}
             </ul>
+          ) : null;
+        const whole = list(lines, i);
+        if (whole) return whole;
+        // A lead-in line straight above a list ("**Skills**" then "- …" lines) keeps the list.
+        const rest = lines.length > 1 ? list(lines.slice(1), 'list') : null;
+        if (rest) {
+          return (
+            <div key={i}>
+              <p className="mt-4 first:mt-0">{inline(lines[0])}</p>
+              {rest}
+            </div>
           );
         }
         return (
