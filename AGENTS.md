@@ -122,10 +122,12 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |
 | Starters: packs, groups, previews, ready-made starters, header/footer | [starters.md](docs/features/starters.md) |
+| Developer guide (Persian: architecture, layers, recipes, operations) | [docs/dev/](docs/dev/README.md) |
 
 ## Keeping this guide
 Any agent finishing a change that alters how something works updates this file (facts that every
-task needs) or the matching feature doc (details), and always `docs/STATUS.md`. Keep this file short;
+task needs) or the matching feature doc (details), the matching page of the Persian developer guide
+in `docs/dev/` (see `docs/dev/07-rules/docs.md`), and always `docs/STATUS.md`. Keep this file short;
 put details in the docs. Update the test counts here and in `docs/STATUS.md` when they change.
 Other tools are pointed here by `CLAUDE.md` (Claude Code), `GEMINI.md` (Gemini CLI),
 `.github/copilot-instructions.md` (GitHub Copilot) and `.cursor/rules/project-guide.mdc` (Cursor);

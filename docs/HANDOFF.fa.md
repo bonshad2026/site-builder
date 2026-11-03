@@ -16,7 +16,7 @@ Docker Desktop (روشن)، Git. برای توسعه‌ی کد: Node.js 20 به 
    ```bash
    git clone https://github.com/bonshad2026/site-builder.git
    cd site-builder
-   git switch feature/studio-and-client-delivery
+   git switch develop
    ```
 2. فایل پشتیبان (`studio-backup-….tar.gz`) را که خصوصی دریافت کرده‌اید داخل پوشه‌ی پروژه بگذارید.
 3. بازگردانی (ساخت اولیه چند دقیقه طول می‌کشد):

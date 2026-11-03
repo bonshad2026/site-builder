@@ -4,6 +4,13 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- Branch `feature/dev-docs` (pushed, not merged): the Persian developer guide in `docs/dev/` — 35 pages
+  in 7 chapters (start, architecture, layers, features, recipes, operations, rules), every claim
+  checked against the code, Mermaid diagrams parsed with mermaid 11, links checked. Keep it current
+  with every change (`docs/dev/07-rules/docs.md`). Also fixed the branch name in `HANDOFF.fa.md`.
+- Branch `feature/user-guide` (pushed 2026-11-03, not merged): the Persian user guide with one video
+  per task; latest commit adds screenshot scenes (`shots`) and the feature list as Word. Next there:
+  agree the list of guide pages with the owner, then a scene and a page for each.
 - Branch `feature/payment-gateways` (pushed and merged into `develop` on 2026-11-02): several gateways per
   site with the buyer choosing at checkout, a studio gateway catalog, operator control of which
   gateways each site may use, a transactions page with "check again", and "test connection". Gateways
@@ -42,6 +49,7 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - None waiting.
 
 ## Log
+- **2026-11-03** — `feature/dev-docs`: Persian developer guide `docs/dev/` (index `docs/dev/README.md`); linked from `AGENTS.md` and `docs/README.md`.
 - **2026-11-02** — `feature/payment-gateways`: tenant migration `011_payment_gateways.sql` moves each
   site's single gateway into `payment_gateways` (one row per driver) and drops the old columns of
   `payment_settings`; studio catalog in `app_settings` (`payment_catalog`); tests in `payments.test.ts`.
