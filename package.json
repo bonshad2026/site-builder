@@ -14,6 +14,7 @@
     "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w apps/api && npm run typecheck -w apps/web",
     "db:up": "docker compose up -d postgres",
     "migrate": "npm run migrate -w apps/api",
-    "seed": "npm run seed -w apps/api"
+    "seed": "npm run seed -w apps/api",
+    "docs:html": "node tools/dev-docs/build.mjs"
   }
 }
