@@ -18,6 +18,7 @@ export interface AdminItem {
   previewData: Record<string, unknown>;
   /** The customer who keeps the item (self-service tables). */
   ownerCustomerId: string | null;
+  demo?: boolean;
   owner: { name: string; phone: string | null; email: string | null } | null;
   rating?: { average: number; count: number };
   createdAt: string;

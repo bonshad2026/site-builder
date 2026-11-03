@@ -4,6 +4,26 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **FireFighter client site** (`feature/firefighter-site`, pushed, not merged; paused 2026-11-03 at the
+  owner's request). The owner's brief: a Persian fire-safety training site (menus, courses, trainer
+  panels, training requests, reviews, guides, news, NFPA, FAQ, terms).
+  - Done in the builder (commit `faa5f39` and the next one): account kinds (person / organisation /
+    trainer, `settings.accounts.kinds`), customers' own items in self-service tables with photo and
+    file uploads and staff approval (`/customer/profile`, `/customer/files`, "My page" in the
+    account), a `files` field type, reviews after a finished request (`item_reviews`, section
+    `item-reviews`, admin Reviews panel), assigning a request to an item (`assignTable`,
+    `leads.assigned_item_id`), form choices from a table (`optionsFrom`), Jalali date picker in
+    forms, `list` and `rating` box blocks, headings / numbered lists / links in rich text, submenus up
+    to 20, image alt = item title, "sample" badge on items. Tenant migration
+    `012_members_and_reviews.sql`; test `apps/api/test/members.test.ts`. Tests: web 43, API 114;
+    typecheck clean. Studio containers rebuilt with all of it.
+  - Site build: `tools/firefighter-site/` — `content-courses.mjs` (13 courses, 6 sample trainers),
+    `content-pages.mjs` (6 guides, 6 news: 3 real with sources, 3 marked sample; 18 NFPA documents
+    checked on nfpa.org; free training; 16 FAQ; terms; about), `build.mjs` (makes the whole site
+    through the API, sample customers / requests / reviews, marks sample rows). **Not run yet.**
+  - Photos: 10 Commons photos + 6 trainer crops in `var/firefighter-photos/` (not in Git) with
+    `credits.json`. The owner stopped further downloads; the gallery has 10 photos, not 20.
+  - Feature docs and the Persian dev guide are not updated for the new features yet.
 - Developer guide (`feature/dev-docs`, merged into `develop` 2026-11-03): the Persian developer guide in
   `docs/dev/` — 35 pages in 7 chapters (start, architecture, layers, features, recipes, operations,
   rules), every claim checked against the code, Mermaid diagrams parsed with mermaid 11, links checked.
@@ -39,6 +59,11 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
 - The studio on the owner's machine runs the latest `develop` (rebuilt 2026-11-02, 52 ready-made starters added).
 
 ## Next (in this order, unless the owner asks for something else)
+0. FireFighter: run `node tools/firefighter-site/build.mjs` (studio up), fix what fails, check the
+   site at http://firefighter.preview.localhost (menus, course / trainer pages, sign-up as trainer,
+   training request, reviews), then write `docs/clients/firefighter/` (install, sample-data list,
+   sources), update the feature docs (collections, interactions) and `docs/dev/`, commit, build
+   the install package. Optional: more photos (gallery wants 20) when the owner agrees.
 1. Payment choice on the customer's order/request tracking page (today it pays with the first gateway).
 2. Sample data for **services** (setup and ready-made starters only turn the module on; service pages
    preview empty). See [features/site-setup.md](features/site-setup.md) and

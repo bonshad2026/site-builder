@@ -217,7 +217,7 @@ function BlockView({ block, item, collection, inert, selected, onSelect }: ViewP
           style={{ borderRadius: block.radius ? `${block.radius}px` : undefined, width: block.imgWidth ? `${block.imgWidth}px` : undefined, height: block.imgHeight ? `${block.imgHeight}px` : undefined, maxWidth: '100%' }}
         >
           {url ? (
-            <img src={url} alt="" loading="lazy" className="h-full w-full" style={{ objectFit: block.fit, objectPosition: objectPosition[block.position] }} />
+            <img src={url} alt={p.l(item.title)} loading="lazy" className="h-full w-full" style={{ objectFit: block.fit, objectPosition: objectPosition[block.position] }} />
           ) : (
             <div className="h-full min-h-24 w-full" />
           )}

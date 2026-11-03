@@ -128,7 +128,7 @@ export const siteSettingsSchema = z.object({
           label: localizedSchema,
           children: z
             .array(z.object({ href: hrefSchema.refine((v) => v !== '', 'Choose a link'), label: localizedSchema }))
-            .max(12)
+            .max(20)
             .default([]),
         })
         // An item with a submenu may be a heading only (no link of its own).

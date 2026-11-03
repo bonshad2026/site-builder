@@ -23,7 +23,7 @@ type Db = pg.Pool | pg.PoolClient;
 export const COLLECTION_COLUMNS = `id, slug, name, item_name AS "itemName", fields, detail_page AS "detailPage", image_field AS "imageField",
   commerce, request_type AS "requestType", position, self_service AS "selfService", reviews`;
 
-export const ITEM_COLUMNS = `id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt", owner_customer_id AS "ownerCustomerId"`;
+export const ITEM_COLUMNS = `id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt", owner_customer_id AS "ownerCustomerId", demo`;
 
 export interface ItemRow {
   id: string;
@@ -37,6 +37,8 @@ export interface ItemRow {
   updatedAt: Date;
   /** The customer who keeps this item (self-service tables). */
   ownerCustomerId: string | null;
+  /** Sample item (removed with the sample data, left out of packages). */
+  demo: boolean;
 }
 
 function normalize(row: Collection): Collection {

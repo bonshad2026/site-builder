@@ -414,7 +414,7 @@ export default function ItemsPage({ siteId }: { siteId: string }) {
                   <div className="size-12 overflow-hidden rounded bg-surface-2">{item.imageUrl && <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />}</div>
                 </Td>
                 <Td>
-                  <span className="font-medium">{l(item.title) || item.slug}</span>
+                  <span className="font-medium">{l(item.title) || item.slug}</span> {item.demo && <Badge tone="neutral">{t(L('Sample', 'نمونه'))}</Badge>}
                   <div className="text-xs text-ink-soft" dir="ltr">
                     /{table.slug}/{item.slug}
                   </div>
