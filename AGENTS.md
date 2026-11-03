@@ -52,6 +52,7 @@ npm test                                    # web (vitest) then api (vitest, rea
 npx vitest run test/starters.test.ts        # one API test file (from apps/api)
 deploy/backup/studio-backup.sh              # whole studio → backups/*.tar.gz (restore: studio-restore.sh / .ps1)
 deploy/photos/download-photos.ps1           # template photos → var/demo-images
+node tools/guide-videos/record.mjs          # user-guide videos → docs/guide/media (not in Git; see its README)
 npm run docs:html                           # rebuild docs/dev/index.html after editing docs/dev (commit both)
 ```
 Containers: `sb-edge` (nginx :80), `sb-studio-db`, `sb-studio-api`, `sb-studio-web`, `sb-control`.
@@ -123,6 +124,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |
 | Starters: packs, groups, previews, ready-made starters, header/footer | [starters.md](docs/features/starters.md) |
+| User guide (Persian, one page + video per task) | [docs/guide/](docs/guide/README.md) |
 | Developer guide (Persian: architecture, layers, recipes, operations) | [docs/dev/](docs/dev/README.md) |
 
 ## Keeping this guide

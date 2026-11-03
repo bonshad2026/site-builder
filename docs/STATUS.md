@@ -4,15 +4,16 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
-- Branch `feature/dev-docs` (merged into `develop` 2026-11-03; the HTML view is on the branch, not yet merged): the Persian developer guide in `docs/dev/` — 35 pages
-  in 7 chapters (start, architecture, layers, features, recipes, operations, rules), every claim
-  checked against the code, Mermaid diagrams parsed with mermaid 11, links checked. `docs/dev/index.html`
-  (built by `npm run docs:html`, `tools/dev-docs/build.mjs`) opens the whole guide with a double click;
-  rebuild it after editing. Keep it current
-  with every change (`docs/dev/07-rules/docs.md`). Also fixed the branch name in `HANDOFF.fa.md`.
-- Branch `feature/user-guide` (pushed 2026-11-03, not merged): the Persian user guide with one video
-  per task; latest commit adds screenshot scenes (`shots`) and the feature list as Word. Next there:
-  agree the list of guide pages with the owner, then a scene and a page for each.
+- Developer guide (`feature/dev-docs`, merged into `develop` 2026-11-03): the Persian developer guide in
+  `docs/dev/` — 35 pages in 7 chapters (start, architecture, layers, features, recipes, operations,
+  rules), every claim checked against the code, Mermaid diagrams parsed with mermaid 11, links checked.
+  `docs/dev/index.html` (built by `npm run docs:html`, `tools/dev-docs/build.mjs`) opens the whole
+  guide with a double click; rebuild it after editing. Keep it current with every change
+  (`docs/dev/07-rules/docs.md`).
+- User guide (`feature/user-guide`, merged into `develop` 2026-11-03): Persian, one short video per task.
+  Sample page `docs/guide/payment-gateways.md`; videos and screenshots are recorded by
+  `tools/guide-videos` (scenes with `shots` make screenshots) into `docs/guide/media/`, which is kept
+  out of Git. Next: agree the list of guide pages with the owner, then add a scene and a page for each.
 - Branch `feature/payment-gateways` (pushed and merged into `develop` on 2026-11-02): several gateways per
   site with the buyer choosing at checkout, a studio gateway catalog, operator control of which
   gateways each site may use, a transactions page with "check again", and "test connection". Gateways
