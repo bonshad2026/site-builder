@@ -10,13 +10,22 @@ const swatches: Record<string, [string, string]> = {
   sage: ['#eef0ea', '#4f6446'],
 };
 
+type Settings = ReturnType<typeof useSiteSettings>['data'];
+
+/** The themes a visitor may pick: the site's list when it has one, else every built-in and own theme. */
+function visitorThemes(settings: Settings): ThemeId[] {
+  const all = [...THEMES, ...(settings?.design?.themes ?? []).map((t) => t.id)];
+  const allowed = settings?.design?.visitorThemes ?? [];
+  return allowed.length ? all.filter((id) => allowed.includes(id)) : all;
+}
+
 /** The theme actually shown: the visitor's choice, else the site's theme. */
 export function useEffectiveTheme(): ThemeId {
   const { theme } = usePreferences();
   const { data: settings } = useSiteSettings();
-  // A visitor's earlier choice counts only while the site still has that theme.
   const known = (id: string | null | undefined) => !!id && (THEMES.includes(id) || !!settings?.design?.themes?.some((t) => t.id === id));
-  if (known(theme)) return theme!;
+  // A visitor's earlier choice counts only while the site still offers that theme.
+  if (theme && visitorThemes(settings).includes(theme)) return theme;
   return known(settings?.themeId) ? settings!.themeId : 'ivory';
 }
 
@@ -57,9 +66,11 @@ export function ThemeSwitch({ className }: { className?: string }) {
   const own = settings?.design?.themes ?? [];
   const names: Record<string, string> = { ...m.prefs.themes, ...Object.fromEntries(own.map((t) => [t.id, l(t.name) || t.id])) };
   const colors: Record<string, [string, string]> = { ...swatches, ...Object.fromEntries(own.map((t) => [t.id, [t.colors.bg, t.colors.accent] as [string, string]])) };
+  const offered = visitorThemes(settings);
+  if (offered.length < 2) return null;
   return (
     <div role="radiogroup" aria-label={m.prefs.theme} className={cn('flex items-center gap-1.5', className)}>
-      {[...THEMES, ...own.map((t) => t.id)].map((id) => {
+      {offered.map((id) => {
         const [bg, accent] = colors[id];
         return (
           <button

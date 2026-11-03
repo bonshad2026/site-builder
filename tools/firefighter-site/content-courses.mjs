@@ -56,7 +56,7 @@ export const COURSES = [
     level: 'intermediate',
     certificate: true,
     duration: '۴۸ ساعت (۶ روز)',
-    image: 'rescue-carry',
+    image: 'team-in-smoke',
     trainers: ['sadri'],
     summary: 'آموزش اصول نجات فنی شامل کار با طناب، سیستم‌های مزیت مکانیکی و ورود ایمن به فضاهای بسته برای تیم‌های نجات.',
     syllabus: `- ارزیابی صحنه و ایمنی تیم نجات
@@ -226,7 +226,7 @@ export const COURSES = [
     level: 'basic',
     certificate: true,
     duration: '۱۶ ساعت (۲ روز)',
-    image: 'rescue-carry',
+    image: 'hose-run',
     trainers: ['tavana'],
     summary: 'آموزش عملی ارزیابی مصدوم، احیای قلبی‌ریوی، کار با دستگاه شوک خودکار (AED)، کنترل خونریزی و مراقبت از سوختگی تا رسیدن اورژانس.',
     syllabus: `- ایمنی صحنه و ارزیابی اولیه‌ی مصدوم

@@ -42,6 +42,8 @@ export const designSchema = z
       .default({}),
     /** Themes made for this site, alongside the built-in ivory, noir and sage. */
     themes: z.array(customThemeSchema).max(10).default([]),
+    /** Themes visitors may pick with the header's theme buttons (built-in or own ids); empty = all of them. */
+    visitorThemes: z.array(slug).max(13).default([]),
     /** An uploaded font file (woff2 / woff / ttf), used where a font is set to "custom" (e.g. a licensed Persian font). */
     customFont: z
       .object({ name: z.string().max(60).default(''), url: z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v)).default('') })

@@ -87,3 +87,9 @@ kit عمومی یک‌بار با جدول‌های starterهای آماده پ�
 
 ## تست
 `apps/api/test/setup.test.ts`، `provisioning.test.ts`، `bank.test.ts`.
+
+## تم‌ها و انتخاب بازدیدکننده
+- تم‌های آماده (ivory، noir، sage) و تم‌های خود سایت (`design.themes`).
+- `design.visitorThemes` (در `packages/shared/src/siteOptions.ts`) مشخص می‌کند دکمه‌های تم در header کدام تم‌ها را نشان دهند.
+  خالی یعنی همه. اگر کمتر از دو تم بماند، دکمه‌ها نمایش داده نمی‌شوند (`ThemeSwitch` در
+  `apps/web/src/components/layout/PreferenceControls.tsx`). در پنل: ظاهر سایت → «تم‌هایی که بازدیدکننده می‌تواند انتخاب کند».

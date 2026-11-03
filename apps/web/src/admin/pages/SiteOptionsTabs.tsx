@@ -106,6 +106,27 @@ export function DesignTab({ s, set, siteId }: TabProps) {
           </div>
         </div>
       </Card>
+      <Card>
+        <p className="mb-1 text-sm font-medium">{T('Themes visitors can pick', 'تم‌هایی که بازدیدکننده می‌تواند انتخاب کند')}</p>
+        <p className="mb-3 text-sm text-ink-soft">
+          {T('Shown as buttons in the header. None ticked = all themes.', 'به‌صورت دکمه در هدر نمایش داده می‌شوند. اگر هیچ‌کدام تیک نخورد، همه‌ی تم‌ها نمایش داده می‌شوند.')}
+        </p>
+        <div className="flex flex-wrap gap-4">
+          {[
+            ['ivory', T('Ivory', 'عاجی')],
+            ['noir', T('Noir', 'شب')],
+            ['sage', T('Sage', 'مریم‌گلی')],
+            ...s.design.themes.map((x) => [x.id, x.name.fa || x.name.en || x.id]),
+          ].map(([id, name]) => (
+            <Checkbox
+              key={id}
+              label={name}
+              checked={s.design.visitorThemes.includes(id)}
+              onChange={(on) => set('design', { ...s.design, visitorThemes: on ? [...s.design.visitorThemes, id] : s.design.visitorThemes.filter((x) => x !== id) })}
+            />
+          ))}
+        </div>
+      </Card>
       <p className="text-sm text-ink-soft">{t.customThemesHint}</p>
       <ListEditor
         label={t.customThemes}

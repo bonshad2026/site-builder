@@ -11,6 +11,8 @@ import { ABOUT, FAQ, FREE_TRAINING, GUIDE_CATEGORIES, GUIDES, NEWS, NFPA_DOCS, T
 const BASE = process.env.STUDIO_URL ?? 'http://admin.localhost';
 const SLUG = 'firefighter';
 const PHOTOS = 'var/firefighter-photos';
+/** Photos left out of the site (the owner did not like them). */
+const SKIP = ['rescue-carry'];
 const fa = (text) => ({ en: '', fa: text });
 /** Persian titles (and alt texts) of the photos. */
 const GALLERY_TITLES = {
@@ -23,7 +25,6 @@ const GALLERY_TITLES = {
   'hose-team': 'تیم لوله‌کشی در تمرین اطفای حریق',
   'hose-attack': 'آتش‌نشان در حال پاشیدن آب',
   'hose-run': 'آتش‌نشان در حال کشیدن لوله کنار خودروی آتش‌نشانی',
-  'rescue-carry': 'تمرین نجات و حمل مصدوم',
 };
 
 /* ---------- a small cookie-keeping API client ---------- */
@@ -82,7 +83,7 @@ console.log('site created', tenant.dbName);
 /* ---------- photos ---------- */
 
 const photos = {};
-for (const f of readdirSync(PHOTOS).filter((x) => x.endsWith('.jpg'))) {
+for (const f of readdirSync(PHOTOS).filter((x) => x.endsWith('.jpg') && !SKIP.includes(x.replace('.jpg', '')))) {
   const form = new FormData();
   form.append('visibility', 'public');
   form.append('altFa', GALLERY_TITLES[f.replace('.jpg', '')] ?? 'مربی (عکس نمونه)');
@@ -97,7 +98,7 @@ console.log('photos', Object.keys(photos).length);
 
 let n = 0;
 const b = (type, props = {}, children = []) => ({ id: `b${++n}`, type, ...props, children });
-const card = (children, extra = {}) => b('stack', { direction: 'column', gap: 0, border: true, radius: 14, shadow: true, background: '#ffffff', linkToItem: true, ...extra }, children);
+const card = (children, extra = {}) => b('stack', { direction: 'column', gap: 0, border: true, radius: 14, shadow: true, background: '', linkToItem: true, ...extra }, children);
 const body = (children) => b('stack', { direction: 'column', gap: 2, padding: 5 }, children);
 
 const designs = [
@@ -365,10 +366,17 @@ Object.assign(settings, {
     themes: [
       {
         id: 'firefighter',
-        name: fa('آتش‌نشانی'),
+        name: fa('روشن'),
         colors: { bg: '#ffffff', surface: '#f4f6f9', surface2: '#e7ebf1', ink: '#14213d', inkSoft: '#4b5568', line: '#dde2ea', accent: '#c8102e', accentInk: '#ffffff', accentSoft: '#fde8ea' },
       },
+      {
+        id: 'firefighter-dark',
+        name: fa('تیره'),
+        colors: { bg: '#0f1420', surface: '#172033', surface2: '#1f2a40', ink: '#f1f3f7', inkSoft: '#a9b2c3', line: '#2a3550', accent: '#e0283f', accentInk: '#ffffff', accentSoft: '#3a1820' },
+      },
     ],
+    // Visitors switch between the light and the dark look with the header buttons.
+    visitorThemes: ['firefighter', 'firefighter-dark'],
   },
   cardDesigns: designs,
   nav: [
@@ -381,7 +389,7 @@ Object.assign(settings, {
     nav('درباره ما', '/about'),
     nav('تماس با ما', '/contact'),
   ],
-  header: { ...settings.header, layout: 'stacked', showCart: false, showLanguage: false, showTheme: false, showSearch: false, showAccount: true, transparentOverHero: true, buttons: [{ label: fa('درخواست آموزش'), href: '/request-training', style: 'primary' }] },
+  header: { ...settings.header, layout: 'stacked', showCart: false, showLanguage: false, showTheme: true, showSearch: false, showAccount: true, transparentOverHero: true, buttons: [{ label: fa('درخواست آموزش'), href: '/request-training', style: 'primary' }] },
   footer: {
     ...settings.footer,
     showSubmenu: false,
@@ -460,7 +468,7 @@ page('fire-world', 'دنیای آتش‌نشانی', [
   s('image-text', { eyebrow: fa('حفاظت فردی'), heading: fa('لباس حفاظتی و دستگاه تنفسی'), body: fa('لباس حفاظتی آتش‌نشان از چند لایه تشکیل شده تا در برابر گرما، شعله و رطوبت از بدن محافظت کند. دستگاه تنفسی مستقل (SCBA) هوای قابل تنفس را از یک سیلندر فشرده تأمین می‌کند و ورود به محیط‌های پر از دود را ممکن می‌سازد. الزامات این تجهیزات در استاندارد NFPA 1970 گرد آمده است.'), imageUrl: photos['smoke-search'].url }),
   s('image-text', { eyebrow: fa('آب و کف'), heading: fa('لوله، سرلوله و اتصالات'), body: fa('لوله‌های آتش‌نشانی آب را از خودرو یا شیر آتش‌نشانی به محل آتش می‌رسانند. سرلوله‌ها شکل و جریان آب را کنترل می‌کنند: جریان مستقیم برای برد بیشتر و جریان مه‌پاش برای خنک‌سازی و محافظت از نیروها. انتخاب درست قطر لوله و سرلوله و آرایش خطوط آب، از مهارت‌های پایه‌ی آتش‌نشانی است.'), imageUrl: photos['hose-attack'].url, imageSide: 'end' }),
   s('image-text', { eyebrow: fa('خودروها'), heading: fa('خودروهای آتش‌نشانی'), body: fa('خودروی آتش‌نشانی مخزن آب، پمپ، لوله و ابزار عملیات را با خود حمل می‌کند. خودروهای نردبان‌دار برای دسترسی به ارتفاع، خودروهای نجات برای حوادث و خودروهای ویژه‌ی فرودگاهی برای حریق هواپیما طراحی شده‌اند.'), imageUrl: photos['hose-run'].url }),
-  s('image-text', { eyebrow: fa('ابزار نجات'), heading: fa('ابزار امداد و نجات'), body: fa('ابزارهای هیدرولیک برش و بازکننده، تجهیزات کار با طناب، برانکارد و وسایل پایدارسازی، امکان رسیدن به مصدوم و خارج‌کردن ایمن او را فراهم می‌کنند.'), imageUrl: photos['rescue-carry'].url, imageSide: 'end' }),
+  s('image-text', { eyebrow: fa('ابزار نجات'), heading: fa('ابزار امداد و نجات'), body: fa('ابزارهای هیدرولیک برش و بازکننده، تجهیزات کار با طناب، برانکارد و وسایل پایدارسازی، امکان رسیدن به مصدوم و خارج‌کردن ایمن او را فراهم می‌کنند.'), imageUrl: photos['team-in-smoke'].url, imageSide: 'end' }),
   s('features', { heading: fa('خاموش‌کننده‌ها: نخستین خط دفاع'), marker: 'bullet', items: [
     { title: fa('انتخاب درست'), text: fa('هر خاموش‌کننده برای نوع خاصی از آتش مناسب است؛ برچسب دستگاه را بخوانید.') },
     { title: fa('جانمایی'), text: fa('در مسیر خروج، در دسترس و قابل دیدن نصب شود.') },
@@ -470,13 +478,15 @@ page('fire-world', 'دنیای آتش‌نشانی', [
 
 page('gallery', 'گالری عکس', [
   header('گالری عکس', 'تصاویری از تمرین‌ها و عملیات آتش‌نشانی. منبع و مجوز هر تصویر در صفحه‌ی «منابع تصاویر» آمده است.', 'تجهیزات'),
-  // The brief wants 20 photos; there are 10 scene photos, so each is shown twice (sample content).
+  // The brief wants 20 photos; there are fewer scene photos, so they repeat (sample content).
   s('gallery', {
-    items: [1, 2].flatMap(() =>
-      Object.keys(photos)
-        .filter((k) => !k.startsWith('trainer-'))
-        .map((k) => ({ imageUrl: photos[k].url, title: fa(GALLERY_TITLES[k] ?? 'آتش‌نشانی'), caption: fa(GALLERY_TITLES[k] ?? '') })),
-    ),
+    items: [1, 2, 3]
+      .flatMap(() =>
+        Object.keys(photos)
+          .filter((k) => !k.startsWith('trainer-'))
+          .map((k) => ({ imageUrl: photos[k].url, title: fa(GALLERY_TITLES[k] ?? 'آتش‌نشانی'), caption: fa(GALLERY_TITLES[k] ?? '') })),
+      )
+      .slice(0, 20),
   }),
 ]);
 
@@ -514,7 +524,7 @@ page('faq', 'سوالات متداول', [header('سوالات متداول', '�
 page('terms', 'قوانین و مقررات', [header('قوانین و مقررات'), ...TERMS.map((x) => rich(x.heading, x.body))]);
 page('image-credits', 'منابع تصاویر', [
   header('منابع تصاویر', 'همه‌ی تصاویر سایت از ویکی‌مدیا کامانز با مجوز آزاد برداشته شده‌اند.'),
-  rich('', Object.entries(credits).map(([k, c]) => `- **${GALLERY_TITLES[k] ?? k}** — ${c.artist || 'بی‌نام'} — مجوز ${c.license} — [صفحه‌ی منبع](${c.page})`).join('\n') + '\n\nتصاویر مربیان، برش‌هایی از همین عکس‌ها هستند و افراد واقعی معرفی‌شده نیستند.', 'wide'),
+  rich('', Object.entries(credits).filter(([k]) => !SKIP.includes(k)).map(([k, c]) => `- **${GALLERY_TITLES[k] ?? k}** — ${c.artist || 'بی‌نام'} — مجوز ${c.license} — [صفحه‌ی منبع](${c.page})`).join('\n') + '\n\nتصاویر مربیان، برش‌هایی از همین عکس‌ها هستند و افراد واقعی معرفی‌شده نیستند.', 'wide'),
 ]);
 
 // Template pages of table items.

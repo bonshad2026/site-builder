@@ -32,6 +32,9 @@ Template photos come from `var/demo-images/<ref>.jpg`, else the network, else a 
 - Header (`settings.header`: layout, size, buttons, `showSearch`, `showAccount`, cart, theme and language
   switches), submenus in `nav`, footer columns and placement (`settings.footer`); both can come from
   header / footer starters ([starters.md](starters.md)).
+- Themes: built-in ivory / noir / sage plus the site's own (`design.themes`). `design.visitorThemes`
+  limits the header's theme buttons to the listed ids (empty = all; fewer than two hides the buttons);
+  set in Site look → design ("Themes visitors can pick").
 - Admin menu of a site (`src/admin/AdminRoot.tsx` `SiteNav`): Requests, Orders, Customers, Tables
   (products, categories, services, content tables), Pages, Site look, Settings (incl. payment gateway).
 

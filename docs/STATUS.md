@@ -13,7 +13,12 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   (`RichText` in `SmartLink.tsx`). Checked in the browser: home, courses, a course page, a trainer page
   (files, rating, reviews), gallery, footer socials, sign-in as a sample customer and their requests.
   Sample customers here use the password `firefighter-demo` (phones `0912100000x`).
-  Still open: the docs (`docs/clients/firefighter/`, feature docs, `docs/dev/`) and the install package.
+  Later the same day: the owner's rejected photo (`rescue-carry`) is left out (`SKIP` in `build.mjs`);
+  the site has a light and a dark theme the visitor picks in the header (new `design.visitorThemes`,
+  editable in Site look); cards follow the theme colour; client doc `docs/clients/firefighter/README.md`;
+  install package with sample data built: `exports/firefighter-20261103-1710.tar.gz` (not in Git).
+  Tests: web 43, API 114; typecheck clean. Still open: the package build sends ~300 MB of build context
+  (backups, exports, root archives are not in `.dockerignore`), which makes it slow.
   The earlier notes:
 - **FireFighter client site** (`feature/firefighter-site`, pushed, not merged; paused 2026-11-03 at the
   owner's request). The owner's brief: a Persian fire-safety training site (menus, courses, trainer
