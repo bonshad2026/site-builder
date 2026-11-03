@@ -4,9 +4,11 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
-- Branch `feature/dev-docs` (pushed, not merged): the Persian developer guide in `docs/dev/` — 35 pages
+- Branch `feature/dev-docs` (merged into `develop` 2026-11-03; the HTML view is on the branch, not yet merged): the Persian developer guide in `docs/dev/` — 35 pages
   in 7 chapters (start, architecture, layers, features, recipes, operations, rules), every claim
-  checked against the code, Mermaid diagrams parsed with mermaid 11, links checked. Keep it current
+  checked against the code, Mermaid diagrams parsed with mermaid 11, links checked. `docs/dev/index.html`
+  (built by `npm run docs:html`, `tools/dev-docs/build.mjs`) opens the whole guide with a double click;
+  rebuild it after editing. Keep it current
   with every change (`docs/dev/07-rules/docs.md`). Also fixed the branch name in `HANDOFF.fa.md`.
 - Branch `feature/user-guide` (pushed 2026-11-03, not merged): the Persian user guide with one video
   per task; latest commit adds screenshot scenes (`shots`) and the feature list as Word. Next there:

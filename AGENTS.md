@@ -52,6 +52,7 @@ npm test                                    # web (vitest) then api (vitest, rea
 npx vitest run test/starters.test.ts        # one API test file (from apps/api)
 deploy/backup/studio-backup.sh              # whole studio → backups/*.tar.gz (restore: studio-restore.sh / .ps1)
 deploy/photos/download-photos.ps1           # template photos → var/demo-images
+npm run docs:html                           # rebuild docs/dev/index.html after editing docs/dev (commit both)
 ```
 Containers: `sb-edge` (nginx :80), `sb-studio-db`, `sb-studio-api`, `sb-studio-web`, `sb-control`.
 Volumes: `site-builder_studio-pgdata`, `site-builder_studio-uploads`, `site-builder_control-data`.
