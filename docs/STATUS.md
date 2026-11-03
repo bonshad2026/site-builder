@@ -4,6 +4,15 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- Liara deploy (`feature/liara-deploy`, not merged): "استقرار روی لیارا" on the deploy page builds an
+  install package with a `liara/` folder and deploys it with the Liara CLI to an existing Docker app
+  that uses a Liara PostgreSQL service (`deploy/liara/`, docs in
+  [features/studio-and-delivery.md](features/studio-and-delivery.md)). The Liara image was tested
+  locally (fresh start, data load, restart without reload, owner sign-in, files) with a stand-in
+  Postgres; it has not run on Liara yet. On the owner's Liara account (2026-11-03): private network
+  `sites` and PostgreSQL 16 `sb-demo-db` (Earth basic plan). Next: check that its root user is a
+  superuser, create the Docker app and `uploads` disk, set `LIARA_*` in `deploy/.env`, rebuild
+  `control`, and deploy one site.
 - Developer guide (`feature/dev-docs`, merged into `develop` 2026-11-03): the Persian developer guide in
   `docs/dev/` — 35 pages in 7 chapters (start, architecture, layers, features, recipes, operations,
   rules), every claim checked against the code, Mermaid diagrams parsed with mermaid 11, links checked.

@@ -18,6 +18,9 @@ const STUDIO_API = env.STUDIO_API || 'http://studio-api:4000';
 const STUDIO_DB = 'sb-studio-db';
 const STUDIO_API_CONTAINER = 'sb-studio-api';
 const STUDIO_URL = 'http://admin.localhost';
+const LIARA_CLI = '9.6.3';
+// Liara needs an API token and a PostgreSQL service (deploy/.env); see deploy/liara/README.md.
+const liaraReady = () => !!(env.LIARA_API_TOKEN && env.LIARA_DB_HOST && env.LIARA_DB_USER && env.LIARA_DB_PASSWORD);
 mkdirSync(SITES, { recursive: true });
 
 /* ---------- helpers ---------- */
@@ -61,6 +64,22 @@ function shTo(script, outFile, logFile) {
     child.stdout.pipe(out);
     child.stderr.on('data', (d) => appendFileSync(logFile, d));
     child.on('close', (code) => out.end(() => resolve(code)));
+  });
+}
+
+/** Runs the Liara CLI (fetched once into the data volume). Arguments are passed as they are, never logged. */
+function liara(args, logFile) {
+  return new Promise((resolve) => {
+    const npm = { npm_config_cache: join(DATA, 'npm-cache'), npm_config_update_notifier: 'false', ...(env.NPM_REGISTRY ? { npm_config_registry: env.NPM_REGISTRY } : {}) };
+    const child = spawn('npx', ['-y', `@liara/cli@${LIARA_CLI}`, ...args], { env: { ...env, ...npm, CI: 'true' } });
+    const take = (d) => appendFileSync(logFile, d);
+    child.stdout.on('data', take);
+    child.stderr.on('data', take);
+    child.on('close', resolve);
+    child.on('error', (err) => {
+      take(String(err));
+      resolve(1);
+    });
   });
 }
 
@@ -122,7 +141,8 @@ const stampNow = () => new Date().toISOString().slice(0, 16).replace(/[-:]/g, ''
 async function job(site, kind, operatorEmail, opts = {}) {
   const { slug } = site;
   if (running) return;
-  running = { slug, kind, name: site.name };
+  running = { slug, kind: opts.liara ? 'liara' : kind, name: site.name };
+  meta(slug, { liara: !!opts.liara });
   const log = join(siteDir(slug), 'job.log');
   const stamp = stampNow();
   const name = kind === 'install' ? `${slug}-${stamp}` : `${slug}-update-${stamp}`;
@@ -214,6 +234,14 @@ async function job(site, kind, operatorEmail, opts = {}) {
       );
       // Sample data made at setup (customers, orders, requests…) goes only when asked for.
       if (!opts.keepDemo) await step('remove sample data', () => sh(`docker exec -i ${db} psql -U sb_admin -d ${targetDb} -v ON_ERROR_STOP=1 -q < ${REPO}/deploy/export/drop-demo.sql`, log));
+      if (opts.liara) {
+        // Liara's database server is shared and made by Liara: the site's rows travel as plain
+        // INSERTs, loaded on the first start (deploy/liara/start.mjs).
+        mkdirSync(join(dir, 'liara/data'), { recursive: true });
+        await step('liara data', () =>
+          shTo(`docker exec ${db} pg_dump -U sb_admin -d ${targetDb} --data-only --inserts --rows-per-insert=200 --exclude-table=schema_migrations`, join(dir, 'liara/data/site.sql'), log),
+        );
+      }
       await step('database export', () => shTo(`docker exec ${db} pg_dumpall -U sb_admin`, join(dir, 'data/db.sql'), log));
       await sh(cleanup.pop(), log);
       await step('server files', () =>
@@ -248,6 +276,41 @@ async function job(site, kind, operatorEmail, opts = {}) {
         ].join('\n'),
         { mode: 0o600 },
       );
+      if (opts.liara) {
+        const L = join(dir, 'liara');
+        await step('liara app', () =>
+          sh(
+            `cd ${REPO}/deploy/liara && cp Dockerfile Caddyfile start.mjs README.md ${L}/ && cp ${REPO}/deploy/export/fix-sequences.sql ${L}/data/ && ` +
+              `cp ${dir}/data/uploads.tar.gz ${L}/data/ && cp -r ${dir}/site ${L}/site && ` +
+              `id=$(docker create ${apiImage}) && docker cp $id:/app ${L}/app && docker rm $id >/dev/null && ` +
+              `id=$(docker create caddy:2-alpine) && docker cp $id:/usr/bin/caddy ${L}/caddy && docker rm $id >/dev/null`,
+            log,
+          ),
+        );
+        const { app, url } = opts.liara;
+        writeFileSync(
+          join(L, 'liara.json'),
+          JSON.stringify({ app, platform: 'docker', port: 80, build: { location: 'iran' }, disks: [{ name: 'uploads', mountTo: '/data/uploads' }] }, null, 2) + '\n',
+        );
+        // The app's settings on Liara: this site's secrets plus the shared database server.
+        const settings = {
+          NODE_ENV: 'production',
+          SITE_URL: url,
+          OLD_SITE_URL: STUDIO_URL,
+          DB_HOST: env.LIARA_DB_HOST,
+          DB_PORT: env.LIARA_DB_PORT || '5432',
+          DB_USER: env.LIARA_DB_USER,
+          DB_PASSWORD: env.LIARA_DB_PASSWORD,
+          ...Object.fromEntries(keep.filter((k) => k !== 'POSTGRES_PASSWORD').map((k) => [k, secrets[k] ?? ''])),
+        };
+        const auth = ['--api-token', env.LIARA_API_TOKEN, ...(env.LIARA_TEAM_ID ? ['--team-id', env.LIARA_TEAM_ID] : [])];
+        await step('liara settings', () => liara(['env', 'set', ...Object.entries(settings).map(([k, v]) => `${k}=${v}`), '--app', app, '--force', ...auth], log));
+        await step('liara deploy', () =>
+          liara(['deploy', '--app', app, '--path', L, '--platform', 'docker', '--port', '80', '--disks', 'uploads=/data/uploads', '--detach', '--message', name, ...auth], log),
+        );
+        appendFileSync(log, `\n== on Liara: ${url}\n`);
+        meta(slug, { lastLiara: url, lastLiaraAt: new Date().toISOString() });
+      }
     } else {
       // Design only: pages, their versions, design settings and new files. The client's own data
       // (catalog, enquiries, orders, contact details, accounts) is left as it is.
@@ -331,7 +394,7 @@ function dashboard(list) {
     const d = readEnvFile(join(siteDir(s.slug), 'deploy.env'));
     const state =
       m.jobStatus === 'running'
-        ? `<span class="warn">در حال ساخت ${m.job === 'install' ? 'بسته‌ی نصب' : 'به‌روزرسانی'}…</span>`
+        ? `<span class="warn">در حال ساخت ${m.job === 'install' ? (m.liara ? 'و استقرار روی لیارا' : 'بسته‌ی نصب') : 'به‌روزرسانی'}…</span>`
         : m.jobStatus === 'failed'
           ? '<span class="bad">خطا در آخرین عملیات</span>'
           : '';
@@ -343,13 +406,21 @@ function dashboard(list) {
 <form class="inline" method="post" action="/deploy/sites/${esc(s.slug)}/update"><button class="btn"${running ? ' disabled' : ''}>بسته‌ی به‌روزرسانی طراحی</button></form>
 <a class="btn" href="/deploy/sites/${esc(s.slug)}/log">لاگ</a>
 ${m.lastInstall ? `<div class="muted">نصب: <code>${esc(EXPORT_HOST_DIR)}/${esc(m.lastInstall)}</code> ${when(m.lastInstallAt)}</div>` : ''}
-${m.lastUpdate ? `<div class="muted">به‌روزرسانی: <code>${esc(EXPORT_HOST_DIR)}/${esc(m.lastUpdate)}</code> ${when(m.lastUpdateAt)}</div>` : ''}</td>
+${m.lastUpdate ? `<div class="muted">به‌روزرسانی: <code>${esc(EXPORT_HOST_DIR)}/${esc(m.lastUpdate)}</code> ${when(m.lastUpdateAt)}</div>` : ''}
+${
+  liaraReady()
+    ? `<form method="post" action="/deploy/sites/${esc(s.slug)}/liara"><input class="mono" name="app" value="${esc(m.liaraApp ?? s.slug)}" size="14" title="شناسه‌ی برنامه‌ی Docker در لیارا">
+<input class="mono" name="url" value="${esc(m.liaraUrl ?? '')}" size="22" placeholder="https://<app>.liara.run" title="نشانی سایت (خالی: نشانی پیش‌فرض لیارا)">
+<button class="btn"${running ? ' disabled' : ''}>استقرار روی لیارا</button></form>`
+    : ''
+}
+${m.lastLiara ? `<div class="muted">لیارا: <a class="mono" href="${esc(m.lastLiara)}" target="_blank">${esc(m.lastLiara)}</a> ${when(m.lastLiaraAt)}</div>` : ''}</td>
 <td class="mono">${d.CELL_OWNER_EMAIL ? `${esc(d.CELL_OWNER_EMAIL)}<br>${esc(d.CELL_OWNER_PASSWORD)}` : '<span class="muted">با اولین بسته ساخته می‌شود</span>'}</td></tr>`;
   });
   return page(
     'پیش‌نمایش و استقرار',
     `<header><h1>پیش‌نمایش و استقرار</h1><a class="btn" href="/admin/platform/sites">بازگشت به پنل</a></header>
-${running ? `<div class="card warn">در حال ساخت ${running.kind === 'install' ? 'بسته‌ی نصب' : 'بسته‌ی به‌روزرسانی'} برای «${esc(running.name)}»… تا پایان آن، ساخت بسته‌ی دیگری ممکن نیست.</div>` : ''}
+${running ? `<div class="card warn">در حال ساخت ${{ install: 'بسته‌ی نصب', update: 'بسته‌ی به‌روزرسانی', liara: 'و استقرار روی لیارا' }[running.kind]} برای «${esc(running.name)}»… تا پایان آن، ساخت بسته‌ی دیگری ممکن نیست.</div>` : ''}
 <div class="card">${
       list.length
         ? `<table><thead><tr><th>سایت</th><th>ساخت و پیش‌نمایش</th><th>استقرار روی سرور مشتری</th><th>ورود مشتری روی سرور خودش</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
@@ -407,7 +478,7 @@ createServer(async (req, res) => {
 
     if (path === '/deploy/' && req.method === 'GET') return send(res, 200, dashboard(list));
 
-    const m = /^\/deploy\/sites\/([a-z0-9-]+)\/(install|update|log)$/.exec(path);
+    const m = /^\/deploy\/sites\/([a-z0-9-]+)\/(install|update|liara|log)$/.exec(path);
     const site = m && list.find((s) => s.slug === m[1]);
     if (m && !site) return send(res, 404, page('یافت نشد', '<p>سایت یافت نشد.</p>'));
     if (m && m[2] === 'log' && req.method === 'GET') {
@@ -422,6 +493,18 @@ createServer(async (req, res) => {
       const f = await formBody(req);
       if (running) {
         return send(res, 409, page('در حال ساخت', `<div class="card warn">ساخت بسته برای «${esc(running.name)}» در جریان است. پس از پایان آن دوباره تلاش کنید.</div><a class="btn" href="/deploy/">بازگشت</a>`));
+      }
+      if (m[2] === 'liara') {
+        // Builds an install package and deploys it to an existing Liara Docker app. The site's data
+        // is loaded only on the app's first start, so later deploys keep the client's data.
+        const app = String(f.app ?? '').trim();
+        const url = String(f.url ?? '').trim().replace(/\/$/, '') || `https://${app}.liara.run`;
+        if (!liaraReady() || !/^[a-z0-9][a-z0-9-]{2,}$/.test(app) || !/^https?:\/\/[^\s/]+$/.test(url)) {
+          return send(res, 400, page('خطا', '<div class="card bad">شناسه‌ی برنامه یا نشانی سایت درست نیست (نشانی بدون مسیر، مثل https://example.ir).</div><a class="btn" href="/deploy/">بازگشت</a>'));
+        }
+        meta(site.slug, { liaraApp: app, liaraUrl: f.url ? url : undefined });
+        void job(site, 'install', user.email, { liara: { app, url } });
+        return redirect(res, '/deploy/');
       }
       const mt = meta(site.slug);
       const previous = m[2] === 'install' ? mt.lastInstall : mt.lastUpdate;

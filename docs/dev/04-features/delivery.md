@@ -50,6 +50,20 @@ flowchart TB
 روی سرور مشتری: `update.sh`، `update.ps1` یا `update.cmd` (`deploy/export/UPDATE.md`). اگر مشتری
 متن یا عکس صفحه‌ها را عوض کرده باشد، با نسخهٔ استودیو **جایگزین** می‌شود.
 
+## استقرار روی لیارا
+دکمهٔ «استقرار روی لیارا» در صفحهٔ deploy فقط وقتی دیده می‌شود که `LIARA_API_TOKEN` و `LIARA_DB_*` در
+`deploy/.env` باشند. این دکمه یک بستهٔ install با پوشهٔ `liara/` می‌سازد (قالب‌ها در `deploy/liara/`) و
+با Liara CLI (`@liara/cli`، نسخهٔ ثابت در `server.mjs`) اول `env set` و بعد `deploy` را روی یک برنامهٔ
+Docker موجود در لیارا اجرا می‌کند.
+- **یک image:** Caddy روی پورت 80 سایت را سرو می‌کند و API (پورت 4000) در همان container است. HTTPS و
+  دامنه با لیاراست.
+- **دیتابیس:** سرویس PostgreSQL لیارا که چند سایت می‌توانند از آن استفاده کنند (برای هر سایت
+  `sb_control_<slug>` و `sb_t_<slug>`). کاربر admin آن باید superuser باشد.
+- **داده:** ردیف‌های سایت به‌صورت INSERT در `data/site.sql` است و `start.mjs` فقط در اولین اجرا آن را
+  بارگذاری می‌کند (نشانگر `.site-data-loaded` روی دیسک `uploads`). deployهای بعدی دادهٔ مشتری را نگه
+  می‌دارند و طراحی صفحه‌ها را عوض نمی‌کنند.
+- راهنما: `deploy/liara/README.md`.
+
 ## سرور مشتری در اجرا
 → [ساخت و حالت‌های اجرا](../02-architecture/builds.md)
 
