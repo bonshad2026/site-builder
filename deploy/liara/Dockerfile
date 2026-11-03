@@ -4,7 +4,8 @@
 FROM node:22-alpine
 ENV NODE_ENV=production XDG_DATA_HOME=/tmp/caddy XDG_CONFIG_HOME=/tmp/caddy
 COPY caddy /usr/bin/caddy
-COPY app /app
+# The compiled API with its node_modules, as one archive (Liara's upload skips node_modules).
+ADD app.tar.gz /
 COPY site /site
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY data /restore

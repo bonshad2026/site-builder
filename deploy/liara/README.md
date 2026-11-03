@@ -21,10 +21,13 @@ LIARA_DB_USER=root
 LIARA_DB_PASSWORD=
 ```
 
+The compiled API travels as `app.tar.gz` (unpacked by `ADD` in the Dockerfile): the Liara CLI
+leaves `node_modules` and symlinks out of what it uploads.
+
 ## What a deploy does
 1. Builds an install package (with a `liara/` folder) like "بسته‌ی نصب کامل".
 2. `liara env set`: the site's secrets, `SITE_URL`, and `DB_*` for the database server.
-3. `liara deploy --platform docker --port 80 --disks uploads=/data/uploads`.
+3. `liara deploy --platform docker --port 80 --disks uploads:/data/uploads` (name`:`path).
 
 On the app's first start `start.mjs` creates the databases and accounts, unpacks the uploaded files
 onto the disk and loads the site's rows (`data/site.sql`); a marker on the disk
@@ -35,5 +38,5 @@ stays. Later deploys bring a new API and built site; page designs in the databas
 With the Liara CLI (`npm i -g @liara/cli`), in this folder:
 ```
 liara env set KEY=value ... --app <app>
-liara deploy --app <app> --platform docker --port 80 --disks uploads=/data/uploads
+liara deploy --app <app> --platform docker --port 80 --disks uploads:/data/uploads
 ```

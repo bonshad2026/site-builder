@@ -282,7 +282,8 @@ async function job(site, kind, operatorEmail, opts = {}) {
           sh(
             `cd ${REPO}/deploy/liara && cp Dockerfile Caddyfile start.mjs README.md ${L}/ && cp ${REPO}/deploy/export/fix-sequences.sql ${L}/data/ && ` +
               `cp ${dir}/data/uploads.tar.gz ${L}/data/ && cp -r ${dir}/site ${L}/site && ` +
-              `id=$(docker create ${apiImage}) && docker cp $id:/app ${L}/app && docker rm $id >/dev/null && ` +
+              // One tarball: Liara's upload leaves out node_modules and symlinks; the Dockerfile unpacks it.
+              `id=$(docker create ${apiImage}) && docker cp $id:/app - | gzip > ${L}/app.tar.gz && docker rm $id >/dev/null && ` +
               `id=$(docker create caddy:2-alpine) && docker cp $id:/usr/bin/caddy ${L}/caddy && docker rm $id >/dev/null`,
             log,
           ),
@@ -306,7 +307,7 @@ async function job(site, kind, operatorEmail, opts = {}) {
         const auth = ['--api-token', env.LIARA_API_TOKEN, ...(env.LIARA_TEAM_ID ? ['--team-id', env.LIARA_TEAM_ID] : [])];
         await step('liara settings', () => liara(['env', 'set', ...Object.entries(settings).map(([k, v]) => `${k}=${v}`), '--app', app, '--force', ...auth], log));
         await step('liara deploy', () =>
-          liara(['deploy', '--app', app, '--path', L, '--platform', 'docker', '--port', '80', '--disks', 'uploads=/data/uploads', '--detach', '--message', name, ...auth], log),
+          liara(['deploy', '--app', app, '--path', L, '--platform', 'docker', '--port', '80', '--disks', 'uploads:/data/uploads', '--detach', '--message', name, ...auth], log),
         );
         appendFileSync(log, `\n== on Liara: ${url}\n`);
         meta(slug, { lastLiara: url, lastLiaraAt: new Date().toISOString() });
