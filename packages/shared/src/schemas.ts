@@ -69,6 +69,8 @@ const requestTypeSchema = z.object({
   layout: formLayoutSchema,
   /** 2: every question, including name, phone, email and consent, is an editable field. */
   formVersion: z.number().int().default(1),
+  /** A content table whose items handle these requests (trainers): the staff pick one per request. */
+  assignTable: z.string().max(40).default(''),
 });
 
 /** New sites' request types, with every question already an editable field (version 2). */

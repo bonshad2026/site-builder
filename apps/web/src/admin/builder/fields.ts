@@ -334,6 +334,18 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       { key: 'card', kind: 'card', label: L('Box design', 'طراحی باکس') },
     ],
   },
+  'item-reviews': {
+    label: L('Ratings and comments', 'امتیازها و نظرها'),
+    description: L('On a table’s template page: the item’s average rating, its comments and the form for customers who may review it', 'در صفحه‌ی قالب جدول: میانگین امتیاز آیتم، نظرها و فرم ثبت نظر برای مشتریانی که مجازند'),
+    dynamic: true,
+    fields: [
+      eyebrow,
+      heading,
+      { key: 'intro', kind: 'loc', label: L('Intro', 'مقدمه'), multiline: true },
+      { key: 'limit', kind: 'number', label: L('Comments shown', 'تعداد نظرهای نمایش‌داده'), min: 1, max: 50 },
+      { key: 'showForm', kind: 'bool', label: L('Show the review form', 'نمایش فرم ثبت نظر') },
+    ],
+  },
   map: {
     label: L('Map', 'نقشه'),
     description: L('A point on the map (latitude / longitude) or an embed from Neshan or Google Maps, with directions links', 'یک نقطه روی نقشه (عرض و طول جغرافیایی) یا کد نقشه‌ی نشان و گوگل، با پیوند مسیریابی'),
@@ -424,6 +436,7 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
           { value: 'requests', label: L('My requests', 'درخواست‌های من') },
           { value: 'orders', label: L('My orders', 'سفارش‌های من') },
           { value: 'profile', label: L('Profile', 'مشخصات') },
+          { value: 'member', label: L('My own page (e.g. trainer profile)', 'صفحه‌ی معرفی خودم (مثلاً پنل مربی)') },
         ],
       },
       {

@@ -1,9 +1,11 @@
 import { currencyDecimals, type Collection, type CollectionField } from '@site-builder/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
-import { api } from '../../lib/api';
+import { api, uploadFile } from '../../lib/api';
+import { ItemFilesEditor, type EditableFile } from '../../components/ui/ItemFilesEditor';
+import type { Asset } from '../pages/FilesPage';
 import { usePreferences } from '../../lib/preferences';
 import { LinkPicker } from '../links';
 import { ImagePicker } from '../pages/FilesPage';
@@ -58,6 +60,12 @@ function ReferenceInput({ siteId, field, value, onChange }: { siteId: string; fi
 }
 
 /** The input for one field, by its type. Images keep their asset id; `urls` shows their previews. */
+/** A `files` value with the links known from the saved item. */
+const asFiles = (v: unknown, preview: unknown): EditableFile[] => {
+  const known = new Map((Array.isArray(preview) ? (preview as { id: string; url: string }[]) : []).map((x) => [x.id, x.url]));
+  return (Array.isArray(v) ? v : []).filter((x): x is EditableFile => !!x && typeof x === 'object' && typeof x.id === 'string').map((x) => ({ ...x, url: x.url ?? known.get(x.id) }));
+};
+
 function FieldInput({
   siteId,
   table,
@@ -66,6 +74,7 @@ function FieldInput({
   onChange,
   urls,
   onUrl,
+  preview,
 }: {
   siteId: string;
   table: Collection;
@@ -74,6 +83,7 @@ function FieldInput({
   onChange: (v: unknown) => void;
   urls: Record<string, string>;
   onUrl: (id: string, url: string) => void;
+  preview?: unknown;
 }) {
   const { l, locale } = usePreferences();
   const cal = useAdminCalendar();
@@ -175,6 +185,22 @@ function FieldInput({
       return <TextField label={label} dir="ltr" type={field.type === 'email' ? 'email' : 'tel'} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} />;
     case 'reference':
       return <ReferenceInput siteId={siteId} field={field} value={asList(value)} onChange={onChange} />;
+    case 'files':
+      return (
+        <ItemFilesEditor
+          label={label}
+          files={asFiles(value, preview)}
+          onChange={(files) => onChange(files.map(({ id, title }) => ({ id, title })))}
+          upload={async (file, onProgress) => {
+            const form = new FormData();
+            form.append('visibility', 'public');
+            form.append('file', file);
+            const asset = await uploadFile<Asset>(`/sites/${siteId}/assets`, form, onProgress);
+            onUrl(asset.id, asset.url);
+            return { id: asset.id, url: asset.url, name: asset.originalName };
+          }}
+        />
+      );
   }
 }
 
@@ -208,6 +234,8 @@ async function itemRows(siteId: string, table: Collection, l: (v: Lbl | undefine
         const list = (Array.isArray(preview) ? preview : [preview]) as ({ title?: Lbl } | null)[];
         return list.map((x) => l(x?.title)).filter(Boolean).join('، ');
       }
+      case 'files':
+        return ((Array.isArray(preview) ? preview : []) as { title: string; url: string }[]).map((x) => `${x.title}: ${abs(x.url)}`).join(' | ');
       default:
         return String(raw);
     }
@@ -293,8 +321,24 @@ function ItemEditor({ siteId, table, item, onClose }: { siteId: string; table: C
           />
           <NumberField label={t(L('Order', 'ترتیب'))} value={draft.position} min={0} onChange={(position) => setDraft((d) => ({ ...d, position: position ?? 0 }))} />
         </div>
+        {item?.owner && (
+          <p className="rounded-md bg-surface-2 px-3 py-2 text-sm">
+            {t(L('Kept by the customer', 'متعلق به مشتری'))}: <strong>{item.owner.name}</strong> <span dir="ltr">{item.owner.phone ?? item.owner.email}</span>
+            {item.status === 'draft' && <> — {t(L('publish it to approve', 'برای تأیید، منتشرش کنید'))}</>}
+          </p>
+        )}
         {table.fields.map((f) => (
-          <FieldInput key={f.key} siteId={siteId} table={table} field={f} value={draft.data[f.key]} onChange={(v) => setValue(f.key, v)} urls={urls} onUrl={(id, url) => setUrls((u) => ({ ...u, [id]: url }))} />
+          <FieldInput
+            key={f.key}
+            siteId={siteId}
+            table={table}
+            field={f}
+            value={f.type === 'files' ? asFiles(draft.data[f.key], item?.previewData[f.key]).map((x) => ({ ...x, url: x.url ?? urls[x.id] })) : draft.data[f.key]}
+            onChange={(v) => setValue(f.key, v)}
+            urls={urls}
+            onUrl={(id, url) => setUrls((u) => ({ ...u, [id]: url }))}
+            preview={item?.previewData[f.key]}
+          />
         ))}
         <ErrorNote error={save.error} labels={Object.fromEntries(table.fields.map((f) => [`data.${f.key}`, f.label[errorLang] || l(f.label) || f.key]))} />
         <div className="flex justify-end gap-3">
@@ -374,6 +418,16 @@ export default function ItemsPage({ siteId }: { siteId: string }) {
                   <div className="text-xs text-ink-soft" dir="ltr">
                     /{table.slug}/{item.slug}
                   </div>
+                  {item.owner && (
+                    <div className="text-xs text-ink-soft">
+                      {t(L('Customer', 'مشتری'))}: {item.owner.name}
+                    </div>
+                  )}
+                  {item.rating && item.rating.count > 0 && (
+                    <div className="text-xs text-ink-soft">
+                      ★ {formatNumber(item.rating.average)} ({formatNumber(item.rating.count)})
+                    </div>
+                  )}
                 </Td>
                 {books && (
                   <Td className="text-xs">
@@ -387,7 +441,11 @@ export default function ItemsPage({ siteId }: { siteId: string }) {
                   </Td>
                 )}
                 <Td>
-                  <Badge tone={item.status === 'published' ? 'good' : 'neutral'}>{item.status === 'published' ? t(L('Published', 'منتشرشده')) : t(L('Draft', 'پیش‌نویس'))}</Badge>
+                  {item.status === 'draft' && item.owner ? (
+                    <Badge tone="warn">{t(L('Waiting for approval', 'در انتظار تأیید'))}</Badge>
+                  ) : (
+                    <Badge tone={item.status === 'published' ? 'good' : 'neutral'}>{item.status === 'published' ? t(L('Published', 'منتشرشده')) : t(L('Draft', 'پیش‌نویس'))}</Badge>
+                  )}
                 </Td>
                 <Td>
                   <div className="flex gap-2">
@@ -405,7 +463,77 @@ export default function ItemsPage({ siteId }: { siteId: string }) {
           <Pagination page={page} totalPages={Number(list.data?.meta?.totalPages ?? 1)} onChange={setPage} />
         </>
       )}
+      {table.reviews.enabled && <ReviewsPanel siteId={siteId} table={table} />}
       {editing && <ItemEditor key={editing === 'new' ? 'new' : editing.id} siteId={siteId} table={table} item={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+interface AdminReview {
+  id: string;
+  itemId: string;
+  itemTitle: Lbl;
+  authorName: string;
+  rating: number;
+  body: string;
+  status: 'published' | 'hidden';
+  demo: boolean;
+  leadId: string | null;
+  createdAt: string;
+}
+
+/** Ratings and comments on the table's items: hide, show again or delete. */
+function ReviewsPanel({ siteId, table }: { siteId: string; table: Collection }) {
+  const { locale, l, formatDate } = usePreferences();
+  const t = (x: Lbl) => x[locale];
+  const qc = useQueryClient();
+  const key = ['site', siteId, 'collections', table.id, 'reviews'];
+  const { data: reviews = [], isLoading } = useQuery({ queryKey: key, queryFn: () => api.get<AdminReview[]>(`/sites/${siteId}/collections/${table.id}/reviews`) });
+  const done = () => {
+    qc.invalidateQueries({ queryKey: key });
+    qc.invalidateQueries({ queryKey: ['site', siteId, 'collections', table.id, 'items'] });
+    qc.invalidateQueries({ queryKey: ['public'] });
+  };
+  const setStatus = useMutation({ mutationFn: (r: AdminReview) => api.patch(`/sites/${siteId}/collections/${table.id}/reviews/${r.id}`, { status: r.status === 'published' ? 'hidden' : 'published' }), onSuccess: done });
+  const remove = useMutation({ mutationFn: (id: string) => api.delete(`/sites/${siteId}/collections/${table.id}/reviews/${id}`), onSuccess: done });
+  return (
+    <section className="mt-12">
+      <h2 className="mb-4 text-lg font-medium">{t(L('Ratings and comments', 'امتیازها و نظرها'))}</h2>
+      {isLoading ? (
+        <Spinner />
+      ) : !reviews.length ? (
+        <p className="text-sm text-ink-soft">{t(L('No reviews yet.', 'هنوز نظری ثبت نشده.'))}</p>
+      ) : (
+        <Table head={[l(table.itemName) || t(L('Item', 'آیتم')), t(L('By', 'نویسنده')), t(L('Rating', 'امتیاز')), t(L('Comment', 'نظر')), t(L('Status', 'وضعیت')), '']}>
+          {reviews.map((r) => (
+            <tr key={r.id}>
+              <Td className="text-sm">{l(r.itemTitle)}</Td>
+              <Td className="text-sm">
+                {r.authorName} {r.demo && <Badge tone="neutral">{t(L('Sample', 'نمونه'))}</Badge>}
+                <div className="text-xs text-ink-soft">{formatDate(r.createdAt)}</div>
+              </Td>
+              <Td className="whitespace-nowrap text-sm">
+                {'★'.repeat(r.rating)}
+                <span className="opacity-30">{'★'.repeat(5 - r.rating)}</span>
+              </Td>
+              <Td className="max-w-md text-sm">{r.body}</Td>
+              <Td>
+                <Badge tone={r.status === 'published' ? 'good' : 'neutral'}>{r.status === 'published' ? t(L('Shown', 'نمایش')) : t(L('Hidden', 'پنهان'))}</Badge>
+              </Td>
+              <Td>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setStatus.mutate(r)}>
+                    {r.status === 'published' ? t(L('Hide', 'پنهان کن')) : t(L('Show', 'نمایش بده'))}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => window.confirm(t(L('Delete this review?', 'این نظر حذف شود؟'))) && remove.mutate(r.id)}>
+                    {t(L('Delete', 'حذف'))}
+                  </Button>
+                </div>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </section>
   );
 }

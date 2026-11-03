@@ -14,6 +14,7 @@ import {
   requestTypeConfig,
   STANDARD_MESSAGES,
   stageChangeSchema,
+  type FormField,
   type RequestTypeConfig,
   type SiteSettings,
   type WorkflowStage,
@@ -35,6 +36,7 @@ type Db = pg.Pool | pg.PoolClient;
 
 export const REQUEST_COLUMNS = `id, number::text AS number, type, name, email, phone, project_type AS "projectType", budget, message, source_path AS "sourcePath",
   status AS stage, stage_kind AS "stageKind", details, answers, item_ref AS item, customer_id AS "customerId", assignee_user_id AS "assigneeUserId", unread,
+  assigned_item_id AS "assignedItemId",
   amount_due_minor::text AS "amountDueMinor", amount_title AS "amountTitle", paid_minor::text AS "paidMinor", currency, payment_status AS "paymentStatus",
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
@@ -51,6 +53,7 @@ export interface RequestRow {
   details: { answers?: { label: string; value: string }[]; date?: string; time?: string; people?: number; company?: string };
   item: { collection: string; slug: string; title: Record<string, string> } | null;
   customerId: string | null;
+  assignedItemId: string | null;
   amountDueMinor: string;
   amountTitle: string;
   paidMinor: string;
@@ -122,7 +125,7 @@ export async function createRequest(
   if (type.access === 'signed_in' && !extra.customer) throw new AppError(401, 'sign_in_required', 'Sign in to send this request');
 
   const customer = extra.customer;
-  const fields = type.fields;
+  const fields = await withTableOptions(db, type.fields);
   // Name, phone, email and consent sent apart (older clients) or known from the account fill their questions.
   const answers = { ...body.answers };
   // The old fixed forms sent their questions apart; they fill the converted questions of the same id.
@@ -202,7 +205,46 @@ export async function createRequest(
   return { lead, code, token, paymentDue: pay };
 }
 
+/**
+ * Questions whose choices come from a content table get the titles of its published items as
+ * their choices (in the table's order), so answers are checked against what the site shows.
+ */
+export async function withTableOptions(db: Db, fields: FormField[]): Promise<FormField[]> {
+  const slugs = [...new Set(fields.filter((f) => f.optionsFrom).map((f) => f.optionsFrom))];
+  if (!slugs.length) return fields;
+  const { rows } = await db.query<{ table: string; title: { en?: string; fa?: string } }>(
+    `SELECT c.slug AS table, i.title FROM collection_items i JOIN collections c ON c.id = i.collection_id
+      WHERE c.slug = ANY($1::text[]) AND i.status = 'published' ORDER BY i.position, i.created_at LIMIT 500`,
+    [slugs],
+  );
+  return fields.map((f) => {
+    if (!f.optionsFrom) return f;
+    const options = rows.filter((r) => r.table === f.optionsFrom).slice(0, 50).map((r) => ({ en: r.title.en ?? '', fa: r.title.fa ?? '', price: 0 }));
+    return { ...f, options };
+  });
+}
+
 /* ---------- staff actions ---------- */
+
+/**
+ * Sets (or clears) the item that handles a request: an item of the request type's `assignTable`.
+ * Recorded on the internal timeline.
+ */
+export async function assignItem(db: pg.Pool, leadId: string, itemId: string | null, actorUserId: string) {
+  const lead = await getRequest(db, leadId);
+  let title: unknown = null;
+  if (itemId) {
+    const type = typeOf(await loadSettings(db), lead.type);
+    const { rows } = await db.query<{ title: unknown }>(
+      `SELECT i.title FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE i.id = $1 AND c.slug = $2 AND $2 <> ''`,
+      [itemId, type.assignTable],
+    );
+    if (!rows[0]) throw badRequest('Choose an item of the table this request type is assigned from');
+    title = rows[0].title;
+  }
+  await db.query('UPDATE leads SET assigned_item_id = $2, updated_at = now() WHERE id = $1', [leadId, itemId]);
+  await addEvent(db, { leadId }, { kind: 'assigned_item', data: { to: itemId, title }, actorUserId });
+}
 
 /**
  * A gateway payment started in the last few minutes and not finished: changing the amount or
@@ -328,6 +370,7 @@ export async function getRequest(db: Db, id: string) {
  */
 export async function customerView(db: Db, settings: SiteSettings, lead: RequestRow, locale: 'en' | 'fa') {
   const type = requestTypeConfig(settings, lead.type);
+  const assigned = await assignedOf(db, lead);
   const workflow = type?.workflow;
   const current = workflow?.stages.find((s) => s.key === lead.stage);
   const events = await eventsOf(db, { leadId: lead.id }, true);
@@ -355,6 +398,7 @@ export async function customerView(db: Db, settings: SiteSettings, lead: Request
     details: { date: lead.details?.date, time: lead.details?.time, people: lead.details?.people },
     message: lead.details?.answers?.length ? '' : lead.message,
     item: lead.item,
+    assigned,
     stage: { key: lead.stage, label: current && !current.visible ? label(lastVisible(events, visibleKey) ?? lead.stage) : label(lead.stage), kind: lead.stageKind, color: current?.color ?? 'gray' },
     path: path.map((p) => ({ ...p, reached: reached.has(p.key) || p.key === lead.stage })),
     payment: {
@@ -383,6 +427,23 @@ export async function customerView(db: Db, settings: SiteSettings, lead: Request
         ok: typeof e.data.ok === 'boolean' ? e.data.ok : undefined,
       })),
   };
+}
+
+/**
+ * The published item that handles the request (its trainer), with whether the customer may
+ * review it now: the table takes reviews, the request is done and has no review yet.
+ */
+async function assignedOf(db: Db, lead: RequestRow) {
+  if (!lead.assignedItemId) return null;
+  const { rows } = await db.query<{ slug: string; title: { en: string; fa: string }; collection: string; reviews: { enabled?: boolean }; reviewed: boolean }>(
+    `SELECT i.slug, i.title, c.slug AS collection, c.reviews, EXISTS (SELECT 1 FROM item_reviews r WHERE r.lead_id = $2) AS reviewed
+       FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE i.id = $1 AND i.status = 'published'`,
+    [lead.assignedItemId, lead.id],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const reviews = !!r.reviews?.enabled;
+  return { collection: r.collection, slug: r.slug, title: r.title, reviews, reviewed: r.reviewed, canReview: reviews && !r.reviewed && lead.stageKind === 'done' && !!lead.customerId };
 }
 
 function lastVisible(events: { kind: string; data: Record<string, unknown> }[], visible: (key: string) => boolean) {

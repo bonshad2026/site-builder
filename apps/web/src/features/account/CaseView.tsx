@@ -37,6 +37,8 @@ interface CaseData {
   answers?: { label: string; value: string }[];
   message?: string;
   item?: { title: { en: string; fa: string } } | null;
+  /** The item that handles the request (its trainer), and whether the customer may rate it now. */
+  assigned?: { collection: string; slug: string; title: { en: string; fa: string }; reviews: boolean; reviewed: boolean; canReview: boolean } | null;
   payment?: { status: string; dueMinor: string; paidMinor: string; currency: string; title: string };
   canCancel?: boolean;
   canReply?: boolean;
@@ -54,6 +56,55 @@ interface CaseData {
   couponCode?: string | null;
   customer?: InvoiceOrder['customer'];
   items?: { productName: { en: string; fa: string }; quantity: number; option: string; variant?: string; unitPriceMinor?: string; lineTotalMinor: string }[];
+}
+
+/** After a finished request: rate and comment on the item that handled it (its trainer). */
+function RateAssigned({ code, number, assigned }: { code: string; number: string; assigned: NonNullable<CaseData['assigned']> }) {
+  const t = useText();
+  const { l } = usePreferences();
+  const api = useCustomerApi();
+  const qc = useQueryClient();
+  const errLang = useSiteErrorLanguage();
+  const [rating, setRating] = useState(0);
+  const [body, setBody] = useState('');
+  const send = useMutation({
+    mutationFn: async () => {
+      // The review is tied to this request: find its id among the ones the server allows.
+      const r = await api.get<{ mine: { leads: { id: string; code: string }[] } }>(`/collections/${assigned.collection}/items/${assigned.slug}/reviews?limit=1`);
+      const lead = r.mine.leads.find((x) => x.code === code) ?? r.mine.leads[0];
+      return api.post(`/collections/${assigned.collection}/items/${assigned.slug}/reviews`, { rating, body, ...(lead ? { leadId: lead.id } : {}) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['public', api.site] }),
+  });
+  if (send.isSuccess) return <p className="text-sm text-emerald-800">✓ {t(L('Thank you for your review.', 'از ثبت نظر شما سپاسگزاریم.'))}</p>;
+  return (
+    <form
+      className="flex flex-col gap-4 rounded-xl border border-accent/40 bg-surface p-5"
+      data-request={number}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (rating) send.mutate();
+      }}
+    >
+      <p className="font-medium text-ink">
+        {t(L('How was it? Rate ', 'تجربه‌ی شما چطور بود؟ به '))}
+        {l(assigned.title)}
+        {t(L('', ' امتیاز دهید'))}
+      </p>
+      <div role="radiogroup" aria-label={t(L('Your rating', 'امتیاز شما'))} dir="ltr" className="flex gap-1 text-3xl">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={rating === n} aria-label={`${n}`} onClick={() => setRating(n)} className={cn('leading-none', n <= rating ? 'text-amber-500' : 'text-ink/20 hover:text-amber-300')}>
+            ★
+          </button>
+        ))}
+      </div>
+      <textarea rows={3} maxLength={1500} value={body} onChange={(e) => setBody(e.target.value)} placeholder={t(L('Your comment (optional)', 'نظر شما (اختیاری)'))} className="rounded-md border border-line bg-bg p-3 text-sm" />
+      {send.error && <p className="text-sm text-danger">{errorLine(send.error, errLang)}</p>}
+      <Button type="submit" size="sm" className="w-fit" disabled={!rating || send.isPending}>
+        {t(L('Send review', 'ثبت نظر'))}
+      </Button>
+    </form>
+  );
 }
 
 /** The stages a customer can see, in order: done ones ticked, the current one bold. */
@@ -183,6 +234,9 @@ export function CaseView({ code, token, paymentResult }: { code: string; token?:
         </p>
       )}
 
+      {c.kind === 'request' && c.assigned?.canReview && <RateAssigned code={c.code} number={c.number} assigned={c.assigned} />}
+      {c.kind === 'request' && c.assigned?.reviewed && <p className="text-sm text-emerald-800">✓ {t(L('Thank you for your review.', 'از ثبت نظر شما سپاسگزاریم.'))}</p>}
+
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <section className="flex flex-col gap-4">
           <h2 className="text-sm font-medium text-ink-soft">{c.kind === 'request' ? t(L('Your request', 'درخواست شما')) : t(L('Items', 'اقلام'))}</h2>
@@ -192,6 +246,16 @@ export function CaseView({ code, token, paymentResult }: { code: string; token?:
                 <div>
                   <dt className="text-xs text-ink-soft">{t(L('About', 'درباره‌ی'))}</dt>
                   <dd>{l(c.item.title)}</dd>
+                </div>
+              )}
+              {c.assigned && (
+                <div>
+                  <dt className="text-xs text-ink-soft">{t(L('Handled by', 'انجام‌دهنده'))}</dt>
+                  <dd>
+                    <Link to={`/${c.assigned.collection}/${c.assigned.slug}`} className="underline-offset-4 hover:underline">
+                      {l(c.assigned.title)}
+                    </Link>
+                  </dd>
                 </div>
               )}
               {c.answers?.map((a, i) => (

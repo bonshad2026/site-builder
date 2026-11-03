@@ -12,6 +12,7 @@ import {
   type FormField,
   type RequestType,
 } from '@site-builder/shared';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Button } from '../../components/ui/Button';
@@ -21,19 +22,14 @@ import { cn } from '../../lib/cn';
 import { errorLine } from '../../lib/errorText';
 import { usePreferences } from '../../lib/preferences';
 import { customerRequest, L, useCustomer, useText } from '../account/customerApi';
-import { DEFAULT_SITE_ID, useSiteErrorLanguage, useSiteId } from '../public-site/data';
+import { DatePickerButton } from '../../components/ui/Calendar';
+import { DEFAULT_SITE_ID, useSiteCalendar, useSiteErrorLanguage, useSiteId } from '../public-site/data';
 import { normalizeDigits } from './leadSchema';
 import { RequestItemNote } from './RequestItemNote';
 import { SubmittedNotice } from './SubmittedNotice';
 
 const wideTypes = new Set(['textarea', 'radio', 'checkbox', 'checkboxes', 'heading', 'file']);
 const ACCEPT: Record<string, string> = { image: 'image/jpeg,image/png,image/webp,image/gif', pdf: 'application/pdf' };
-
-/** Today plus `days` as yyyy-mm-dd (the date input's min / max). */
-const dayFromToday = (days: number) => {
-  const now = new Date();
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + days)).toISOString().slice(0, 10);
-};
 
 interface Upload {
   id: string;
@@ -119,13 +115,45 @@ function FileQuestion({ field, id, requestType, value, names, onChange, preview,
   );
 }
 
+type FormProps = Parameters<typeof RequestForm>[0];
+
+/**
+ * Questions whose choices come from a content table (`optionsFrom`) get the titles of its
+ * published items, as the server does when it checks the answers. The form waits for them so a
+ * link can prefill such a question too.
+ */
+export function CustomRequestForm(props: FormProps) {
+  const site = useSiteId();
+  const tables = [...new Set(props.fields.filter((f) => f.optionsFrom).map((f) => f.optionsFrom))];
+  const options = useQuery({
+    queryKey: ['public', site, 'form-options', tables],
+    queryFn: async () => {
+      const out: Record<string, { en: string; fa: string }[]> = {};
+      for (const slug of tables) {
+        const items = await customerRequest<{ title: { en: string; fa: string } }[]>(site, `/collections/${slug}/items?pageSize=60`).catch(() => []);
+        out[slug] = items.slice(0, 50).map((i) => i.title);
+      }
+      return out;
+    },
+    enabled: tables.length > 0,
+    staleTime: 60_000,
+  });
+  const fields = useMemo(
+    () => (tables.length && options.data ? props.fields.map((f) => (f.optionsFrom ? { ...f, options: (options.data[f.optionsFrom] ?? []).map((x) => ({ en: x.en, fa: x.fa, price: 0 })) } : f)) : props.fields),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [props.fields, options.data],
+  );
+  if (tables.length && options.isLoading) return <div role="status" aria-label="Loading" className="min-h-40" />;
+  return <RequestForm {...props} fields={fields} />;
+}
+
 /**
  * A request form built entirely from the request type's fields: questions with conditions,
  * limits and ready-made checks, file uploads, pages (step breaks), prices with a running total,
  * and the type's own layout and texts. The server checks everything again. On success the visitor
  * gets a tracking code, or goes straight to the payment gateway.
  */
-export function CustomRequestForm({
+function RequestForm({
   requestType,
   type,
   fields,
@@ -143,6 +171,7 @@ export function CustomRequestForm({
 }) {
   const { m, l, locale, formatMoney } = usePreferences();
   const t = useText();
+  const cal = useSiteCalendar();
   const location = useLocation();
   const errorLang = useSiteErrorLanguage();
   const { customer, enabled: accountsOn } = useCustomer();
@@ -454,6 +483,11 @@ export function CustomRequestForm({
                 set(f.id, ids);
               }}
             />
+          ) : f.type === 'date' ? (
+            // Dates are picked in the site's calendar (Jalali on Persian sites) and kept as ISO days.
+            <div className="pt-2">
+              <DatePickerButton cal={cal} locale={locale} value={text(f.id)} onChange={(v) => set(f.id, v)} placeholder={placeholder || t(L('Choose a date', 'انتخاب تاریخ'))} className={cn(err(key) && 'border-danger')} />
+            </div>
           ) : (
             <TextInput
               id={id}
@@ -463,8 +497,6 @@ export function CustomRequestForm({
               autoComplete={f.role === 'name' ? 'name' : f.role === 'phone' ? 'tel' : f.role === 'email' ? 'email' : undefined}
               placeholder={placeholder}
               maxLength={f.type === 'text' && f.max !== null ? f.max : undefined}
-              min={f.type === 'date' && f.min !== null ? dayFromToday(f.min) : undefined}
-              max={f.type === 'date' && f.max !== null ? dayFromToday(f.max) : undefined}
               value={text(f.id)}
               onChange={(e) => set(f.id, e.target.value)}
               aria-invalid={!!err(key)}

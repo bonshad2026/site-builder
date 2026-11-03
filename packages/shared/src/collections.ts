@@ -42,6 +42,7 @@ export const FIELD_TYPES = [
   'email',
   'phone',
   'reference',
+  'files',
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
@@ -64,6 +65,35 @@ export const collectionFieldSchema = z.object({
   multiple: z.boolean().default(false),
 });
 export type CollectionField = z.output<typeof collectionFieldSchema>;
+
+/**
+ * Visitors' own items: a signed-in customer of an account kind that points to this table keeps
+ * one item of it (a trainer's profile) and edits it from their account. New items wait as drafts
+ * until the staff publish them; later edits show at once.
+ */
+export const collectionSelfServiceSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Fields the owner may fill (empty = every field). The title is always theirs to set. */
+    fields: z.array(z.string().max(40)).max(40).default([]),
+    /** A new item stays a draft until the staff publish it. */
+    approval: z.boolean().default(true),
+  })
+  .default({});
+export type CollectionSelfService = z.output<typeof collectionSelfServiceSchema>;
+
+/** Ratings and comments on items (a trainer). */
+export const collectionReviewsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /**
+     * Only a customer whose request was handled by the item (assigned to it) and reached a "done"
+     * stage may review, once per request. Off: any signed-in customer, once per item.
+     */
+    afterDoneRequest: z.boolean().default(true),
+  })
+  .default({});
+export type CollectionReviews = z.output<typeof collectionReviewsSchema>;
 
 /** Selling or booking an item: which fields hold the price, the seats and the deadline. */
 export const collectionCommerceSchema = z
@@ -101,6 +131,8 @@ export const collectionInputSchema = z
     /** Default request type of the "request" button. */
     requestType: z.string().max(40).default(''),
     position: z.number().int().min(0).max(10_000).default(0),
+    selfService: collectionSelfServiceSchema,
+    reviews: collectionReviewsSchema,
   })
   .superRefine((c, ctx) => {
     const keys = new Set<string>();
@@ -115,6 +147,9 @@ export const collectionInputSchema = z
     if (!typed(c.commerce.capacityField, ['number'])) ctx.addIssue({ code: 'custom', path: ['commerce', 'capacityField'], message: 'Choose a number field' });
     if (!typed(c.commerce.deadlineField, ['date', 'datetime'])) ctx.addIssue({ code: 'custom', path: ['commerce', 'deadlineField'], message: 'Choose a date field' });
     if (c.commerce.enabled && !c.commerce.priceField) ctx.addIssue({ code: 'custom', path: ['commerce', 'priceField'], message: 'Selling needs a price field' });
+    c.selfService.fields.forEach((k, i) => {
+      if (!keys.has(k)) ctx.addIssue({ code: 'custom', path: ['selfService', 'fields', i], message: 'Not a field of this table' });
+    });
   });
 export type CollectionInput = z.output<typeof collectionInputSchema>;
 export type Collection = CollectionInput & { id: string };
@@ -140,12 +175,19 @@ export type ItemInput = z.output<typeof itemInputSchema>;
 const localized = z.object({ en: z.string().max(20_000).default(''), fa: z.string().max(20_000).default('') });
 const uuid = z.string().uuid();
 
+/** Types whose value is a list (empty = []). */
+export const LIST_FIELD_TYPES: readonly FieldType[] = ['multiselect', 'gallery', 'reference', 'files'];
+
+/** One file of a `files` field: an uploaded public file (PDF or image) and the title shown for it. */
+export const itemFileSchema = z.object({ id: uuid, title: z.string().trim().min(1, 'Give the file a title').max(160) });
+export type ItemFile = z.output<typeof itemFileSchema>;
+
 /** Validates one field value; returns the cleaned value or an error message. */
 export function parseFieldValue(field: CollectionField, value: unknown): { ok: true; value: unknown } | { ok: false; error: string } {
   const empty = value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
   if (empty) {
     if (field.required) return { ok: false, error: 'Required' };
-    return { ok: true, value: field.type === 'multiselect' || field.type === 'gallery' || field.type === 'reference' ? [] : null };
+    return { ok: true, value: LIST_FIELD_TYPES.includes(field.type) ? [] : null };
   }
   const check = <T>(schema: z.ZodType<T>) => {
     const r = schema.safeParse(value);
@@ -185,6 +227,8 @@ export function parseFieldValue(field: CollectionField, value: unknown): { ok: t
     case 'reference':
       // Always stored as a list of item ids (one for single references).
       return check(z.array(uuid).max(field.multiple ? 50 : 1).or(uuid.transform((v) => [v])));
+    case 'files':
+      return check(z.array(itemFileSchema).max(20));
   }
 }
 
@@ -253,7 +297,11 @@ export type ListQuery = z.output<typeof listQuerySchema>;
 
 /* ---------- boxes (cards) ---------- */
 
-export const BLOCK_TYPES = ['stack', 'image', 'text', 'badge', 'price', 'capacity', 'button', 'divider', 'spacer'] as const;
+/**
+ * `list`: a field's values one by one (references as links to their pages, files as download
+ * links, choices as chips); `rating`: the item's average rating as stars with the review count.
+ */
+export const BLOCK_TYPES = ['stack', 'image', 'text', 'badge', 'price', 'capacity', 'button', 'divider', 'spacer', 'list', 'rating'] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 export const BLOCK_ACTIONS = ['view', 'cart', 'request', 'link', 'call'] as const;
 export type BlockAction = (typeof BLOCK_ACTIONS)[number];
@@ -596,6 +644,8 @@ export interface PublicItem {
     reason: '' | 'full' | 'deadline';
     canBuy: boolean;
   };
+  /** Average rating and number of reviews, for tables with reviews. */
+  rating?: { average: number; count: number };
 }
 
 export interface PublicCollection {
@@ -608,4 +658,5 @@ export interface PublicCollection {
   imageField: string;
   requestType: string;
   commerce: { enabled: boolean; currency: string; maxPerOrder: number };
+  reviews?: { enabled: boolean };
 }

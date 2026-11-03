@@ -7,6 +7,7 @@ import { useCartOptional } from '../cart/cart';
 import { useSiteCalendar, useSiteSettings } from '../public-site/data';
 import { formatDay, type CalendarSystem } from '../../lib/calendar';
 import { itemHref } from './data';
+import { RichText } from '../../components/ui/SmartLink';
 
 type Prefs = ReturnType<typeof usePreferences>;
 type Loc = { en?: string; fa?: string };
@@ -41,6 +42,7 @@ export function formatFieldValue(item: PublicItem, collection: PublicCollection 
     }
     case 'image':
     case 'gallery':
+    case 'files':
       return '';
   }
   if (isLoc(value)) return p.l(value);
@@ -246,9 +248,73 @@ function BlockView({ block, item, collection, inert, selected, onSelect }: ViewP
     case 'text': {
       const value = text();
       if (!value && !onSelect) return null;
+      // Long texts read as paragraphs, lists and headings (the same marks as the text section).
+      const long = block.source === 'field' && !block.showLabel && block.lines === 0 && collection?.fields.find((f) => f.key === block.field)?.type === 'textarea';
+      if (long && value)
+        return (
+          <div className={cn(textLook, common)} style={textStyle} onClick={pick}>
+            <RichText text={value} />
+          </div>
+        );
       return (
         <p className={cn(textLook, 'whitespace-pre-line', common)} style={textStyle} onClick={pick}>
           {value || <span className="opacity-40">{block.field || '…'}</span>}
+        </p>
+      );
+    }
+    case 'list': {
+      const entries = listEntries(item, collection, block.field, p);
+      if (!entries.length && !onSelect) return null;
+      const label = block.showLabel ? p.l(block.label) || p.l(collection?.fields.find((f) => f.key === block.field)?.label) : '';
+      const chips = block.display !== 'stack';
+      return (
+        <div className={cn('flex flex-col gap-2', common)} onClick={pick}>
+          {label && <p className="text-sm font-medium text-ink">{label}</p>}
+          <ul className={cn(chips ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2', textLook)} style={textStyle}>
+            {entries.map((e, i) => {
+              const look = chips ? 'inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm' : 'inline-flex items-center gap-2';
+              const body = (
+                <>
+                  {e.file && (
+                    <span aria-hidden className="text-accent">
+                      ⤓
+                    </span>
+                  )}
+                  <span>{e.label}</span>
+                  {e.note && <span className="text-xs text-ink-soft">{e.note}</span>}
+                </>
+              );
+              return (
+                <li key={i}>
+                  {e.href && !inert && !onSelect ? (
+                    e.file || /^https?:/i.test(e.href) ? (
+                      <a href={e.href} target="_blank" rel="noreferrer noopener" className={cn(look, 'transition hover:border-ink hover:text-ink')}>
+                        {body}
+                      </a>
+                    ) : (
+                      <Link to={e.href} className={cn(look, 'underline-offset-4 transition hover:border-ink hover:underline')}>
+                        {body}
+                      </Link>
+                    )
+                  ) : (
+                    <span className={look}>{body}</span>
+                  )}
+                </li>
+              );
+            })}
+            {!entries.length && <li className="opacity-40">{block.field || '…'}</li>}
+          </ul>
+        </div>
+      );
+    }
+    case 'rating': {
+      const r = item.rating;
+      if (!r && !onSelect) return null;
+      const avg = r?.average ?? 0;
+      return (
+        <p className={cn('flex items-center gap-2', textLook, common)} style={textStyle} onClick={pick} aria-label={`${p.formatNumber(avg)} / 5`}>
+          <Stars value={avg} />
+          <span className="text-sm text-ink-soft">{r && r.count > 0 ? `${p.formatNumber(avg)} (${p.format(p.m.collections.reviewCount, { count: p.formatNumber(r.count) })})` : p.m.collections.noReviews}</span>
         </p>
       );
     }
@@ -291,6 +357,45 @@ function BlockView({ block, item, collection, inert, selected, onSelect }: ViewP
       return <div className={common} style={{ height: `${block.height}px` }} onClick={pick} />;
     case 'button':
       return <CardButton block={block} item={item} collection={collection} inert={inert || !!onSelect} className={common} onClick={pick} />;
+  }
+}
+
+/** Five stars, filled up to `value` (halves rounded to the nearest whole star). */
+export function Stars({ value, className }: { value: number; className?: string }) {
+  const full = Math.round(value);
+  return (
+    <span dir="ltr" aria-hidden className={cn('inline-flex text-amber-500', className)}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={i < full ? '' : 'opacity-25'}>
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** One field's values as list entries: references link to their pages, files to themselves, choices as text. */
+function listEntries(item: PublicItem, collection: PublicCollection | undefined, key: string, p: Prefs): { label: string; href?: string; file?: boolean; note?: string }[] {
+  const field = collection?.fields.find((f) => f.key === key);
+  const value = item.data[key];
+  if (!field || value === null || value === undefined) return [];
+  const list = Array.isArray(value) ? value : [value];
+  switch (field.type) {
+    case 'reference':
+      return (list as { slug?: string; collection?: string; title?: Loc }[]).filter((r) => r && r.slug).map((r) => ({ label: p.l(r.title) || r.slug!, href: `/${r.collection}/${r.slug}` }));
+    case 'files':
+      return (list as { title?: string; url?: string; contentType?: string }[])
+        .filter((f) => f && f.url)
+        .map((f) => ({ label: f.title || '', href: f.url, file: true, note: f.contentType === 'application/pdf' ? 'PDF' : undefined }));
+    case 'select':
+    case 'multiselect':
+      return list.map((v) => ({ label: p.l(field.options.find((o) => o.value === v)?.label) || String(v) }));
+    case 'link':
+      return list.filter((v): v is string => typeof v === 'string' && !!v).map((v) => ({ label: v.replace(/^https?:\/\//, ''), href: v }));
+    default: {
+      const text = formatFieldValue(item, collection, key, p);
+      return text ? text.split(/\s*[،,]\s*|\n+/).filter(Boolean).map((label) => ({ label })) : [];
+    }
   }
 }
 

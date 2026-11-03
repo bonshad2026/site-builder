@@ -352,8 +352,8 @@ function SettingsView({ siteId }: { siteId: string }) {
         {tab === 'requests' && (
           <RequestTypesEditor siteId={siteId} siteName={s.name} value={s.requestTypes} onChange={(requestTypes) => set('requestTypes', requestTypes)} operator={operator} />
         )}
-        {tab === 'accounts' && <AccountsTab s={s} set={set} part="accounts" />}
-        {tab === 'notifications' && <AccountsTab s={s} set={set} part="notifications" />}
+        {tab === 'accounts' && <AccountsTab siteId={siteId} s={s} set={set} part="accounts" />}
+        {tab === 'notifications' && <AccountsTab siteId={siteId} s={s} set={set} part="notifications" />}
         {tab === 'design' && <DesignTab {...tabProps} />}
         {tab === 'texts' && <TextsTab {...tabProps} />}
         {tab === 'header' && operator && <ChromeStarters siteId={siteId} kind="header" />}

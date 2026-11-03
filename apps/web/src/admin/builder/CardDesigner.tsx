@@ -38,6 +38,8 @@ const TYPE_LABELS: Record<BlockType, Lbl> = {
   button: L('Button', 'دکمه'),
   divider: L('Divider', 'جداکننده'),
   spacer: L('Space', 'فاصله'),
+  list: L('List of a field (links, files, chips)', 'فهرست یک فیلد (لینک، فایل، برچسب)'),
+  rating: L('Rating (stars)', 'امتیاز (ستاره)'),
 };
 const ACTION_LABELS: Record<(typeof BLOCK_ACTIONS)[number], Lbl> = {
   view: L('Open the item page', 'باز کردن صفحه‌ی آیتم'),
@@ -600,7 +602,26 @@ function BlockSettings({ siteId, block, fields, set, isRoot }: { siteId: string;
         </>
       )}
 
-      {(block.type === 'price' || block.type === 'capacity') && textLook}
+      {(block.type === 'price' || block.type === 'capacity' || block.type === 'rating') && textLook}
+
+      {block.type === 'list' && (
+        <>
+          <SelectField label={t(L('Field', 'فیلد'))} value={block.field} onChange={(field) => set({ field })} options={fieldOptions()} />
+          <Checkbox label={t(L('Show the field name above', 'نمایش نام فیلد بالای فهرست'))} checked={block.showLabel} onChange={(showLabel) => set({ showLabel })} />
+          {block.showLabel && <LocalizedField label={t(L('Name shown (empty = field name)', 'نام نمایشی (خالی = نام فیلد)'))} value={block.label} onChange={(label) => set({ label })} />}
+          <SelectField
+            label={t(L('Shown as', 'نحوه‌ی نمایش'))}
+            value={block.display === 'stack' ? 'stack' : 'row'}
+            onChange={(display) => set({ display })}
+            options={[
+              { value: 'row', label: t(L('Chips side by side', 'برچسب‌های کنار هم')) },
+              { value: 'stack', label: t(L('One per line', 'هر کدام یک خط')) },
+            ]}
+          />
+          <p className="text-xs text-ink-soft">{t(L('Items of another table link to their pages; files open or download.', 'آیتم‌های جدول دیگر به صفحه‌شان لینک می‌شوند؛ فایل‌ها باز یا دانلود می‌شوند.'))}</p>
+          {textLook}
+        </>
+      )}
 
       {block.type === 'button' && (
         <>

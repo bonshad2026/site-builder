@@ -159,7 +159,8 @@ export function systemPageSections(key: SystemPageKey): { type: string; props: R
 
 /** How a customer's account offers its parts, and the parts. */
 export const ACCOUNT_MENUS = ['tabs', 'sidebar', 'cards', 'none'] as const;
-export const ACCOUNT_PARTS = ['requests', 'orders', 'profile'] as const;
+/** `member`: the customer's own item (a trainer's profile), for account kinds that keep one. */
+export const ACCOUNT_PARTS = ['requests', 'orders', 'profile', 'member'] as const;
 
 export const FEATURE_MARKERS = ['roman', 'number', 'bullet', 'none'] as const;
 export const TEXT_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
@@ -304,6 +305,16 @@ export const sectionDefinitions = {
     itemSlug: z.string().max(80).default(''),
     cardDesign: z.string().max(40).default(''),
     card: cardDesignSchema.nullable().default(null),
+  }),
+  /**
+   * Ratings and comments of the item whose page this is (a table with reviews): the average, the
+   * list, and the form for customers who may review it.
+   */
+  'item-reviews': z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    limit: z.number().int().min(1).max(50).default(10),
+    showForm: z.boolean().default(true),
   }),
   /** The built-in content of a system page (the cart, the current product…) inside a builder page. */
   'system-page': z.object({

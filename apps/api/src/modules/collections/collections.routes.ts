@@ -22,8 +22,9 @@ import {
   publicCollection,
   toPublicItems,
 } from './collections.service.js';
+import { registerReviewAdminRoutes } from './members.routes.js';
 
-const toRow = (c: z.output<typeof collectionInputSchema>) => [c.slug, c.name, c.itemName, JSON.stringify(c.fields), c.detailPage, c.imageField, c.commerce, c.requestType, c.position];
+const toRow = (c: z.output<typeof collectionInputSchema>) => [c.slug, c.name, c.itemName, JSON.stringify(c.fields), c.detailPage, c.imageField, c.commerce, c.requestType, c.position, c.selfService, c.reviews];
 
 async function run<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -55,8 +56,8 @@ export function collectionsRoutes(storage: StorageAdapter, operatorOnly: Request
   r.route({ method: 'post', path: '/', summary: 'Create a content table', status: 201, body: collectionInputSchema, middleware: structure }, async ({ req, body }) => {
     const { rows } = await run(() =>
       req.tenant!.db.query(
-        `INSERT INTO collections (slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${COLLECTION_COLUMNS}`,
+        `INSERT INTO collections (slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position, self_service, reviews)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING ${COLLECTION_COLUMNS}`,
         toRow(body),
       ),
     );
@@ -76,7 +77,8 @@ export function collectionsRoutes(storage: StorageAdapter, operatorOnly: Request
       if (body.slug !== current.slug) throw badRequest('The address (slug) of a table cannot be changed');
       const { rows } = await run(() =>
         req.tenant!.db.query(
-          `UPDATE collections SET name = $2, item_name = $3, fields = $4, detail_page = $5, image_field = $6, commerce = $7, request_type = $8, position = $9, updated_at = now()
+          `UPDATE collections SET name = $2, item_name = $3, fields = $4, detail_page = $5, image_field = $6, commerce = $7, request_type = $8, position = $9,
+                  self_service = $10, reviews = $11, updated_at = now()
             WHERE id = $1 RETURNING ${COLLECTION_COLUMNS}`,
           [params.collectionId, ...toRow(body).slice(1)],
         ),
@@ -115,9 +117,23 @@ export function collectionsRoutes(storage: StorageAdapter, operatorOnly: Request
         status: query.status,
       });
       const preview = await toPublicItems(db, storage, table, list);
+      // Items kept by customers (self-service tables) show who they belong to.
+      const ownerIds = [...new Set(list.map((x) => x.ownerCustomerId).filter((x): x is string => !!x))];
+      const owners = new Map<string, { name: string; phone: string | null; email: string | null }>();
+      if (ownerIds.length) {
+        const { rows } = await db.query<{ id: string; name: string; phone: string | null; email: string | null }>('SELECT id, name, phone, email FROM customers WHERE id = ANY($1::uuid[])', [ownerIds]);
+        for (const o of rows) owners.set(o.id, o);
+      }
       return {
         // `previewData`: the same values with image URLs and referenced items, for the editor.
-        data: list.map((row, i) => ({ ...row, imageUrl: preview[i]?.imageUrl ?? null, availability: preview[i]?.availability, previewData: preview[i]?.data ?? {} })),
+        data: list.map((row, i) => ({
+          ...row,
+          owner: row.ownerCustomerId ? (owners.get(row.ownerCustomerId) ?? null) : null,
+          imageUrl: preview[i]?.imageUrl ?? null,
+          availability: preview[i]?.availability,
+          rating: preview[i]?.rating,
+          previewData: preview[i]?.data ?? {},
+        })),
         meta: pageMeta(query.page, Math.min(query.pageSize, 60), total),
       };
     },
@@ -180,6 +196,8 @@ export function collectionsRoutes(storage: StorageAdapter, operatorOnly: Request
       return { data: (await toPublicItems(db, storage, table, rows)).map((item, i) => ({ ...item, status: rows[i].status })) };
     },
   );
+
+  registerReviewAdminRoutes(r);
 
   return r.router;
 }

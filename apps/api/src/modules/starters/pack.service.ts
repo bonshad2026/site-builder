@@ -534,8 +534,9 @@ export async function applyPack(ctx: AppContext, tenantId: string, db: pg.Pool, 
         if (c.action === 'create') {
           await run(() =>
             tx.query(
-              `INSERT INTO collections (slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [moved.slug, moved.name, moved.itemName, JSON.stringify(moved.fields), moved.detailPage, moved.imageField, moved.commerce, moved.requestType, moved.position],
+              `INSERT INTO collections (slug, name, item_name, fields, detail_page, image_field, commerce, request_type, position, self_service, reviews)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              [moved.slug, moved.name, moved.itemName, JSON.stringify(moved.fields), moved.detailPage, moved.imageField, moved.commerce, moved.requestType, moved.position, moved.selfService, moved.reviews],
             ),
           );
           result.tables++;

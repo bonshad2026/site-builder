@@ -376,8 +376,26 @@ export const accountsSchema = z
     identifier: z.enum(['phone', 'email']).default('phone'),
     /** Accounts may set a password; signing in with a one-time code always works. */
     passwords: z.boolean().default(true),
+    /**
+     * Kinds of account a visitor picks when signing up (person, organisation, trainer…); none =
+     * one kind. `organization` asks for the organisation's name; `profileTable` gives accounts of
+     * this kind their own item in that table (see the table's self-service option).
+     */
+    kinds: z
+      .array(
+        z.object({
+          key: stageKeySchema,
+          label: loc(60),
+          hint: loc(200),
+          organization: z.boolean().default(false),
+          profileTable: z.string().max(40).default(''),
+        }),
+      )
+      .max(6)
+      .default([]),
   })
   .default({});
+export type AccountKind = z.output<typeof accountsSchema>['kinds'][number];
 export type AccountsSettings = z.output<typeof accountsSchema>;
 
 export const notificationsSchema = z
@@ -434,6 +452,8 @@ export const paymentRequestSchema = z.object({
 
 export const requestUpdateSchema = z.object({
   assigneeUserId: z.string().uuid().nullable().optional(),
+  /** The item of the type's `assignTable` that handles the request (its trainer). */
+  assignedItemId: z.string().uuid().nullable().optional(),
   read: z.boolean().optional(),
 });
 
@@ -465,6 +485,9 @@ export const customerSignupSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
   name: z.string().trim().min(2).max(120),
   password: z.string().min(8).max(200).optional(),
+  /** One of the site's account kinds (required when it has any). */
+  kind: z.string().max(40).default(''),
+  organization: z.string().trim().max(200).default(''),
 });
 export const customerLoginSchema = z
   .object({ identifier: identifierSchema, password: z.string().max(200).optional(), code: z.string().trim().regex(/^\d{6}$/).optional() })
@@ -472,6 +495,7 @@ export const customerLoginSchema = z
 export const customerResetSchema = z.object({ identifier: identifierSchema, code: z.string().trim().regex(/^\d{6}$/), password: z.string().min(8).max(200) });
 export const customerProfileSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
+  organization: z.string().trim().max(200).optional(),
   /** The other way to reach the customer (email when the account is a phone, or the other way round). */
   email: z.union([z.string().trim().toLowerCase().email().max(254), z.literal('')]).optional(),
   phone: z.union([z.string().trim().regex(PHONE), z.literal('')]).optional(),

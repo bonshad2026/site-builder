@@ -12,6 +12,8 @@ import { ExcelButton, excelDate, fetchAll, listTotal } from '../ExcelExport';
 interface Customer {
   id: string;
   name: string;
+  kind: string;
+  organization: string;
   phone: string | null;
   email: string | null;
   status: 'active' | 'blocked';
@@ -119,6 +121,10 @@ export default function CustomersPage({ siteId }: { siteId: string }) {
   const t = useL();
   const { formatDate } = usePreferences();
   const { data: settings } = useAdminSettings(siteId);
+  const kindLabel = (key: string) => {
+    const k = settings?.accounts.kinds.find((x) => x.key === key);
+    return k ? k.label.fa || k.label.en : key;
+  };
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
   const [search, setSearch] = useState('');
@@ -141,7 +147,7 @@ export default function CustomersPage({ siteId }: { siteId: string }) {
               const list = await fetchAll<Customer>(`/sites/${siteId}/customers${search ? `?q=${encodeURIComponent(search)}` : ''}`);
               return [
                 ['نام / Name', 'موبایل / Phone', 'ایمیل / Email', 'وضعیت / Status', 'درخواست‌ها / Requests', 'سفارش‌ها / Orders', 'عضویت / Joined', 'آخرین ورود / Last sign-in'],
-                ...list.map((c) => [c.name, c.phone ?? '', c.email ?? '', c.status, c.requests, c.orders, excelDate(c.createdAt), excelDate(c.lastLoginAt)]),
+                ...list.map((c) => [c.organization ? `${c.name} — ${c.organization}` : c.name, c.phone ?? '', c.email ?? '', c.status, c.requests, c.orders, excelDate(c.createdAt), excelDate(c.lastLoginAt)]),
               ];
             }}
           />
@@ -175,6 +181,7 @@ export default function CustomersPage({ siteId }: { siteId: string }) {
               <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpen(c)}>
                 <Td>
                   {c.name} {c.status === 'blocked' && <Badge tone="bad">{t(L('Blocked', 'مسدود'))}</Badge>}
+                  {(c.organization || c.kind) && <div className="text-xs text-ink-soft">{[c.organization, kindLabel(c.kind)].filter(Boolean).join(' · ')}</div>}
                 </Td>
                 <Td className="text-xs" >
                   <span dir="ltr">{c.phone ?? c.email}</span>

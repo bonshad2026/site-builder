@@ -10,6 +10,8 @@ import { usePreferences } from '../../lib/preferences';
 import { useSiteErrorLanguage } from '../public-site/data';
 import { useSystemPageOptions } from '../../sections/BuiltInPage';
 import { CaseView } from './CaseView';
+import { MemberProfile } from './MemberProfile';
+import { useSiteSettings } from '../public-site/data';
 import { L, useCustomer, useCustomerApi, useRefreshCustomer, useText, type Customer } from './customerApi';
 
 type Mode = 'login' | 'signup' | 'reset';
@@ -24,7 +26,14 @@ function AuthPanel({ next }: { next?: string }) {
   const { accounts } = useCustomer();
   const byPhone = accounts?.identifier !== 'email';
   const passwords = accounts?.passwords !== false;
-  const [mode, setMode] = useState<Mode>(useSystemPageOptions().authStart ?? 'login');
+  const [params] = useSearchParams();
+  const kinds = accounts?.kinds ?? [];
+  // `?kind=trainer` (a "sign up as a trainer" link) opens sign-up with that kind chosen.
+  const [kind, setKind] = useState(() => kinds.find((k) => k.key === params.get('kind'))?.key ?? '');
+  const [organization, setOrganization] = useState('');
+  const chosenKind = kinds.find((k) => k.key === kind);
+  const authStart = useSystemPageOptions().authStart;
+  const [mode, setMode] = useState<Mode>(kind ? 'signup' : (authStart ?? 'login'));
   const [withCode, setWithCode] = useState(!passwords);
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
@@ -43,7 +52,7 @@ function AuthPanel({ next }: { next?: string }) {
   const submit = useMutation({
     mutationFn: () =>
       mode === 'signup'
-        ? api.post<Customer>('/customer/signup', { identifier, code, name, ...(password ? { password } : {}) })
+        ? api.post<Customer>('/customer/signup', { identifier, code, name, kind, organization, ...(password ? { password } : {}) })
         : mode === 'reset'
           ? api.post<Customer>('/customer/reset', { identifier, code, password })
           : api.post<Customer>('/customer/login', withCode ? { identifier, code } : { identifier, password }),
@@ -99,8 +108,29 @@ function AuthPanel({ next }: { next?: string }) {
             placeholder={byPhone ? '09xxxxxxxxx' : 'name@example.com'}
           />
         </FieldShell>
+        {mode === 'signup' && kinds.length > 0 && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-sm font-medium text-ink">{t(L('I am signing up as', 'نوع حساب'))}</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {kinds.map((k) => (
+                <label key={k.key} className={cn('flex cursor-pointer flex-col gap-1 rounded-lg border p-3 text-sm transition', kind === k.key ? 'border-ink bg-surface' : 'border-line hover:border-ink-soft')}>
+                  <span className="flex items-center gap-2">
+                    <input type="radio" name="acc-kind" value={k.key} checked={kind === k.key} onChange={() => setKind(k.key)} className="accent-[var(--color-accent)]" />
+                    <span className="font-medium text-ink">{t(k.label)}</span>
+                  </span>
+                  {t(k.hint) && <span className="text-xs text-ink-soft">{t(k.hint)}</span>}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        {mode === 'signup' && chosenKind?.organization && (
+          <FieldShell id="acc-org" label={t(L('Organisation name', 'نام سازمان یا ارگان'))}>
+            <TextInput id="acc-org" autoComplete="organization" value={organization} onChange={(e) => setOrganization(e.target.value)} />
+          </FieldShell>
+        )}
         {mode === 'signup' && (
-          <FieldShell id="acc-name" label={t(L('Your name', 'نام شما'))}>
+          <FieldShell id="acc-name" label={chosenKind?.organization ? t(L('Your name (contact person)', 'نام شما (رابط سازمان)')) : t(L('Your name', 'نام شما'))}>
             <TextInput id="acc-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FieldShell>
         )}
@@ -134,7 +164,16 @@ function AuthPanel({ next }: { next?: string }) {
             {errorLine(submit.error ?? sendCode.error, errLang)}
           </p>
         )}
-        <Button type="submit" disabled={sendCode.isPending || submit.isPending || !identifier.trim() || (mode === 'signup' && codeSent && name.trim().length < 2)}>
+        <Button
+          type="submit"
+          disabled={
+            sendCode.isPending ||
+            submit.isPending ||
+            !identifier.trim() ||
+            (mode === 'signup' && kinds.length > 0 && !chosenKind) ||
+            (mode === 'signup' && codeSent && (name.trim().length < 2 || (!!chosenKind?.organization && organization.trim().length < 2)))
+          }
+        >
           {needsCode && !codeSent
             ? t(L('Send code', 'ارسال کد'))
             : mode === 'signup'
@@ -188,6 +227,8 @@ function Profile({ customer }: { customer: Customer }) {
   const errLang = useSiteErrorLanguage();
   const { accounts } = useCustomer();
   const [name, setName] = useState(customer.name);
+  const [organization, setOrganization] = useState(customer.organization);
+  const kind = accounts?.kinds.find((k) => k.key === customer.kind);
   const [other, setOther] = useState((accounts?.identifier === 'email' ? customer.phone : customer.email) ?? '');
   const [password, setPassword] = useState('');
   const [current, setCurrent] = useState('');
@@ -195,6 +236,7 @@ function Profile({ customer }: { customer: Customer }) {
     mutationFn: () =>
       api.patch('/customer/me', {
         name,
+        ...(kind?.organization ? { organization } : {}),
         ...(accounts?.identifier === 'email' ? { phone: other } : { email: other }),
         ...(password ? { password, currentPassword: current } : {}),
       }),
@@ -215,6 +257,11 @@ function Profile({ customer }: { customer: Customer }) {
       <FieldShell id="p-name" label={t(L('Name', 'نام'))}>
         <TextInput id="p-name" value={name} onChange={(e) => setName(e.target.value)} />
       </FieldShell>
+      {kind?.organization && (
+        <FieldShell id="p-org" label={t(L('Organisation name', 'نام سازمان یا ارگان'))}>
+          <TextInput id="p-org" value={organization} onChange={(e) => setOrganization(e.target.value)} />
+        </FieldShell>
+      )}
       <FieldShell id="p-other" label={accounts?.identifier === 'email' ? t(L('Mobile number', 'شماره موبایل')) : t(L('Email (optional)', 'ایمیل (اختیاری)'))}>
         <TextInput id="p-other" dir="ltr" value={other} onChange={(e) => setOther(e.target.value)} />
       </FieldShell>
@@ -241,7 +288,7 @@ function Profile({ customer }: { customer: Customer }) {
   );
 }
 
-type Part = 'requests' | 'orders' | 'profile';
+type Part = 'requests' | 'orders' | 'profile' | 'member';
 
 /**
  * The signed-in customer's account: requests, orders and profile, offered as tabs, a side menu
@@ -255,12 +302,23 @@ function Dashboard({ customer }: { customer: Customer }) {
   const options = useSystemPageOptions();
   const menu = options.accountMenu ?? 'tabs';
   const { locale } = usePreferences();
-  const [part, setPart] = useState<Part>(options.accountOpen ?? 'requests');
-  const cases = useQuery({ queryKey: ['public', api.site, 'customer', 'cases', locale], queryFn: () => api.get<CasesList>(`/customer/cases?locale=${locale}`), enabled: part !== 'profile' || menu === 'cards' || menu === 'sidebar' });
+  const { accounts } = useCustomer();
+  const { data: settings } = useSiteSettings();
+  // Account kinds that keep their own item (a trainer) get a part for it, opened first.
+  const kind = accounts?.kinds.find((k) => k.key === customer.kind);
+  const member = !!kind?.profileTable;
+  const [part, setPart] = useState<Part>(() => {
+    const open = options.accountOpen ?? 'requests';
+    if (open === 'member' && !member) return 'requests';
+    return member && !options.accountOpen ? 'member' : open;
+  });
+  const cases = useQuery({ queryKey: ['public', api.site, 'customer', 'cases', locale], queryFn: () => api.get<CasesList>(`/customer/cases?locale=${locale}`), enabled: (part !== 'profile' && part !== 'member') || menu === 'cards' || menu === 'sidebar' });
   const logout = useMutation({ mutationFn: () => api.post('/customer/logout'), onSuccess: refresh });
   const parts: { id: Part; label: { en: string; fa: string }; count?: number }[] = [
+    ...(member ? [{ id: 'member' as const, label: L('My page', 'صفحه‌ی معرفی من') }] : []),
     { id: 'requests', label: L('My requests', 'درخواست‌های من'), count: cases.data?.requests.length },
-    { id: 'orders', label: L('My orders', 'سفارش‌های من'), count: cases.data?.orders.length },
+    // A site without the shop's orders shows no "My orders".
+    ...(settings?.modules.orders === false ? [] : [{ id: 'orders' as const, label: L('My orders', 'سفارش‌های من'), count: cases.data?.orders.length }]),
     { id: 'profile', label: L('Profile', 'مشخصات') },
   ];
   const signOut = (
@@ -273,6 +331,7 @@ function Dashboard({ customer }: { customer: Customer }) {
       <div>
         <p className="eyebrow">{menu === 'none' ? t(parts.find((x) => x.id === part)!.label) : t(L('My account', 'حساب من'))}</p>
         <h1 className="mt-2 font-display text-4xl text-ink">{customer.name}</h1>
+        {(customer.organization || kind) && <p className="mt-1 text-sm text-ink-soft">{[customer.organization, kind ? t(kind.label) : ''].filter(Boolean).join(' · ')}</p>}
         <p className="mt-1 text-sm text-ink-soft" dir="ltr">
           {customer.phone ?? customer.email}
         </p>
@@ -283,6 +342,8 @@ function Dashboard({ customer }: { customer: Customer }) {
   const body =
     part === 'profile' ? (
       <Profile customer={customer} />
+    ) : part === 'member' ? (
+      <MemberProfile />
     ) : cases.isLoading ? (
       <p className="text-ink-soft">{t(L('Loading…', 'در حال بارگذاری…'))}</p>
     ) : part === 'orders' ? (
@@ -328,7 +389,7 @@ function Dashboard({ customer }: { customer: Customer }) {
         </div>
       )}
       {menu === 'cards' && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className={cn('grid gap-4', parts.length > 3 ? 'sm:grid-cols-4' : 'sm:grid-cols-3')}>
           {parts.map((x) => (
             <button
               key={x.id}
@@ -338,7 +399,7 @@ function Dashboard({ customer }: { customer: Customer }) {
               className={cn('flex flex-col items-start gap-2 rounded-xl border p-5 text-start transition-colors', part === x.id ? 'border-ink bg-surface' : 'border-line hover:border-ink-soft')}
             >
               <span className="text-sm text-ink-soft">{t(x.label)}</span>
-              <span className="font-display text-3xl text-ink">{x.id === 'profile' ? '✎' : (x.count ?? '—')}</span>
+              <span className="font-display text-3xl text-ink">{x.id === 'profile' || x.id === 'member' ? '✎' : (x.count ?? '—')}</span>
             </button>
           ))}
         </div>

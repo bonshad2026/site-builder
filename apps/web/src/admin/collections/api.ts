@@ -16,6 +16,10 @@ export interface AdminItem {
   availability?: PublicItem['availability'];
   /** Values with image URLs and referenced items (for previews in the editor). */
   previewData: Record<string, unknown>;
+  /** The customer who keeps the item (self-service tables). */
+  ownerCustomerId: string | null;
+  owner: { name: string; phone: string | null; email: string | null } | null;
+  rating?: { average: number; count: number };
   createdAt: string;
   updatedAt: string;
 }

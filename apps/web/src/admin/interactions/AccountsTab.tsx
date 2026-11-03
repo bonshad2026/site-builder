@@ -1,10 +1,14 @@
 import type { SiteSettings } from '@site-builder/shared';
-import { Card, Checkbox, SelectField, TextField } from '../ui';
+import { usePreferences } from '../../lib/preferences';
+import { useAdminCollections } from '../collections/api';
+import { Card, Checkbox, ListEditor, LocalizedField, SelectField, TextField } from '../ui';
 import { L, useL } from './common';
 
 /** Customer accounts on the site (operator) and who gets told about new requests (owner too). */
-export function AccountsTab({ s, set, part }: { s: SiteSettings; set: <K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => void; part: 'accounts' | 'notifications' }) {
+export function AccountsTab({ siteId, s, set, part }: { siteId: string; s: SiteSettings; set: <K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => void; part: 'accounts' | 'notifications' }) {
   const t = useL();
+  const { l } = usePreferences();
+  const { data: tables = [] } = useAdminCollections(siteId);
   const a = s.accounts;
   const n = s.notifications;
   return (
@@ -36,6 +40,34 @@ export function AccountsTab({ s, set, part }: { s: SiteSettings; set: <K extends
                 />
                 <Checkbox label={t(L('Allow passwords', 'امکان رمز عبور'))} checked={a.passwords} onChange={(passwords) => set('accounts', { ...a, passwords })} hint={t(L('Signing in with a one-time code always works.', 'ورود با کد یک‌بارمصرف همیشه فعال است.'))} />
               </div>
+            )}
+            {a.enabled && (
+              <ListEditor
+                label={t(L('Kinds of account (optional)', 'انواع حساب (اختیاری)'))}
+                items={a.kinds}
+                max={6}
+                onChange={(kinds) => set('accounts', { ...a, kinds })}
+                create={() => ({ key: `kind${a.kinds.length + 1}`, label: { en: '', fa: '' }, hint: { en: '', fa: '' }, organization: false, profileTable: '' })}
+                render={(k, update) => (
+                  <div className="flex flex-col gap-3">
+                    <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                      <TextField label={t(L('Key', 'کلید'))} dir="ltr" value={k.key} onChange={(key) => update({ ...k, key: key.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} hint={`/account?kind=${k.key}`} />
+                      <LocalizedField label={t(L('Name (e.g. Organisation)', 'نام (مثلاً سازمان)'))} value={k.label} onChange={(label) => update({ ...k, label })} />
+                    </div>
+                    <LocalizedField label={t(L('Short explanation', 'توضیح کوتاه'))} value={k.hint} onChange={(hint) => update({ ...k, hint })} />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Checkbox label={t(L('Ask for the organisation’s name', 'نام سازمان پرسیده شود'))} checked={k.organization} onChange={(organization) => update({ ...k, organization })} />
+                      <SelectField
+                        label={t(L('Keeps its own item in', 'آیتم اختصاصی در جدول'))}
+                        value={k.profileTable}
+                        onChange={(profileTable) => update({ ...k, profileTable })}
+                        options={[{ value: '', label: '—' }, ...tables.filter((x) => x.selfService.enabled || x.slug === k.profileTable).map((x) => ({ value: x.slug, label: l(x.name) || x.slug }))]}
+                        hint={t(L('Only tables with “Customers keep their own item” on.', 'فقط جدول‌هایی که «مشتری‌ها آیتم خودشان را دارند» در آن‌ها روشن است.'))}
+                      />
+                    </div>
+                  </div>
+                )}
+              />
             )}
             {a.enabled && (
               <p className="text-xs text-ink-soft">

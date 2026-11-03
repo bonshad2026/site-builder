@@ -21,7 +21,7 @@ export const customerCookie = (slug: string) => `sb_c_${slug}`;
 export const customerCsrfCookie = (slug: string) => `sb_cc_${slug}`;
 export const CUSTOMER_CSRF_HEADER = 'x-customer-csrf';
 
-const COLUMNS = 'c.id, c.name, c.phone, c.email, c.password_hash IS NOT NULL AS has_password';
+const COLUMNS = 'c.id, c.name, c.phone, c.email, c.password_hash IS NOT NULL AS has_password, c.kind, c.organization';
 
 interface CustomerRow {
   id: string;
@@ -29,14 +29,18 @@ interface CustomerRow {
   phone: string | null;
   email: string | null;
   has_password: boolean;
+  kind: string;
+  organization: string;
 }
 
-export const publicCustomer = (c: { id: string; name: string; phone: string | null; email: string | null; hasPassword?: boolean; has_password?: boolean }) => ({
+export const publicCustomer = (c: { id: string; name: string; phone: string | null; email: string | null; hasPassword?: boolean; has_password?: boolean; kind?: string; organization?: string }) => ({
   id: c.id,
   name: c.name,
   phone: c.phone,
   email: c.email,
   hasPassword: c.hasPassword ?? c.has_password ?? false,
+  kind: c.kind ?? '',
+  organization: c.organization ?? '',
 });
 
 /** Loads the visitor's account session (if any) from this site's cookie. Never throws. */
@@ -52,7 +56,7 @@ export function loadCustomer(): RequestHandler {
     );
     const row = rows[0];
     if (row) {
-      req.customer = { id: row.id, name: row.name, phone: row.phone, email: row.email, hasPassword: row.has_password, sessionId: row.session_id, csrfHash: row.csrf_hash };
+      req.customer = { id: row.id, name: row.name, phone: row.phone, email: row.email, hasPassword: row.has_password, kind: row.kind, sessionId: row.session_id, csrfHash: row.csrf_hash };
       if (Date.now() - row.last_seen_at.getTime() > 5 * 60_000) await tenant.db.query('UPDATE customer_sessions SET last_seen_at = now() WHERE id = $1', [row.session_id]);
     }
     next();
@@ -147,15 +151,20 @@ async function consumeCode(db: pg.Pool, identifier: string, purpose: string, cod
 
 /* ---------- accounts ---------- */
 
-export async function signup(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code: string; name: string; password?: string }) {
+export async function signup(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code: string; name: string; password?: string; kind?: string; organization?: string }) {
   const identifier = identifierOf(settings, input.identifier);
   if (input.password && !settings.passwords) throw badRequest('Passwords are not used on this site');
+  // A site with kinds of account needs one of them; the organisation's name when that kind asks for it.
+  const kind = settings.kinds.length ? settings.kinds.find((k) => k.key === input.kind) : undefined;
+  if (settings.kinds.length && !kind) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'kind', message: 'Choose a kind of account', code: 'too_small' }]);
+  const organization = kind?.organization ? (input.organization ?? '').trim() : '';
+  if (kind?.organization && organization.length < 2) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'organization', message: 'Required', code: 'too_small' }]);
   await consumeCode(db, identifier, 'signup', input.code);
   const passwordHash = input.password ? await hashPassword(input.password) : null;
   try {
     const { rows } = await db.query<CustomerRow>(
-      `INSERT INTO customers AS c (${column(settings)}, name, password_hash) VALUES ($1, $2, $3) RETURNING ${COLUMNS}`,
-      [identifier, input.name, passwordHash],
+      `INSERT INTO customers AS c (${column(settings)}, name, password_hash, kind, organization) VALUES ($1, $2, $3, $4, $5) RETURNING ${COLUMNS}`,
+      [identifier, input.name, passwordHash, kind?.key ?? '', organization],
     );
     await linkCases(db, rows[0].id, settings, identifier);
     return rows[0];
@@ -240,7 +249,7 @@ export async function updateProfile(
   db: pg.Pool,
   settings: AccountsSettings,
   customer: CustomerSession,
-  input: { name?: string; email?: string; phone?: string; password?: string; currentPassword?: string },
+  input: { name?: string; organization?: string; email?: string; phone?: string; password?: string; currentPassword?: string },
 ) {
   const sets: string[] = [];
   const values: unknown[] = [customer.id];
@@ -249,6 +258,7 @@ export async function updateProfile(
     sets.push(`${col} = $${values.length}`);
   };
   if (input.name) add('name', input.name);
+  if (input.organization !== undefined) add('organization', input.organization);
   // The verified identifier cannot be changed here; the other contact detail can.
   if (input.email !== undefined && settings.identifier === 'phone') add('email', input.email ? normalizeIdentifier(input.email, 'email') : null);
   if (input.phone !== undefined && settings.identifier === 'email') add('phone', input.phone ? normalizeIdentifier(input.phone, 'phone') : null);

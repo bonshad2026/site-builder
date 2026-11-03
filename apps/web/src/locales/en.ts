@@ -272,6 +272,8 @@ export const en = {
   },
   collections: {
     seatsLeft: '{count} seats left',
+    reviewCount: '{count} reviews',
+    noReviews: 'No reviews yet',
     full: 'Full',
     closed: 'Registration closed',
     deadline: 'Register by {date}',
