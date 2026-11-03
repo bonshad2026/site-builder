@@ -17,7 +17,7 @@ function readEnv(root) {
  * Opens Edge, signs in as the studio operator in a page that is not recorded (Node cannot
  * resolve *.localhost; the browser can) and returns a recording page plus helpers.
  */
-export async function startRecording({ root, outDir }) {
+export async function startRecording({ root, outDir, video = true, viewport = size }) {
   const env = readEnv(root);
   const browser = await chromium.launch({ channel: 'msedge' });
 
@@ -37,7 +37,12 @@ export async function startRecording({ root, outDir }) {
   const status = await api('POST', '/api/v1/auth/login', { email: env.CONTROL_ADMIN_EMAIL, password: env.CONTROL_ADMIN_PASSWORD });
   if (status !== 200) throw new Error(`Studio sign-in failed (${status}). Is the studio running at ${BASE}?`);
 
-  const context = await browser.newContext({ viewport: size, recordVideo: { dir: outDir, size }, locale: 'fa-IR', storageState: await setup.storageState() });
+  const context = await browser.newContext({
+    viewport,
+    ...(video ? { recordVideo: { dir: outDir, size: viewport } } : {}),
+    locale: 'fa-IR',
+    storageState: await setup.storageState(),
+  });
   const page = await context.newPage();
   const pause = (ms) => page.waitForTimeout(ms);
 
@@ -67,7 +72,7 @@ export async function startRecording({ root, outDir }) {
     pause,
     /** Opens an admin address and switches the panel to Persian. */
     async open(url) {
-      await page.goto(`${BASE}${url}`);
+      await page.goto(url.startsWith('http') ? url : `${BASE}${url}`);
       await page.waitForLoadState('networkidle');
       const fa = page.getByRole('button', { name: /^(فا|FA|فارسی)$/i });
       if (await fa.count()) await fa.first().click();
@@ -113,6 +118,16 @@ export async function startRecording({ root, outDir }) {
       await pause(700);
       await locator.click();
     },
+    /** Saves a screenshot of the window as <outDir>/<name>.png (captions and boxes included). */
+    async shot(name) {
+      await pause(300);
+      await page.screenshot({ path: `${outDir}/${name}.png` });
+    },
+    /** Hides the caption and boxes. */
+    async clear() {
+      await guide.caption('');
+      await guide.highlight(null);
+    },
     /** Types like a person. */
     async type(locator, text) {
       await guide.click(locator);
@@ -123,7 +138,7 @@ export async function startRecording({ root, outDir }) {
   /** Stops recording; returns the path of the video file. */
   async function finish() {
     await context.close();
-    return { video: await page.video().path(), close: () => browser.close() };
+    return { video: video ? await page.video().path() : null, close: () => browser.close() };
   }
   return { guide, finish };
 }

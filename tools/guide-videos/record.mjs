@@ -17,6 +17,21 @@ const names = process.argv.slice(2).length ? process.argv.slice(2) : all;
 for (const name of names) {
   if (!all.includes(name)) throw new Error(`No scene "${name}". Scenes: ${all.join(', ')}`);
   const scene = await import(pathToFileURL(path.join(here, 'scenes', `${name}.mjs`)).href);
+  // A scene with `shots` makes screenshots (media/<name>/*.png) instead of a video.
+  if (scene.shots) {
+    const dir = path.join(outDir, name);
+    mkdirSync(dir, { recursive: true });
+    const { guide, finish } = await startRecording({ root, outDir: dir, video: false, viewport: { width: 1440, height: 860 } });
+    await scene.reset?.(guide.api);
+    try {
+      await scene.shots(guide);
+    } finally {
+      await scene.reset?.(guide.api);
+      await (await finish()).close();
+    }
+    console.log(`captured ${name} → docs/guide/media/${name}/`);
+    continue;
+  }
   const { guide, finish } = await startRecording({ root, outDir: tmpDir });
   await scene.reset?.(guide.api);
   try {
