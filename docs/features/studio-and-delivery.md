@@ -36,6 +36,15 @@ refuses structure changes for non-operators (`clientLocked`, `contentOnlyChange`
 "Site texts" (`settings.texts`) is operator-only and hidden in the client panel); the web bundle is built with `VITE_ADMIN_SCOPE=client`, which leaves out the
 builder and platform pages. Operators reach a client's admin with SSO (`src/modules/auth/sso.ts`).
 
+## Liara
+"استقرار روی لیارا" on the deploy page (shown when `LIARA_API_TOKEN` and `LIARA_DB_*` are set in
+`deploy/.env`) builds an install package with a `liara/` folder (`deploy/liara/`: one Docker image
+with Caddy + the API, the site's rows as INSERTs) and deploys it to an existing Liara Docker app
+with the Liara CLI (`@liara/cli`, pinned in `server.mjs`): `env set`, then `deploy`. The database
+is a Liara PostgreSQL service shared by sites (its admin must be a superuser); uploads live on a
+Liara disk `uploads`. Data is loaded on the first start only. See `deploy/liara/README.md`.
+Tested locally with a stand-in Postgres; not yet run against Liara itself.
+
 ## Backups
 - `deploy/backup/studio-backup.sh` → `backups/*.tar.gz` (databases, uploads, control data).
 - `deploy/backup/studio-restore.sh <file> [--replace]` (Windows: `studio-restore.ps1 -Backup <file> [-Replace]`).

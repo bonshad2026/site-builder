@@ -40,6 +40,16 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   - Photos: 10 Commons photos + 6 trainer crops in `var/firefighter-photos/` (not in Git) with
     `credits.json`. The owner stopped further downloads; the gallery has 10 photos, not 20.
   - Feature docs and the Persian dev guide are not updated for the new features yet.
+- Liara deploy (`feature/liara-deploy`, not merged): "استقرار روی لیارا" on the deploy page builds an
+  install package with a `liara/` folder and deploys it with the Liara CLI to an existing Docker app
+  that uses a Liara PostgreSQL service (`deploy/liara/`, docs in
+  [features/studio-and-delivery.md](features/studio-and-delivery.md)). The Liara image was tested
+  locally with a stand-in Postgres, then deployed for real on 2026-11-03: site `sample` runs at
+  https://sample-site.liara.run (Liara app `sample-site`, 1GB plan + basic bundle, disk `uploads`;
+  PostgreSQL 16 `sb-demo-db`, root is a superuser; network `sites`). Pitfalls found: `--disks` takes
+  `name:path`, and the CLI upload drops `node_modules` (the API ships as `app.tar.gz`). The studio's
+  `sb-control` currently runs this branch through a compose override in the session scratchpad; after
+  merging, rebuild `control` normally. Next: merge into `develop` when the owner asks.
 - Developer guide (`feature/dev-docs`, merged into `develop` 2026-11-03): the Persian developer guide in
   `docs/dev/` — 35 pages in 7 chapters (start, architecture, layers, features, recipes, operations,
   rules), every claim checked against the code, Mermaid diagrams parsed with mermaid 11, links checked.
