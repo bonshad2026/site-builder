@@ -1,18 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { HOST_SITE_ID } from '../features/public-site/data';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
 import type { SiteSettings } from '@site-builder/shared';
 import { LanguageSwitch } from '../components/layout/PreferenceControls';
 import { api } from '../lib/api';
 import { cn } from '../lib/cn';
-import { usePreferences } from '../lib/preferences';
-import { ForgotPasswordPage, LoginPage, RequireAuth, useLogout, useMe, type Me } from './auth';
+import { usePreferences, useSiteDirection } from '../lib/preferences';
+import { ForgotPasswordPage, isOperator, LoginPage, OPERATOR_UI, RequireAuth, useLogout, useMe, type Me } from './auth';
 import { useT } from './i18n';
 import { Spinner, ToastProvider } from './ui';
+import { useAdminCollections } from './collections/api';
 
-const Platform = lazy(() => import('./pages/PlatformPages'));
+// Operator-only code is not even bundled into client builds.
+const Platform = OPERATOR_UI ? lazy(() => import('./pages/PlatformPages')) : null;
 const SitePages = lazy(() => import('./pages/SitePages'));
-const Builder = lazy(() => import('./builder/BuilderPage'));
+const Builder = OPERATOR_UI ? lazy(() => import('./builder/BuilderPage')) : null;
 
 export interface SiteInfo {
   siteId: string;
@@ -43,21 +46,53 @@ function useAdminTheme() {
   }, []);
 }
 
+/** Sites whose panel language was already applied this visit, so the user can still switch afterwards. */
+const appliedLanguage = new Set<string>();
+
+/**
+ * The current site's panel language and direction: the site in the address (/admin/sites/:id),
+ * or the site this address belongs to (a client's own /admin, also on the sign-in page).
+ */
+function AdminSiteLook() {
+  const routeSite = useLocation().pathname.match(/^\/admin\/sites\/([^/]+)/)?.[1];
+  const siteId = routeSite ?? HOST_SITE_ID;
+  const { locale, setLocale } = usePreferences();
+  const { data } = useQuery({
+    queryKey: ['admin-look', siteId],
+    queryFn: () => api.get<Pick<SiteSettings, 'adminDirection' | 'adminLanguage'>>(`/public/sites/${siteId}/settings`),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  });
+  useSiteDirection(siteId ? data?.adminDirection : undefined);
+  useEffect(() => {
+    const lang = data?.adminLanguage;
+    if (!siteId || (lang !== 'fa' && lang !== 'en')) return;
+    const key = `${siteId}:${lang}`;
+    if (appliedLanguage.has(key)) return;
+    appliedLanguage.add(key);
+    if (lang !== locale) setLocale(lang);
+  }, [siteId, data?.adminLanguage, locale, setLocale]);
+  return null;
+}
+
 export default function AdminRoot() {
   useAdminTheme();
   return (
     <ToastProvider>
+      <AdminSiteLook />
       <Suspense fallback={<Spinner />}>
         <Routes>
           <Route path="login" element={<LoginPage />} />
           <Route path="forgot" element={<ForgotPasswordPage />} />
-          <Route
-            path="sites/:siteId/pages/:pageId/builder"
-            element={<RequireAuth>{() => <Builder />}</RequireAuth>}
-          />
+          {Builder && (
+            <Route
+              path="sites/:siteId/pages/:pageId/builder"
+              element={<RequireAuth>{(me) => (isOperator(me) ? <Builder /> : <Navigate to="/admin" replace />)}</RequireAuth>}
+            />
+          )}
           <Route element={<RequireAuth>{(me) => <AdminLayout me={me} />}</RequireAuth>}>
             <Route index element={<AdminHome />} />
-            <Route path="platform/*" element={<Platform />} />
+            {Platform && <Route path="platform/*" element={<RequireAuth>{(me) => (isOperator(me) ? <Platform /> : <Navigate to="/admin" replace />)}</RequireAuth>} />}
             <Route path="sites/:siteId/*" element={<SitePages />} />
             <Route path="account" element={<SitePages account />} />
           </Route>
@@ -72,7 +107,7 @@ function AdminHome() {
   const { data: me } = useMe();
   const t = useT();
   if (!me) return null;
-  if (me.user.isPlatformAdmin) return <Navigate to="/admin/platform/sites" replace />;
+  if (isOperator(me)) return <Navigate to="/admin/platform/sites" replace />;
   if (me.sites.length === 1) return <Navigate to={`/admin/sites/${me.sites[0].siteId}`} replace />;
   return (
     <div className="max-w-xl">
@@ -95,35 +130,211 @@ function AdminHome() {
   );
 }
 
-function NavItem({ to, children, end }: { to: string; children: ReactNode; end?: boolean }) {
+interface MenuItem {
+  to: string;
+  label: string;
+  /** A section of the settings page (?tab=). */
+  tab?: string;
+  end?: boolean;
+  badge?: number;
+  show?: boolean;
+}
+
+/** Whether a menu entry is the page being shown (settings sections compare their ?tab=). */
+function useIsCurrent() {
+  const { pathname, search } = useLocation();
+  const current = new URLSearchParams(search).get('tab') ?? 'brand';
+  return (item: MenuItem) => (item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`)) && (!item.tab || item.tab === current);
+}
+
+const Count = ({ n }: { n?: number }) => (n ? <span className="ms-2 rounded-full bg-accent px-1.5 text-[11px] text-accent-ink">{n}</span> : null);
+
+function NavItem({ item, nested }: { item: MenuItem; nested?: boolean }) {
+  const isCurrent = useIsCurrent();
+  const active = isCurrent(item);
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => cn('block rounded-md px-3 py-2 text-sm', isActive ? 'bg-ink text-bg' : 'text-ink-soft hover:bg-surface-2 hover:text-ink')}>
-      {children}
-    </NavLink>
+    <Link
+      to={item.tab ? `${item.to}?tab=${item.tab}` : item.to}
+      aria-current={active ? 'page' : undefined}
+      className={cn('flex items-center justify-between rounded-md py-2 text-sm', nested ? 'ps-6 pe-3' : 'px-3', active ? 'bg-ink text-bg' : 'text-ink-soft hover:bg-surface-2 hover:text-ink')}
+    >
+      {item.label}
+      <Count n={item.badge} />
+    </Link>
   );
 }
 
+const CLOSED_KEY = 'sb_nav_closed';
+const readClosed = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * A collapsible group of the menu, hidden when empty. It opens by itself when one of its pages is
+ * opened, and can still be closed while that page is shown.
+ */
+function NavGroup({ id, title, items, badge }: { id: string; title: string; items: MenuItem[]; badge?: number }) {
+  const isCurrent = useIsCurrent();
+  const shown = items.filter((i) => i.show !== false);
+  const [closed, setClosed] = useState(() => readClosed().includes(id));
+  const current = shown.find(isCurrent);
+  const currentKey = current ? `${current.to}${current.tab ?? ''}` : '';
+  useEffect(() => {
+    if (currentKey) setClosed(false);
+  }, [currentKey]);
+  if (!shown.length) return null;
+  const open = !closed;
+  const toggle = () => {
+    const next = !closed;
+    setClosed(next);
+    try {
+      const list = readClosed().filter((x) => x !== id);
+      localStorage.setItem(CLOSED_KEY, JSON.stringify(next ? [...list, id] : list));
+    } catch {
+      // Storage may be unavailable; the group still toggles for this visit.
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className={cn(
+          'flex items-center justify-between rounded-md px-3 py-1.5 text-start text-xs font-semibold text-ink hover:bg-surface-2',
+          // Closed while one of its pages is open: the group shows it holds the current page, and which.
+          !open && current && 'border-s-2 border-accent bg-surface-2',
+        )}
+      >
+        <span className="flex min-w-0 flex-col">
+          <span className="flex items-center">
+            {title}
+            {!open && <Count n={badge} />}
+          </span>
+          {!open && current && <span className="truncate text-[11px] font-normal text-ink-soft">{current.label}</span>}
+        </span>
+        <span aria-hidden="true" className={cn('text-ink-soft transition-transform', open ? 'rotate-90' : 'rtl:rotate-180')}>
+          ›
+        </span>
+      </button>
+      {open && shown.map((item) => <NavItem key={`${item.to}${item.tab ?? ''}`} item={item} nested />)}
+    </div>
+  );
+}
+
+/**
+ * The site menu in standard groups: requests, shop, customers, tables, content, look and settings.
+ * Each settings section has its own entry where it belongs (shop rules under Shop, sign-up under
+ * Customers). Groups and entries a person cannot use are hidden.
+ */
 function SiteNav({ siteId }: { siteId: string }) {
   const t = useT();
   const { data: info } = useSiteInfo(siteId);
   const { data: settings } = useAdminSettings(siteId);
+  const operator = isOperator(useMe().data);
+  const { l } = usePreferences();
+  const { data: tables = [] } = useAdminCollections(siteId);
   const can = (p: string) => !!info?.permissions.includes(p);
   const mod = (m: keyof SiteSettings['modules']) => !!settings?.modules[m];
+  const L = (en: string, fa: string) => l({ en, fa });
+  // New requests and customer replies; refreshed every minute while the panel is open.
+  const summary = useQuery({
+    queryKey: ['site', siteId, 'leads', 'summary'],
+    queryFn: () => api.get<{ unread: number }>(`/sites/${siteId}/leads/summary`),
+    enabled: mod('leads') && can('leads:read'),
+    refetchInterval: 60_000,
+  });
   const base = `/admin/sites/${siteId}`;
+  const settingsUrl = `${base}/settings`;
+  const site = can('site:write');
+  const owner = info?.role === 'owner' || info?.role === 'platform_admin';
+  const shop = mod('products') || mod('orders');
   return (
-    <nav aria-label={info?.name ?? siteId} className="flex flex-col gap-0.5">
-      <NavItem to={base} end>
-        {t.dashboard}
-      </NavItem>
-      <NavItem to={`${base}/pages`}>{t.pages}</NavItem>
-      {mod('services') && <NavItem to={`${base}/services`}>{t.services}</NavItem>}
-      {mod('products') && <NavItem to={`${base}/products`}>{t.products}</NavItem>}
-      {mod('leads') && can('leads:read') && <NavItem to={`${base}/leads`}>{t.leads}</NavItem>}
-      {mod('orders') && can('orders:read') && <NavItem to={`${base}/orders`}>{t.orders}</NavItem>}
-      <NavItem to={`${base}/files`}>{t.files}</NavItem>
-      {(info?.role === 'owner' || info?.role === 'platform_admin') && <NavItem to={`${base}/members`}>{t.members}</NavItem>}
-      {can('site:write') && <NavItem to={`${base}/settings`}>{t.settings}</NavItem>}
-      {can('payments:manage') && mod('orders') && <NavItem to={`${base}/payments`}>{t.payments}</NavItem>}
+    <nav aria-label={info?.name ?? siteId} className="flex flex-col">
+      {operator && <NavItem item={{ to: base, end: true, label: t.dashboard }} />}
+      <NavGroup
+        id="requests"
+        title={L('Requests', 'درخواست‌ها')}
+        badge={summary.data?.unread}
+        items={[
+          { to: `${base}/leads`, label: L('All requests', 'همه‌ی درخواست‌ها'), badge: summary.data?.unread, show: mod('leads') && can('leads:read') },
+          { to: settingsUrl, tab: 'requests', label: L('Forms & workflows', 'فرم‌ها و روال پیگیری'), show: site && mod('leads') },
+        ]}
+      />
+      <NavGroup
+        id="shop"
+        title={L('Orders', 'سفارش‌ها')}
+        items={[
+          { to: `${base}/orders`, label: t.orders, show: mod('orders') && can('orders:read') },
+          { to: `${base}/coupons`, label: t.sx.coupons, show: mod('orders') && can('orders:read') },
+          { to: settingsUrl, tab: 'shop', label: L('Sales rules, checkout & shipping', 'قوانین فروش، تسویه و ارسال'), show: site && mod('products') },
+        ]}
+      />
+      <NavGroup
+        id="customers"
+        title={L('Customers', 'مشتریان')}
+        items={[
+          { to: `${base}/customers`, label: L('Customer list', 'فهرست مشتریان'), show: can('leads:read') && (!!settings?.accounts?.enabled || operator) },
+          { to: settingsUrl, tab: 'accounts', label: L('Sign-up & sign-in', 'ثبت‌نام و ورود مشتری'), show: site && operator },
+          { to: `${base}/reviews`, label: t.sx.reviews, show: mod('products') && can('catalog:write') },
+          { to: `${base}/subscribers`, label: t.sx.subscribers, show: can('leads:read') },
+        ]}
+      />
+      {/* Everything the site's people add items to: products, services, categories and the content tables. */}
+      <NavGroup
+        id="tables"
+        title={L('Tables', 'جدول‌ها')}
+        items={[
+          { to: `${base}/products`, label: t.products, show: mod('products') },
+          { to: settingsUrl, tab: 'categories', label: L('Product categories', 'دسته‌بندی محصولات'), show: site && mod('products') },
+          { to: `${base}/services`, label: t.services, show: mod('services') },
+          ...tables.map((c) => ({ to: `${base}/items/${c.id}`, label: l(c.name) || c.slug })),
+          { to: `${base}/tables`, label: L('Manage tables', 'مدیریت جدول‌ها'), show: operator },
+        ]}
+      />
+      <NavGroup
+        id="content"
+        title={L('Pages', 'صفحه‌ها')}
+        items={[
+          { to: `${base}/pages`, label: t.pages, show: operator },
+          // Clients edit the text and images of their pages; operators use the builder.
+          { to: `${base}/content`, label: t.content, show: !operator && can('pages:write') },
+          { to: settingsUrl, tab: 'shopPage', label: L('Shop page', 'صفحه‌ی فروشگاه'), show: site && operator && mod('products') },
+          { to: settingsUrl, tab: 'systemPages', label: L('Built-in pages (cart, 404…)', 'صفحه‌های آماده (سبد خرید، ۴۰۴…)'), show: site && operator },
+          { to: `${base}/files`, label: t.files },
+          { to: settingsUrl, tab: 'texts', label: L('Site texts', 'متن‌های سایت'), show: site && operator },
+        ]}
+      />
+      <NavGroup
+        id="look"
+        title={L('Site look', 'ظاهر سایت')}
+        items={[
+          { to: settingsUrl, tab: 'design', label: L('Design & theme', 'طراحی و تم'), show: site && operator },
+          { to: settingsUrl, tab: 'menu', label: L('Menu', 'منوی سایت'), show: site && operator },
+          { to: settingsUrl, tab: 'header', label: L('Header', 'سربرگ'), show: site && operator },
+          { to: settingsUrl, tab: 'footer', label: L('Footer', 'پاورقی'), show: site },
+          { to: settingsUrl, tab: 'extras', label: L('Page code, icon, bar & popup', 'کد صفحه، آیکون، اعلان و پاپ‌آپ'), show: site },
+        ]}
+      />
+      <NavGroup
+        id="settings"
+        title={t.settings}
+        items={[
+          { to: settingsUrl, tab: 'brand', label: L('General', 'عمومی'), show: site },
+          { to: settingsUrl, tab: 'contact', label: L('Contact details', 'اطلاعات تماس'), show: site },
+          { to: settingsUrl, tab: 'notifications', label: L('Staff notifications', 'اطلاع‌رسانی به کارکنان'), show: site },
+          { to: settingsUrl, tab: 'seo', label: L('SEO', 'سئو'), show: site && operator },
+          { to: settingsUrl, tab: 'modules', label: L('Modules', 'ماژول‌ها'), show: site && operator },
+          { to: `${base}/payments`, label: L('Payment gateways', 'درگاه‌های پرداخت'), show: can('payments:manage') && (shop || mod('leads')) },
+          { to: `${base}/transactions`, label: L('Transactions', 'تراکنش‌ها'), show: can('payments:manage') && (shop || mod('leads')) },
+          { to: `${base}/messaging`, label: t.su.messaging, show: operator },
+          { to: `${base}/members`, label: t.members, show: owner },
+        ]}
+      />
     </nav>
   );
 }
@@ -139,21 +350,38 @@ function AdminLayout({ me }: { me: Me }) {
   const sites = me.sites;
 
   const sidebar = (
-    <div className="flex h-full flex-col gap-6 p-4">
+    <div className="flex min-h-full flex-col gap-6 p-4">
       <Link to="/admin" className="px-3 font-display text-2xl text-ink">
         {t.brand}
       </Link>
-      {me.user.isPlatformAdmin && (
+      {isOperator(me) && (
         <div>
           <p className="mb-1 px-3 text-xs font-medium text-ink-soft uppercase rtl:normal-case">{t.platform}</p>
           <nav aria-label={t.platform} className="flex flex-col gap-0.5">
-            <NavItem to="/admin/platform/sites">{t.sites}</NavItem>
-            <NavItem to="/admin/platform/users">{t.users}</NavItem>
-            <NavItem to="/admin/platform/audit">{t.audit}</NavItem>
+            <NavItem item={{ to: "/admin/platform/sites", label: t.sites }} />
+            <NavItem item={{ to: "/admin/platform/users", label: t.users }} />
+            <NavItem item={{ to: "/admin/platform/bank", label: t.bk.nav }} />
+            <NavGroup
+              id="starters"
+              title={t.sr.nav}
+              items={[
+                { to: '/admin/platform/starters/pages', label: t.sr.pages },
+                { to: '/admin/platform/starters/tables', label: t.sr.tables },
+                { to: '/admin/platform/starters/headers', label: t.sr.headers },
+                { to: '/admin/platform/starters/footers', label: t.sr.footers },
+              ]}
+            />
+            <NavItem item={{ to: "/admin/platform/messaging", label: t.su.messaging }} />
+            <NavItem item={{ to: "/admin/platform/payments", label: t.pg.catalog }} />
+            <NavItem item={{ to: "/admin/platform/audit", label: t.audit }} />
+            {/* Studio deploy service (served next to the admin by the edge proxy). */}
+            <a href="/deploy/" className="block rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
+              {t.deploy}
+            </a>
           </nav>
         </div>
       )}
-      {(sites.length > 1 || me.user.isPlatformAdmin || siteId) && (
+      {(sites.length > 1 || isOperator(me)) && (
         <label className="flex flex-col gap-1 px-3 text-xs text-ink-soft">
           {t.chooseSite}
           <SiteSwitcher current={siteId} me={me} onChange={(id) => navigate(`/admin/sites/${id}`)} />
@@ -176,11 +404,11 @@ function AdminLayout({ me }: { me: Me }) {
 
   return (
     <div className="flex min-h-dvh bg-bg text-ink">
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-e border-line bg-surface lg:block">{sidebar}</aside>
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 overflow-y-auto overscroll-contain border-e border-line bg-surface lg:block">{sidebar}</aside>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <aside className={cn('absolute inset-y-0 w-72 bg-surface shadow-xl', dir === 'rtl' ? 'right-0' : 'left-0')} onClick={(e) => e.stopPropagation()}>
+          <aside className={cn('absolute inset-y-0 w-72 overflow-y-auto bg-surface shadow-xl', dir === 'rtl' ? 'right-0' : 'left-0')} onClick={(e) => e.stopPropagation()}>
             {sidebar}
           </aside>
         </div>

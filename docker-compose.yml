@@ -1,7 +1,8 @@
 # Whole stack for local use: `docker compose up -d --build`
 #   site http://localhost:5173 · admin http://localhost:5173/admin · API http://localhost:4000
 # Secrets come from the root .env (copy .env.example). After code changes, run with --build again.
-name: site-builder
+# Original single-stack setup. The studio platform (deploy/) uses the project name "site-builder".
+name: site-builder-legacy
 
 services:
   api:
@@ -66,5 +67,8 @@ services:
       - miniodata:/data
 
 volumes:
+  # Names kept from before the rename, so existing data stays attached.
   pgdata:
+    name: site-builder_pgdata
   miniodata:
+    name: site-builder_miniodata

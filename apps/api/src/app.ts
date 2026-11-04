@@ -1,7 +1,8 @@
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express, { Router } from 'express';
+import express, { Router, type RequestHandler } from 'express';
+import { forbidden } from './common/errors.js';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { registry } from './common/http.js';
@@ -11,28 +12,37 @@ import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { loadMemberTenant, loadPublicTenant } from './middleware/tenant.js';
 import { assetsRoutes } from './modules/assets/assets.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { ssoLogin } from './modules/auth/sso.js';
 import { productsRoutes, servicesRoutes } from './modules/catalog/catalog.js';
+import { collectionsRoutes } from './modules/collections/collections.routes.js';
+import { customersRoutes } from './modules/customers/customers.routes.js';
+import { loadCustomer } from './modules/customers/customers.service.js';
 import { leadsRoutes } from './modules/leads/leads.routes.js';
 import { membersRoutes } from './modules/members/members.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { pagesRoutes } from './modules/pages/pages.routes.js';
+import { bankRoutes } from './modules/bank/bank.routes.js';
+import { siteStarterRoutes, starterRoutes } from './modules/starters/starters.routes.js';
+import { shopAdminRoutes, shopPublicRoutes } from './modules/shop/shop.routes.js';
+import { messagingRoutes } from './modules/platform/messaging.js';
 import { platformRoutes } from './modules/platform/platform.routes.js';
 import { publicRoutes, resolveRoutes } from './modules/public/public.routes.js';
 import { siteRoutes } from './modules/site/site.routes.js';
 import { filesRoutes } from './storage/files.routes.js';
-import { paymentReturnRoutes, paymentSettingsRoutes } from './modules/payments/payments.routes.js';
+import { paymentCatalogRoutes } from './modules/payments/catalog.js';
+import { paymentReturnRoutes, paymentSettingsRoutes, paymentsListRoutes } from './modules/payments/payments.routes.js';
 import { overviewRoutes } from './modules/site/overview.routes.js';
 import './types.js';
 
 export function createApp(ctx: AppContext) {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 'loopback');
+  app.set('trust proxy', ctx.env.TRUST_PROXY);
 
   if (ctx.env.NODE_ENV !== 'test') app.use(pinoHttp({ logger: ctx.log, autoLogging: { ignore: (req) => req.url === '/health' } }));
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   // Credentials (cookies) are only accepted from the configured web origins.
-  app.use(cors({ origin: ctx.env.corsOrigins, credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] }));
+  app.use(cors({ origin: ctx.env.corsOrigins, credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Customer-CSRF'] }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(loadSession(ctx));
@@ -43,27 +53,43 @@ export function createApp(ctx: AppContext) {
   });
   app.use(filesRoutes(ctx));
 
+  app.get('/api/v1/auth/sso', (req, res, next) => ssoLogin(ctx, req, res).catch(next));
   app.use('/api/v1/auth', authRoutes(ctx));
+  app.use('/api/v1/platform/bank', requirePlatformAdmin, bankRoutes(ctx));
+  app.use('/api/v1/platform/starters', requirePlatformAdmin, starterRoutes(ctx));
+  app.use('/api/v1/platform/payment-gateways', requirePlatformAdmin, paymentCatalogRoutes(ctx));
+  app.use('/api/v1/platform', requirePlatformAdmin, messagingRoutes(ctx, () => ctx.resetMessaging()));
   app.use('/api/v1/platform', requirePlatformAdmin, platformRoutes(ctx));
 
   // Everything under a site: membership (or platform admin) is checked first, from the session.
   const site = Router({ mergeParams: true });
   site.use(requireAuth, loadMemberTenant(ctx));
-  site.use('/', siteRoutes());
-  site.use('/pages', pagesRoutes());
+  // Cell mode: the client manages its data; building the site (pages, design) is the operator's.
+  const clientLocked = !!ctx.env.CELL_SLUG;
+  const operatorOnly: RequestHandler = (req, _res, next) =>
+    next(clientLocked && !req.auth!.user.isPlatformAdmin ? forbidden('Only the site operator can change the site structure') : undefined);
+  site.use('/', siteRoutes(clientLocked));
+  site.use('/pages', pagesRoutes(clientLocked));
   site.use('/services', servicesRoutes(ctx.storage));
   site.use('/products', productsRoutes(ctx.storage));
+  site.use('/collections', collectionsRoutes(ctx.storage, operatorOnly));
   site.use('/payment-settings', paymentSettingsRoutes(ctx));
-  site.use('/overview', overviewRoutes());
-  site.use('/leads', leadsRoutes());
-  site.use('/orders', ordersRoutes());
+  site.use('/payments', paymentsListRoutes(ctx));
+  site.use('/overview', operatorOnly, overviewRoutes());
+  site.use('/leads', leadsRoutes(ctx));
+  site.use('/orders', ordersRoutes(ctx));
+  site.use('/customers', customersRoutes());
   site.use('/assets', assetsRoutes(ctx));
   site.use('/members', membersRoutes(ctx));
+  site.use('/shop', shopAdminRoutes());
+  // The studio's starters: operators only.
+  site.use('/starters', requirePlatformAdmin, siteStarterRoutes(ctx));
   app.use('/api/v1/sites/:siteId', site);
 
   app.use('/api/v1/payments', express.urlencoded({ extended: false, limit: '10kb' }), paymentReturnRoutes(ctx));
   app.use('/api/v1/public', resolveRoutes(ctx));
-  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), publicRoutes(ctx));
+  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), loadCustomer(), publicRoutes(ctx));
+  app.use('/api/v1/public/sites/:siteSlug', loadPublicTenant(ctx), loadCustomer(), shopPublicRoutes(ctx));
 
   const openapi = new OpenApiGeneratorV3(registry.definitions).generateDocument({
     openapi: '3.0.3',

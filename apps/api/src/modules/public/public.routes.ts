@@ -1,16 +1,25 @@
-import { leadInputSchema, orderInputSchema } from '@site-builder/shared';
+import { leadInputSchema, orderInputSchema, paymentProviderSchema, withSettingDefaults } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
+import type pg from 'pg';
 import { z } from 'zod';
 import { sha256 } from '../../common/crypto.js';
-import { notFound } from '../../common/errors.js';
+import { badRequest, conflict, notFound } from '../../common/errors.js';
 import { ApiRouter, pageMeta, paginationQuery } from '../../common/http.js';
 import { selectList } from '../../common/sql.js';
 import type { AppContext } from '../../context.js';
 import { requireModule } from '../../middleware/tenant.js';
 import { productsTable, servicesTable } from '../catalog/catalog.js';
 import { withImageUrls } from '../assets/urls.js';
-import { createOrder, orderItems } from '../orders/orders.service.js';
-import { findOrderForBuyer, gatewayFor, getPaymentSettings, startPayment } from '../payments/payments.service.js';
+import { registerPublicCollectionRoutes } from '../collections/collections.routes.js';
+import { availabilityOf, loadCollections, seatsTaken, type ItemRow } from '../collections/collections.service.js';
+import { createOrder, orderItems, type LowStock } from '../orders/orders.service.js';
+import { findOrderForBuyer, getPaymentSettings, startPayment, usableGateways } from '../payments/payments.service.js';
+import { verifiedCustomer } from '../customers/customers.service.js';
+import { accessValid, loadSettings, siteBaseUrl } from '../interactions/context.js';
+import { notifyStaff } from '../interactions/notify.js';
+import { registerInteractionRoutes } from '../interactions/public.routes.js';
+import { registerMemberRoutes } from '../collections/members.routes.js';
+import { createRequest } from '../interactions/requests.service.js';
 
 const slugParam = z.object({ slug: z.string().min(1).max(64) });
 
@@ -23,7 +32,8 @@ export function publicRoutes(ctx: AppContext) {
 
   const submitLimiter = rateLimit({
     windowMs: 10 * 60_000,
-    limit: ctx.env.NODE_ENV === 'test' ? 1000 : 5,
+    // Strict on client servers; the studio and development (one shared address for every tester) allow many more.
+    limit: ctx.env.NODE_ENV === 'production' ? 5 : 1000,
     keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? '')}:${req.params.siteSlug}`,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
@@ -32,8 +42,14 @@ export function publicRoutes(ctx: AppContext) {
 
   r.route({ method: 'get', path: '/settings', summary: 'Public site configuration' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id = 1');
-    return { data: rows[0]?.settings ?? null };
+    if (!rows[0]?.settings) return { data: null };
+    // Workflows (internal stage names, message texts) and staff addresses stay private.
+    const { notifications: _n, ...settings } = withSettingDefaults(rows[0].settings);
+    return { data: { ...settings, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
   });
+
+  registerInteractionRoutes(r, ctx);
+  registerMemberRoutes(r, ctx);
 
   r.route({ method: 'get', path: '/pages', summary: 'Published pages (for navigation and sitemap)' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(
@@ -53,6 +69,8 @@ export function publicRoutes(ctx: AppContext) {
     if (!rows[0]) throw notFound('Page');
     return { data: rows[0] };
   });
+
+  registerPublicCollectionRoutes(r, ctx.storage);
 
   r.route({ method: 'get', path: '/services', summary: 'Published services', middleware: [requireModule('services')] }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(`SELECT ${selectList(servicesTable)} FROM services WHERE status = 'published' ORDER BY position, created_at`);
@@ -105,16 +123,18 @@ export function publicRoutes(ctx: AppContext) {
   });
 
   r.route(
-    { method: 'post', path: '/leads', summary: 'Submit a contact / consultation / service request', status: 201, body: leadInputSchema, middleware: [submitLimiter, requireModule('leads')] },
+    { method: 'post', path: '/leads', summary: 'Submit a customer request (consultation, reservation, demo, question…)', status: 201, body: leadInputSchema, middleware: [submitLimiter, requireModule('leads')] },
     async ({ req, body }) => {
       // Honeypot filled in: accept silently so bots learn nothing, but store nothing.
       if (body.website) return { data: { received: true } };
-      const { rows } = await req.tenant!.db.query(
-        `INSERT INTO leads (type, name, email, phone, project_type, budget, message, source_path, ip_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at AS "createdAt"`,
-        [body.type, body.name, body.email, body.phone, body.projectType ?? null, body.budget ?? null, body.message, body.sourcePath ?? null, req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null],
-      );
-      return { data: { received: true, id: rows[0].id, createdAt: rows[0].createdAt } };
+      const itemRef = body.item ? await requestedItem(req.tenant!.db, body.item) : null;
+      const { lead, code, token, paymentDue } = await createRequest(ctx, req.tenant!, body, {
+        customer: verifiedCustomer(req),
+        ipHash: req.ip ? sha256(`${req.tenant!.id}:${req.ip}`) : null,
+        itemRef,
+      });
+      // The tracking code and token let the visitor follow (and pay for) the request without an account.
+      return { data: { received: true, id: lead.id, number: lead.number, code, token, paymentDue, createdAt: lead.createdAt } };
     },
   );
 
@@ -125,16 +145,27 @@ export function publicRoutes(ctx: AppContext) {
       summary: 'Place an order (prices and stock are checked on the server; payment is not processed)',
       status: 201,
       body: orderInputSchema,
-      middleware: [submitLimiter, requireModule('products'), requireModule('orders')],
+      middleware: [submitLimiter, requireModule('orders')],
     },
     async ({ req, body }) => {
-      const order = await createOrder(req.tenant!.db, body);
+      // Products need the shop; content-table items only need orders.
+      if (body.items.some((l) => l.productId) && !req.tenant!.modules?.products) throw badRequest('This site does not sell products');
+      if (body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
+      const order = await createOrder(req.tenant!.db, body, verifiedCustomer(req)?.id ?? null);
+      const settings = await loadSettings(req.tenant!.db);
+      const base = await siteBaseUrl(ctx, req.tenant!);
+      await notifyStaff(ctx, req.tenant!, settings, `Order #${order.number}`, `${body.customer.name} — #${order.number}\n\n${base}/admin/sites/${req.tenant!.slug}/orders?open=${order.id}`);
+      if (order.lowStock.length) {
+        const list = (order.lowStock as LowStock[]).map((x) => `- ${x.name.fa || x.name.en}${x.variant ? ` (${x.variant})` : ''}: ${x.stock}`).join('\n');
+        await notifyStaff(ctx, req.tenant!, settings, 'Low stock / موجودی کم', `${list}\n\n${base}/admin/sites/${req.tenant!.slug}/products`);
+      }
       return {
         data: {
           number: order.number,
           orderToken: order.orderToken,
           status: order.status,
           paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
           currency: order.currency,
           totalMinor: order.totalMinor,
           items: order.items,
@@ -143,9 +174,18 @@ export function publicRoutes(ctx: AppContext) {
     },
   );
 
-  r.route({ method: 'get', path: '/payment-methods', summary: 'Whether online payment is available, and whether it is a test gateway', middleware: [requireModule('orders')] }, async ({ req }) => {
-    const gateway = gatewayFor(ctx, await getPaymentSettings(req.tenant!.db), req.tenant!.slug);
-    return { data: { online: !!gateway, provider: gateway?.name ?? null, isTest: gateway?.isTest ?? false } };
+  r.route({ method: 'get', path: '/payment-methods', summary: 'The online gateways a buyer can choose (first = default) and payment on delivery', middleware: [requireModule('orders')] }, async ({ req }) => {
+    const settings = await getPaymentSettings(req.tenant!.db);
+    const gateways = await usableGateways(ctx, req.tenant!);
+    return {
+      data: {
+        online: gateways.length > 0,
+        cod: settings.allowCod,
+        provider: gateways[0]?.provider ?? null,
+        isTest: gateways[0]?.gateway.isTest ?? false,
+        gateways: gateways.map((g) => ({ provider: g.provider, label: g.label, description: g.description, isTest: g.gateway.isTest })),
+      },
+    };
   });
 
   const orderLookup = z.object({ number: z.string().regex(/^\d{1,12}$/) });
@@ -179,25 +219,38 @@ export function publicRoutes(ctx: AppContext) {
       path: '/orders/:number/pay',
       summary: 'Start online payment; returns the gateway URL',
       params: orderLookup,
-      body: z.object({ token: z.string().min(10).max(100), locale: z.enum(['en', 'fa']).default('en') }),
+      body: z.object({ token: z.string().max(200).default(''), locale: z.enum(['en', 'fa']).default('en'), gateway: paymentProviderSchema.optional() }),
       middleware: [submitLimiter, requireModule('orders')],
     },
     async ({ req, params, body }) => {
-      const base = await siteBaseUrl(ctx, req.tenant!.id);
-      const returnUrl = `${base}${body.locale === 'fa' ? '/fa' : ''}/checkout/result?order=${params.number}&token=${encodeURIComponent(body.token)}`;
-      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl }) };
+      const base = await siteBaseUrl(ctx, req.tenant!);
+      // Signed in as the buyer, or holding a signed link (order page): no order token needed.
+      const { rows } = await req.tenant!.db.query<{ id: string; customer_id: string | null }>('SELECT id, customer_id FROM orders WHERE number = $1', [params.number]);
+      const customer = verifiedCustomer(req);
+      const verified =
+        !!rows[0] && ((!!customer && rows[0].customer_id === customer.id) || (body.token.startsWith('s.') && accessValid(ctx, req.tenant!.id, 'order', { id: rows[0].id, public_token_hash: null }, body.token)));
+      const returnUrl = verified
+        ? `${base}${body.locale === 'fa' ? '/fa' : ''}/track/${params.number}${body.token ? `?t=${encodeURIComponent(body.token)}` : ''}`
+        : `${base}${body.locale === 'fa' ? '/fa' : ''}/checkout/result?order=${params.number}&token=${encodeURIComponent(body.token)}`;
+      return { data: await startPayment(ctx, req.tenant!, { number: params.number, token: body.token, returnUrl, provider: body.gateway }, verified) };
     },
   );
 
   r.route({ method: 'get', path: '/sitemap.xml', summary: 'XML sitemap of published content in both languages' }, async ({ req, res }) => {
-    const base = await siteBaseUrl(ctx, req.tenant!.id);
+    const base = await siteBaseUrl(ctx, req.tenant!);
     const db = req.tenant!.db;
     const modules = (await db.query(`SELECT settings->'modules' AS modules FROM site_settings WHERE id = 1`)).rows[0]?.modules ?? {};
     const entries: { path: string; lastmod: Date }[] = [];
     const pages = await db.query(
       `SELECT slug, is_home, published_at FROM pages WHERE published IS NOT NULL AND NOT coalesce((published_seo->>'noIndex')::boolean, false)`,
     );
-    for (const p of pages.rows) entries.push({ path: p.is_home ? '' : `/${p.slug}`, lastmod: p.published_at });
+    // A table's template page is only shown through its items.
+    const templates = new Set((await db.query<{ detail_page: string }>(`SELECT detail_page FROM collections WHERE detail_page <> ''`)).rows.map((r) => r.detail_page));
+    for (const p of pages.rows) if (!templates.has(p.slug)) entries.push({ path: p.is_home ? '' : `/${p.slug}`, lastmod: p.published_at });
+    const items = await db.query(
+      `SELECT c.slug AS collection, i.slug, i.updated_at FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE i.status = 'published'`,
+    );
+    for (const i of items.rows) entries.push({ path: `/${i.collection}/${encodeURIComponent(i.slug)}`, lastmod: i.updated_at });
     if (modules.services) {
       for (const s of (await db.query(`SELECT slug, updated_at FROM services WHERE status = 'published'`)).rows) entries.push({ path: `/services/${s.slug}`, lastmod: s.updated_at });
     }
@@ -226,13 +279,25 @@ export function publicRoutes(ctx: AppContext) {
   return r.router;
 }
 
-/** Canonical origin of a site: its primary domain in production, the web app URL otherwise. */
-async function siteBaseUrl(ctx: AppContext, tenantId: string): Promise<string> {
-  if (ctx.env.NODE_ENV === 'production') {
-    const { rows } = await ctx.control.query<{ domain: string }>('SELECT domain FROM tenant_domains WHERE tenant_id = $1 AND is_primary', [tenantId]);
-    if (rows[0]) return `https://${rows[0].domain}`;
-  }
-  return ctx.env.WEB_APP_URL.replace(/\/$/, '');
+/**
+ * The item a request is about, checked like a booking: it must be published and, when requests
+ * take a seat, open and not full. Returns what is stored with the request.
+ */
+async function requestedItem(db: pg.Pool, ref: { collection: string; slug: string }) {
+  const tables = await loadCollections(db);
+  const table = tables.find((t) => t.slug === ref.collection);
+  if (!table) throw badRequest('Unknown item');
+  const { rows } = await db.query<ItemRow>(
+    `SELECT id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM collection_items WHERE collection_id = $1 AND slug = $2 AND status = 'published'`,
+    [table.id, ref.slug],
+  );
+  const item = rows[0];
+  if (!item) throw badRequest('Unknown item');
+  const state = availabilityOf(table, item, (await seatsTaken(db, table, [item.id])).get(item.id) ?? 0);
+  if (state.reason === 'deadline') throw badRequest('Registration for this item has closed');
+  if (table.commerce.requestsTakeSeat && state.reason === 'full') throw conflict('This item is full');
+  return { collection: table.slug, id: item.id, slug: item.slug, title: item.title };
 }
 
 /** Maps a custom domain to its site id, for hosting each client on their own domain. */

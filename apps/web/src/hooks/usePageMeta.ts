@@ -62,7 +62,8 @@ export function usePageMeta(title: string, description?: string, options: MetaOp
     setMeta('property', 'og:type', 'website');
     setMeta('property', 'og:locale', locale === 'fa' ? 'fa_IR' : 'en_US');
     setMeta('property', 'og:url', locale === 'fa' ? faUrl : enUrl);
-    setMeta('property', 'og:image', image ?? null);
+    // A page without its own image shares the site's default image.
+    setMeta('property', 'og:image', image ?? (settings.meta?.shareImageUrl || null));
     setLink('canonical', locale === 'fa' ? faUrl : enUrl);
     setLink('alternate', enUrl, 'en');
     setLink('alternate', faUrl, 'fa');

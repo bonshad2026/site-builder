@@ -1,4 +1,6 @@
-export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
+const configuredApi = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+/** VITE_API_URL=same-origin: the API is served from the page's own origin (studio and previews). */
+export const API_URL = (configuredApi === 'same-origin' && typeof window !== 'undefined' ? window.location.origin : configuredApi).replace(/\/$/, '');
 
 /** Without an API the public site runs on bundled demo content and the admin panel is unavailable. */
 export const apiAvailable = () => API_URL !== '';
@@ -8,7 +10,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
-    public readonly details?: { path: string; message: string }[],
+    /** Validation problems: where, the English message, and the kind of problem with its limits. */
+    public readonly details?: { path: string; message: string; code?: string; [limit: string]: unknown }[],
   ) {
     super(message);
   }
@@ -28,8 +31,21 @@ export interface Envelope<T> {
  * JSON request to the API. Sends the session cookie and, for state-changing
  * requests, the CSRF token. Throws ApiError with the server's error code.
  */
+/**
+ * Answers requests without the network (the studio's starter preview, which shows a starter's
+ * pages with its own sample data); undefined lets the request go to the API.
+ */
+export type ApiMock = (method: string, path: string, body: unknown) => Promise<Envelope<unknown> | undefined> | Envelope<unknown> | undefined;
+let apiMock: ApiMock | null = null;
+export const setApiMock = (mock: ApiMock | null) => {
+  apiMock = mock;
+};
+export const mockedRequest = (method: string, path: string, body: unknown) => apiMock?.(method, path, body);
+
 export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<Envelope<T>> {
   const method = init.method ?? 'GET';
+  const mocked = await mockedRequest(method, path, init.body);
+  if (mocked !== undefined) return mocked as Envelope<T>;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') {
@@ -43,7 +59,7 @@ export async function apiRequest<T>(path: string, init: { method?: string; body?
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   if (res.status === 204) return { data: undefined as T };
-  const json = (await res.json().catch(() => null)) as (Envelope<T> & { error?: { code: string; message: string; details?: { path: string; message: string }[] } }) | null;
+  const json = (await res.json().catch(() => null)) as (Envelope<T> & { error?: { code: string; message: string; details?: ApiError['details'] } }) | null;
   if (!res.ok || !json) {
     const e = json?.error;
     throw new ApiError(res.status, e?.code ?? 'network_error', e?.message ?? `Request failed (${res.status})`, e?.details);

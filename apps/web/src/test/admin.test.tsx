@@ -19,15 +19,17 @@ async function loadApp() {
   return (await import('./renderApp')).renderApp;
 }
 
-describe('admin panel access', () => {
+// The first test loads the whole admin bundle, which is slow when every test file runs at once.
+describe('admin panel access', { timeout: 30_000 }, () => {
   it('redirects to sign-in when there is no session', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: { code: 'unauthorized', message: 'Authentication required' } }, { status: 401 })));
     const app = (await loadApp())('/admin/sites/atelier-navar/pages');
-    expect(await screen.findByRole('heading', { name: /sign in/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /sign in/i }, { timeout: 20_000 })).toBeInTheDocument();
     expect(app.router().state.location.search).toContain('next=%2Fadmin%2Fsites%2Fatelier-navar%2Fpages');
   });
 
-  it('signs in, sends the CSRF token on changes, and lands on the site dashboard', async () => {
+  // The dashboard is the operator's; a site owner lands on their first content list.
+  it('signs in, sends the CSRF token on changes, and lands on the owner products list', async () => {
     let signedIn = false;
     const calls: { path: string; method: string; headers: Record<string, string> }[] = [];
     vi.stubGlobal(
@@ -57,12 +59,11 @@ describe('admin panel access', () => {
     );
 
     (await loadApp())('/admin/login');
-    await userEvent.type(await screen.findByLabelText(/email/i), 'owner@example.com');
+    await userEvent.type(await screen.findByLabelText(/email/i, {}, { timeout: 20_000 }), 'owner@example.com');
     await userEvent.type(screen.getByLabelText(/password/i), 'correct-horse-42');
     await userEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
 
-    expect(await screen.findByText(/new enquiries/i)).toBeInTheDocument();
-    expect(screen.getByText(/test payments \(not real money\)/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^products$/i }, { timeout: 20_000 })).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: /sign out/i })[0]);
     await waitFor(() => expect(calls.some((c) => c.path === '/auth/logout')).toBe(true));

@@ -50,9 +50,10 @@ export function authRoutes(ctx: AppContext) {
     {
       method: 'post',
       path: '/login',
-      summary: 'Sign in with email and password',
+      summary: 'Sign in with email (or username) and password',
       middleware: [limiter],
-      body: z.object({ email: emailSchema, password: z.string().min(1).max(200) }),
+      // Accounts are found by their sign-in name: an email, or a plain username such as "admin".
+      body: z.object({ email: z.string().trim().toLowerCase().min(1).max(254), password: z.string().min(1).max(200) }),
     },
     async ({ req, res, body }) => {
       const user = await auth.loginWithPassword(ctx, body.email, body.password, req.ip);

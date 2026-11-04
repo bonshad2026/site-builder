@@ -43,13 +43,15 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('contact form with the API', () => {
+// Typing a whole enquiry with user-event takes a few seconds on slower machines.
+describe('contact form with the API', { timeout: 15_000 }, () => {
   it('posts the lead to the site’s public endpoint and confirms real receipt', async () => {
     const calls = fakeApi((url, init) => (init.method === 'POST' && url.pathname.endsWith('/leads') ? { status: 201, body: { data: { received: true } } } : undefined));
     (await loadApp())('/contact?service=design-consultation');
 
     await userEvent.type(await screen.findByLabelText(/full name/i), 'Sara Ahmadi');
     await userEvent.type(screen.getByLabelText(/^email/i), 'sara@example.com');
+    await userEvent.selectOptions(screen.getByLabelText(/project type/i), 'Consultation');
     await userEvent.type(screen.getByLabelText(/tell us about your space/i), 'A two-bedroom apartment in need of a calmer living room.');
     await userEvent.click(screen.getByLabelText(/agree to be contacted/i));
     await userEvent.click(screen.getByRole('button', { name: /send enquiry/i }));
@@ -57,7 +59,8 @@ describe('contact form with the API', () => {
     expect(await screen.findByText(/we received your enquiry/i)).toBeInTheDocument();
     const post = calls.find((c) => c.init.method === 'POST')!;
     expect(post.url.pathname).toBe('/api/v1/public/sites/atelier-navar/leads');
-    expect(JSON.parse(String(post.init.body))).toMatchObject({ type: 'consultation', consent: true, email: 'sara@example.com' });
+    // Every question, name, email and consent included, is an answer of the form.
+    expect(JSON.parse(String(post.init.body))).toMatchObject({ type: 'consultation', answers: { name: 'Sara Ahmadi', email: 'sara@example.com', 'project-type': 'Consultation', consent: true } });
   });
 
   it('shows an error and does not claim success when the API rejects the lead', async () => {
@@ -65,7 +68,7 @@ describe('contact form with the API', () => {
     (await loadApp())('/contact');
     await userEvent.type(await screen.findByLabelText(/full name/i), 'Sara Ahmadi');
     await userEvent.type(screen.getByLabelText(/^email/i), 'sara@example.com');
-    await userEvent.selectOptions(screen.getByLabelText(/project type/i), 'residential');
+    await userEvent.selectOptions(screen.getByLabelText(/project type/i), 'Residential interior');
     await userEvent.type(screen.getByLabelText(/tell us about your space/i), 'A two-bedroom apartment in need of a calmer living room.');
     await userEvent.click(screen.getByLabelText(/agree to be contacted/i));
     await userEvent.click(screen.getByRole('button', { name: /send enquiry/i }));
@@ -101,7 +104,7 @@ describe('cart and checkout', () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith('http://api.test/api/v1/payments/sandbox/x/SBX-1'));
     const order = calls.find((c) => c.init.method === 'POST' && c.url.pathname.endsWith('/orders'))!;
     const body = JSON.parse(String(order.init.body));
-    expect(body.items).toEqual([{ productId: fallbackProducts[0].id, quantity: 2 }]);
+    expect(body.items).toEqual([{ productId: fallbackProducts[0].id, quantity: 2, option: '', variant: '' }]);
     expect(JSON.stringify(body)).not.toMatch(/price/i);
   });
 

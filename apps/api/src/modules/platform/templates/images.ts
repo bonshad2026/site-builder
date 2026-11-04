@@ -1,0 +1,145 @@
+import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
+import type pg from 'pg';
+import type { AppContext } from '../../../context.js';
+
+/**
+ * Template photos come from Unsplash (free licence). A reference is either a long photo id
+ * ("1555041469-a586c61ea9bc") or a short one from a photo page ("NnsqpLjiA94").
+ * Order of preference: a local copy in var/demo-images/<ref>.jpg, the network, then a
+ * soft gradient placeholder in the template's colours (so a site works offline too).
+ */
+const LOCAL_DIR = process.env.DEMO_IMAGES_DIR || path.resolve(process.cwd(), '../../var/demo-images');
+
+const sourceUrl = (ref: string) =>
+  /^\d{9,}-[0-9a-f]+$/.test(ref)
+    ? `https://images.unsplash.com/photo-${ref}?auto=format&fm=jpg&q=78&w=1800`
+    : `https://unsplash.com/photos/${ref}/download?force=true&w=1800`;
+
+/** Vertical gradient PNG (small; the browser scales it). */
+function gradientPng(from: string, to: string) {
+  const [w, h] = [64, 80];
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [a, b] = [rgb(from), rgb(to)];
+  const rows: Buffer[] = [];
+  for (let y = 0; y < h; y++) {
+    const t = y / (h - 1);
+    const px = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    rows.push(Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: w }, () => px).flat())]));
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(Buffer.concat(rows))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** Template photos stored as gradient placeholders (no local copy or network when the site was made). */
+const PLACEHOLDER_PHOTOS = `FROM assets WHERE original_name LIKE 'unsplash-%.png'`;
+
+/** How many placeholder photos a site still has; the studio offers "Refresh photos" only when > 0. */
+export async function countPlaceholderPhotos(db: pg.Pool) {
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n ${PLACEHOLDER_PHOTOS}`);
+  return rows[0].n;
+}
+
+/**
+ * Swaps a site's placeholder template photos for real ones that have since been placed in
+ * var/demo-images: new file, same asset id, and links in pages and settings updated.
+ * Returns how many photos were replaced and how many are still missing.
+ */
+export async function refreshTemplatePhotos(ctx: AppContext, db: pg.Pool) {
+  const { rows } = await db.query<{ id: string; storage_key: string; original_name: string }>(
+    `SELECT id, storage_key, original_name ${PLACEHOLDER_PHOTOS}`,
+  );
+  let replaced = 0;
+  const missing: string[] = [];
+  for (const a of rows) {
+    const ref = a.original_name.slice('unsplash-'.length, -'.png'.length);
+    const local = path.join(LOCAL_DIR, `${ref}.jpg`);
+    if (!existsSync(local)) {
+      missing.push(ref);
+      continue;
+    }
+    const body = readFileSync(local);
+    const key = a.storage_key.replace(/\.png$/, '.jpg');
+    await ctx.storage.put(key, body, 'image/jpeg');
+    const [oldUrl, newUrl] = [ctx.storage.publicUrl(a.storage_key), ctx.storage.publicUrl(key)];
+    await db.query(`UPDATE assets SET storage_key = $2, original_name = $3, content_type = 'image/jpeg', size_bytes = $4 WHERE id = $1`, [a.id, key, `unsplash-${ref}.jpg`, body.length]);
+    await db.query(`UPDATE pages SET draft = replace(draft::text, $1, $2)::jsonb, published = replace(published::text, $1, $2)::jsonb WHERE draft::text LIKE '%' || $1 || '%' OR published::text LIKE '%' || $1 || '%'`, [oldUrl, newUrl]);
+    await db.query(`UPDATE page_versions SET document = replace(document::text, $1, $2)::jsonb WHERE document::text LIKE '%' || $1 || '%'`, [oldUrl, newUrl]);
+    await db.query(`UPDATE site_settings SET settings = replace(settings::text, $1, $2)::jsonb WHERE settings::text LIKE '%' || $1 || '%'`, [oldUrl, newUrl]);
+    await ctx.storage.delete(a.storage_key).catch(() => undefined);
+    replaced++;
+  }
+  return { replaced, missing: [...new Set(missing)] };
+}
+
+export interface StoredImage {
+  id: string;
+  url: string;
+}
+
+/**
+ * A template photo's bytes: the local copy, else a download (skipped once the network failed),
+ * else a gradient placeholder in the given colours.
+ */
+export function templatePhotoLoader(ctx: AppContext, palette: [string, string]) {
+  let offline = false;
+  return async function load(ref: string): Promise<{ body: Buffer; ext: string; contentType: string }> {
+    const local = path.join(LOCAL_DIR, `${ref}.jpg`);
+    if (existsSync(local)) return { body: readFileSync(local), ext: 'jpg', contentType: 'image/jpeg' };
+    if (!offline) {
+      try {
+        const res = await (ctx.httpFetch ?? fetch)(sourceUrl(ref), { signal: AbortSignal.timeout(15000) });
+        if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) throw new Error(`HTTP ${res.status}`);
+        return { body: Buffer.from(await res.arrayBuffer()), ext: 'jpg', contentType: 'image/jpeg' };
+      } catch (err) {
+        offline = true;
+        ctx.log.warn(`template photos unavailable (${(err as Error).message}); using placeholders`);
+      }
+    }
+    return { body: gradientPng(...palette), ext: 'png', contentType: 'image/png' };
+  };
+}
+
+/** Stores template photos as the site's own assets; one download per photo per run. */
+export function templateImageStore(ctx: AppContext, db: pg.Pool, tenantId: string, palette: [string, string]) {
+  const cache = new Map<string, StoredImage>();
+  const load = templatePhotoLoader(ctx, palette);
+
+  return async function store(ref: string): Promise<StoredImage> {
+    const hit = cache.get(ref);
+    if (hit) return hit;
+    const { body, ext, contentType } = await load(ref);
+    const id = randomUUID();
+    const now = new Date();
+    const key = `public/tenants/${tenantId}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${id}.${ext}`;
+    await ctx.storage.put(key, body, contentType);
+    await db.query(`INSERT INTO assets (id, storage_key, original_name, content_type, size_bytes, visibility, kind) VALUES ($1, $2, $3, $4, $5, 'public', 'image')`, [
+      id,
+      key,
+      `unsplash-${ref}.${ext}`,
+      contentType,
+      body.length,
+    ]);
+    const stored = { id, url: ctx.storage.publicUrl(key) };
+    cache.set(ref, stored);
+    return stored;
+  };
+}

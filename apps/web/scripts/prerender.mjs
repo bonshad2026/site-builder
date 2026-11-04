@@ -43,12 +43,24 @@ const get = async (p) => {
   return res.headers.get('content-type')?.includes('json') ? (await res.json()).data : res.text();
 };
 
-let settings, pages, services, products;
+let settings, pages, services, products, tables;
+const tableItems = new Map();
 try {
   settings = await get('/settings');
   pages = await get('/pages');
   services = settings.modules.services ? await get('/services') : [];
   products = settings.modules.products ? await get('/products?pageSize=100') : [];
+  // Content tables (sites built before them have none; an older API answers 404).
+  tables = (await get('/collections').catch(() => [])).filter((c) => c.slug !== 'products');
+  for (const c of tables) {
+    const items = [];
+    for (let page = 1; page <= 50; page++) {
+      const batch = await get(`/collections/${c.slug}/items?page=${page}&pageSize=60`);
+      items.push(...batch);
+      if (batch.length < 60) break;
+    }
+    tableItems.set(c.slug, items);
+  }
 } catch (err) {
   console.warn(`[prerender] API not reachable (${err.message}); skipping.`);
   process.exit(0);
@@ -59,13 +71,17 @@ const pick = (v, locale) => (v ? v[locale] || v[locale === 'fa' ? 'en' : 'fa'] |
 const template = await readFile(path.join(dist, 'index.html'), 'utf8');
 
 const routes = [];
+const templates = new Set(tables.map((c) => c.detailPage).filter(Boolean));
 for (const p of pages) {
-  if (p.seo?.noIndex) continue;
+  if (p.seo?.noIndex || templates.has(p.slug)) continue;
   routes.push({ path: p.isHome ? '' : `/${p.slug}`, title: (l) => pick(p.seo?.title, l) || (p.isHome ? pick(settings.tagline, l) || pick(p.title, l) : pick(p.title, l)), description: (l) => pick(p.seo?.description, l) });
 }
 if (settings.modules.services) {
   routes.push({ path: '/services', title: (l) => (l === 'fa' ? 'خدمات' : 'Services') });
   for (const s of services) routes.push({ path: `/services/${s.slug}`, title: (l) => pick(s.title, l), description: (l) => pick(s.summary, l), image: s.imageUrl });
+}
+for (const c of tables) {
+  for (const it of tableItems.get(c.slug) ?? []) routes.push({ path: `/${c.slug}/${it.slug}`, title: (l) => pick(it.title, l), image: it.imageUrl });
 }
 if (settings.modules.products) {
   routes.push({ path: '/products', title: (l) => (l === 'fa' ? 'مجموعه' : 'Collection') });
@@ -92,7 +108,10 @@ for (const route of routes) {
       `<meta property="og:description" content="${esc(description)}" />`,
       `<meta property="og:url" content="${esc(locale === 'fa' ? fa : en)}" />`,
       `<meta property="og:locale" content="${locale === 'fa' ? 'fa_IR' : 'en_US'}" />`,
-      route.image ? `<meta property="og:image" content="${esc(route.image)}" />` : '',
+      route.image || settings.meta?.shareImageUrl ? `<meta property="og:image" content="${esc(route.image || settings.meta.shareImageUrl)}" />` : '',
+      settings.meta?.faviconUrl ? `<link rel="icon" href="${esc(settings.meta.faviconUrl)}" />` : '',
+      // The operator's own head code (verification tags, analytics) as written; the app does not add it again.
+      settings.meta?.headCode?.trim() ? `<!--sb-head-->${settings.meta.headCode}<!--/sb-head-->` : '',
     ]
       .filter(Boolean)
       .join('\n    ');

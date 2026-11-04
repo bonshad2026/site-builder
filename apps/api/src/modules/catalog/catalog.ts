@@ -38,16 +38,22 @@ export const productsTable: TableDef = {
     currency: 'currency',
     stock: 'stock',
     isAvailable: 'is_available',
+    discountPercent: 'discount_percent',
+    colors: 'colors',
+    maxPerOrder: 'max_per_order',
     featured: 'featured',
     materials: 'materials',
     dimensions: 'dimensions',
     leadTime: 'lead_time',
     imageAssetId: 'image_asset_id',
+    images: 'image_asset_ids',
+    attributes: 'attributes',
+    variants: 'variants',
     status: 'status',
     position: 'position',
     seo: 'seo',
   },
-  json: new Set(['name', 'description', 'materials', 'leadTime', 'seo']),
+  json: new Set(['name', 'description', 'materials', 'leadTime', 'colors', 'images', 'attributes', 'variants', 'seo']),
 };
 
 interface CatalogConfig {

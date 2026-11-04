@@ -3,6 +3,7 @@ import type { Env } from './config/env.js';
 import { createLogger, type Logger } from './common/logger.js';
 import { TenantPools } from './database/tenant/pools.js';
 import { createNotifiers, type EmailSender, type SmsSender } from './modules/auth/notifications.js';
+import { loadMessaging } from './modules/platform/messaging.js';
 import { createStorage, type StorageAdapter } from './storage/storage.js';
 
 /** Process-wide dependencies, created once and passed to modules explicitly. */
@@ -16,13 +17,16 @@ export interface AppContext {
   storage: StorageAdapter;
   /** Outgoing HTTP (payment gateways); replaceable in tests. */
   httpFetch: typeof fetch;
+  /** Re-read e-mail / SMS settings saved in the panel. */
+  resetMessaging: () => void;
 }
 
 export function createContext(env: Env, overrides: Partial<AppContext> = {}): AppContext {
   const log = overrides.log ?? createLogger(env.LOG_LEVEL, env.NODE_ENV === 'development');
   const control = new pg.Pool({ connectionString: env.CONTROL_DATABASE_URL, max: 10, application_name: 'site-builder-api' });
   control.on('error', (err) => log.error({ err }, 'control-plane pool error'));
-  const notifiers = createNotifiers(env, log);
+  // E-mail and SMS set in the panel (control database) win over the environment's.
+  const notifiers = createNotifiers(env, log, () => loadMessaging({ control, env }));
   return {
     env,
     log,
@@ -38,6 +42,7 @@ export function createContext(env: Env, overrides: Partial<AppContext> = {}): Ap
     sms: notifiers.sms,
     storage: createStorage(env),
     httpFetch: fetch,
+    resetMessaging: notifiers.reset,
     ...overrides,
   };
 }

@@ -6,3 +6,11 @@ dist
 coverage
 *.log
 var/
+exports/
+backups/
+# Guide videos are recorded by tools/guide-videos, not stored in Git
+docs/guide/media/
+
+# Studio backups and stray files at the root
+/*.tar.gz
+/*.jpg

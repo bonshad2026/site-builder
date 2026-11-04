@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { api, apiRequest, uploadFile } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import { useT } from '../i18n';
-import { Badge, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, useToast } from '../ui';
+import { Badge, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, useErrorLine, useToast } from '../ui';
 
 export interface Asset {
   id: string;
@@ -33,6 +33,7 @@ export function UploadButton({ siteId, onUploaded, visibility = 'public' }: { si
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const errorText = useErrorLine();
   const input = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
 
@@ -46,7 +47,7 @@ export function UploadButton({ siteId, onUploaded, visibility = 'public' }: { si
       qc.invalidateQueries({ queryKey: assetsKey(siteId) });
       onUploaded?.(asset);
     } catch (err) {
-      toast((err as Error).message, 'bad');
+      toast(errorText(err), 'bad');
     } finally {
       setProgress(null);
       if (input.current) input.current.value = '';
@@ -128,6 +129,7 @@ export function ImagePicker({ siteId, value, onChange, label }: { siteId: string
 export default function FilesPage({ siteId }: { siteId: string }) {
   const t = useT();
   const toast = useToast();
+  const errorText = useErrorLine();
   const qc = useQueryClient();
   const { format } = usePreferences();
   const [page, setPage] = useState(1);
@@ -138,7 +140,7 @@ export default function FilesPage({ siteId }: { siteId: string }) {
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/sites/${siteId}/assets/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: assetsKey(siteId) }),
-    onError: (e) => toast(e.message, 'bad'),
+    onError: (e) => toast(errorText(e), 'bad'),
   });
   const scan = useMutation({
     mutationFn: (dryRun: boolean) => api.post<{ unused: string[]; deleted: number }>(`/sites/${siteId}/assets/cleanup?dryRun=${dryRun}`),

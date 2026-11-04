@@ -17,6 +17,14 @@ const ALLOWED: Record<string, { ext: string; kind: 'image' | 'document' }> = {
   'image/avif': { ext: 'avif', kind: 'image' },
   'image/gif': { ext: 'gif', kind: 'image' },
   'application/pdf': { ext: 'pdf', kind: 'document' },
+  // Videos for the video section.
+  'video/mp4': { ext: 'mp4', kind: 'document' },
+  'video/webm': { ext: 'webm', kind: 'document' },
+  // A site's own font (design → custom font).
+  'font/woff2': { ext: 'woff2', kind: 'document' },
+  'font/woff': { ext: 'woff', kind: 'document' },
+  'font/ttf': { ext: 'ttf', kind: 'document' },
+  'font/otf': { ext: 'otf', kind: 'document' },
 };
 
 const COLUMNS = `id, storage_key AS "storageKey", original_name AS "originalName", content_type AS "contentType",

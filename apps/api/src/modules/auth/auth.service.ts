@@ -20,7 +20,7 @@ const USER_COLUMNS = 'id, email, phone, display_name, is_platform_admin, email_v
 
 export const hashPassword = (password: string) => hash(password, { algorithm: 2 });
 
-async function verifyPassword(stored: string | null, password: string): Promise<boolean> {
+export async function verifyPassword(stored: string | null, password: string): Promise<boolean> {
   dummyHash ??= hashPassword(randomToken());
   try {
     return await verify(stored ?? (await dummyHash), password);

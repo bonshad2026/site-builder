@@ -1,12 +1,21 @@
+import { withSettingDefaults } from '@site-builder/shared';
 import { useQuery } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { siteConfig } from '../../config/site';
 import { fallbackPages, fallbackProducts, fallbackServices, fallbackSettings } from '../../content/fallback';
 import { api, apiAvailable, ApiError } from '../../lib/api';
+import { resolveCalendar, type CalendarSystem } from '../../lib/calendar';
+import type { ErrorLanguage } from '../../lib/errorText';
+import { usePreferences } from '../../lib/preferences';
 import type { ProductDto, PublishedPage, ServiceDto, SiteSettings } from '../../types/api';
 
-/** Which client site this front end shows. One build can serve any site by setting VITE_SITE_ID. */
-export const DEFAULT_SITE_ID = (import.meta.env.VITE_SITE_ID as string | undefined) || siteConfig.id;
+/** Studio previews: <site>.preview.<host> shows that site from one shared build. */
+const previewSite = typeof window !== 'undefined' ? /^([a-z0-9][a-z0-9-]*)\.preview\./.exec(window.location.hostname)?.[1] : undefined;
+
+/** Which client site this front end shows: the preview host, else VITE_SITE_ID (one build per client domain). */
+export const DEFAULT_SITE_ID = previewSite || (import.meta.env.VITE_SITE_ID as string | undefined) || siteConfig.id;
+/** The site this address belongs to (a preview host or a client's own build); empty in the studio. */
+export const HOST_SITE_ID = previewSite || (import.meta.env.VITE_SITE_ID as string | undefined) || '';
 
 export const SiteIdContext = createContext<string>(DEFAULT_SITE_ID);
 export const useSiteId = () => useContext(SiteIdContext);
@@ -17,14 +26,42 @@ export function useSiteSettings() {
   const site = useSiteId();
   return useQuery({
     queryKey: ['public', site, 'settings'],
-    queryFn: () => (apiAvailable() ? api.get<SiteSettings>(`/public/sites/${site}/settings`) : Promise.resolve(fallbackSettings)),
+    // Options a site never set get their defaults, so older sites keep their look.
+    queryFn: () => (apiAvailable() ? api.get<SiteSettings>(`/public/sites/${site}/settings`).then(withSettingDefaults) : Promise.resolve(fallbackSettings)),
     staleTime: 60_000,
   });
 }
 
-export function usePublishedPage(slug: string) {
+/** Calendar for dates on the site: the site's setting, else Jalali in Persian and Gregorian in English. */
+export function useSiteCalendar(): CalendarSystem {
+  const { data: settings } = useSiteSettings();
+  const { locale } = usePreferences();
+  return resolveCalendar(settings?.calendar, locale);
+}
+
+/** Error language on the site: the site's setting, else the language the visitor is reading. */
+export function useSiteErrorLanguage(): ErrorLanguage {
+  const { data: settings } = useSiteSettings();
+  const { locale } = usePreferences();
+  const chosen = settings?.errorLanguage;
+  return chosen === 'fa' || chosen === 'en' ? chosen : locale;
+}
+
+/** Slugs of the site's published pages (to know which built-in pages it replaced with its own). */
+export function usePublishedPageList(enabled = true) {
   const site = useSiteId();
   return useQuery({
+    enabled,
+    queryKey: ['public', site, 'pages'],
+    queryFn: () => (apiAvailable() ? api.get<{ slug: string }[]>(`/public/sites/${site}/pages`) : Promise.resolve(fallbackPages.map((p) => ({ slug: p.slug })))),
+    staleTime: 60_000,
+  });
+}
+
+export function usePublishedPage(slug: string, enabled = true) {
+  const site = useSiteId();
+  return useQuery({
+    enabled,
     queryKey: ['public', site, 'page', slug],
     queryFn: async () => {
       if (apiAvailable()) return api.get<PublishedPage>(`/public/sites/${site}/pages/${slug}`);
@@ -55,6 +92,7 @@ export function useService(slug: string) {
       if (!s) throw notFound();
       return s;
     },
+    enabled: !!slug,
     retry: false,
   });
 }
@@ -79,8 +117,26 @@ export function useProduct(slug: string) {
       if (!p) throw notFound();
       return p;
     },
+    enabled: !!slug,
     retry: false,
   });
+}
+
+/** An online gateway the buyer can choose at checkout. */
+export interface PublicGateway {
+  provider: string;
+  label: { en: string; fa: string };
+  description: { en: string; fa: string };
+  isTest: boolean;
+}
+
+export interface PaymentMethods {
+  online: boolean;
+  cod: boolean;
+  /** The default (first) gateway. */
+  provider: string | null;
+  isTest: boolean;
+  gateways?: PublicGateway[];
 }
 
 export function usePaymentMethods(enabled: boolean) {
@@ -88,9 +144,7 @@ export function usePaymentMethods(enabled: boolean) {
   return useQuery({
     queryKey: ['public', site, 'payment-methods'],
     queryFn: () =>
-      apiAvailable()
-        ? api.get<{ online: boolean; provider: string | null; isTest: boolean }>(`/public/sites/${site}/payment-methods`)
-        : Promise.resolve({ online: false, provider: null, isTest: false }),
+      apiAvailable() ? api.get<PaymentMethods>(`/public/sites/${site}/payment-methods`) : Promise.resolve<PaymentMethods>({ online: false, cod: false, provider: null, isTest: false, gateways: [] }),
     enabled,
   });
 }

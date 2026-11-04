@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app.js';
 import { closeContext } from '../src/context.js';
 import { createAdmin, createTenant, createTestServer, lead, product, signIn, type Client } from './helpers.js';
 
@@ -18,33 +19,33 @@ beforeAll(async () => {
 });
 afterAll(() => closeContext(ctx));
 
-const doc = (heading: string) => ({ schemaVersion: 1, sections: [{ id: 's1', type: 'hero', props: { heading: { en: heading, fa: heading } } }] });
+const doc = (heading: string) => ({ schemaVersion: 1, sections: [{ id: 's1', type: 'page-header', props: { heading: { en: heading, fa: heading } } }] });
 
 describe('pages: draft vs published', () => {
   it('keeps drafts private until published, then serves only the published copy', async () => {
-    const created = await owner.post(`${base}/pages`, { slug: 'about', title: { en: 'About', fa: 'درباره' }, document: doc('Draft one') });
+    const created = await owner.post(`${base}/pages`, { slug: 'our-story', title: { en: 'About', fa: 'درباره' }, document: doc('Draft one') });
     expect(created.status).toBe(201);
     const id = created.body.data.id;
-    expect((await request(app).get(`${pub}/pages/about`)).status).toBe(404);
+    expect((await request(app).get(`${pub}/pages/our-story`)).status).toBe(404);
 
     const published = await owner.post(`${base}/pages/${id}/publish`);
     expect(published.body.data).toMatchObject({ isPublished: true, publishedVersion: 1, hasUnpublishedChanges: false });
-    expect((await request(app).get(`${pub}/pages/about`)).body.data.document.sections[0].props.heading.en).toBe('Draft one');
+    expect((await request(app).get(`${pub}/pages/our-story`)).body.data.document.sections[0].props.heading.en).toBe('Draft one');
 
     // Editing the draft does not leak to visitors.
     const edited = await owner.patch(`${base}/pages/${id}`, { document: doc('Work in progress') });
     expect(edited.body.data.hasUnpublishedChanges).toBe(true);
-    expect((await request(app).get(`${pub}/pages/about`)).body.data.document.sections[0].props.heading.en).toBe('Draft one');
+    expect((await request(app).get(`${pub}/pages/our-story`)).body.data.document.sections[0].props.heading.en).toBe('Draft one');
 
     // Version history: publish v2, restore v1 into the draft.
     await owner.post(`${base}/pages/${id}/publish`);
     expect((await owner.get(`${base}/pages/${id}/versions`)).body.data.map((v: { version: number }) => v.version)).toEqual([2, 1]);
     const restored = await owner.post(`${base}/pages/${id}/versions/1/restore`);
     expect(restored.body.data.document.sections[0].props.heading.en).toBe('Draft one');
-    expect((await request(app).get(`${pub}/pages/about`)).body.data.document.sections[0].props.heading.en).toBe('Work in progress');
+    expect((await request(app).get(`${pub}/pages/our-story`)).body.data.document.sections[0].props.heading.en).toBe('Work in progress');
 
     await owner.post(`${base}/pages/${id}/unpublish`);
-    expect((await request(app).get(`${pub}/pages/about`)).status).toBe(404);
+    expect((await request(app).get(`${pub}/pages/our-story`)).status).toBe(404);
   });
 
   it('enforces unique slugs, one home page, and protects the home page', async () => {
@@ -97,14 +98,16 @@ describe('products and services', () => {
 
 describe('leads', () => {
   it('accepts a valid enquiry from a visitor and shows it to the owner', async () => {
-    const res = await request(app).post(`${pub}/leads`).send(lead({ type: 'consultation' }));
+    const res = await request(app).post(`${pub}/leads`).send(lead({ type: 'consultation', projectType: 'residential' }));
     expect(res.status).toBe(201);
     const inbox = (await owner.get(`${base}/leads`)).body.data;
-    expect(inbox[0]).toMatchObject({ type: 'consultation', status: 'new', phone: '09123456789' });
+    expect(inbox[0]).toMatchObject({ type: 'consultation', stage: 'new', phone: '09123456789', unread: true });
 
-    const updated = await owner.patch(`${base}/leads/${inbox[0].id}`, { status: 'contacted', note: 'Called back' });
-    expect(updated.body.data.status).toBe('contacted');
-    expect(updated.body.data.notes[0].text).toBe('Called back');
+    const moved = await owner.post(`${base}/leads/${inbox[0].id}/stage`, { stage: 'reviewing' });
+    expect(moved.body.data.stage).toBe('reviewing');
+    await owner.post(`${base}/leads/${inbox[0].id}/events`, { kind: 'note', text: 'Called back' });
+    const full = (await owner.get(`${base}/leads/${inbox[0].id}`)).body.data;
+    expect(full.events.map((e: { kind: string }) => e.kind)).toEqual(['created', 'stage', 'note']);
   });
 
   it('validates on the server and silently drops honeypot submissions', async () => {
@@ -205,5 +208,22 @@ describe('API documentation', () => {
     expect(res.status).toBe(200);
     expect(res.body.paths['/api/v1/sites/{siteId}/products']).toBeDefined();
     expect(res.body.paths['/api/v1/public/sites/{siteSlug}/orders'].post).toBeDefined();
+  });
+});
+
+describe('site settings on a client server', () => {
+  it('keeps the built-in texts operator-only while the client edits their contact details', async () => {
+    // Same database, served as a client's own server (CELL_SLUG set): structure is the operator's.
+    const locked = createApp({ ...ctx, env: { ...ctx.env, CELL_SLUG: site.slug } });
+    const client = await signIn(locked, site.ownerEmail);
+    const current = (await client.get(`${base}/settings`)).body.data;
+    const res = await client.put(`${base}/settings`, {
+      ...current,
+      contact: { ...current.contact, email: 'client@test.local' },
+      texts: { 'cart.checkout': { en: 'Pay now', fa: 'پرداخت' } },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.data.contact.email).toBe('client@test.local');
+    expect(res.body.data.texts).toEqual(current.texts);
   });
 });

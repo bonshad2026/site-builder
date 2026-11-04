@@ -31,12 +31,24 @@ export interface ProductDto {
   currency: string;
   stock: number | null;
   isAvailable: boolean;
+  /** Percentage off; the server applies it to orders. */
+  discountPercent?: number;
+  colors?: { name: Localized; hex: string }[];
+  /** Sizes / models with their own price and stock (null = the product's). */
+  variants?: { name: Localized; priceMinor: number | null; stock: number | null }[];
+  maxPerOrder?: number | null;
   featured: boolean;
   materials: Localized;
   dimensions: string;
   leadTime: Localized;
   imageAssetId: string | null;
   imageUrl: string | null;
+  /** Extra photo asset ids, in order. */
+  images?: string[];
+  /** Extra photos with their URLs (ids whose file is gone are left out). */
+  gallery?: { id: string; url: string }[];
+  /** Name / value details shown on the product page. */
+  attributes?: { name: Localized; value: Localized }[];
   status: 'draft' | 'published' | 'archived';
   position: number;
   seo: Record<string, unknown>;
@@ -57,7 +69,9 @@ export interface OrderItemDto {
   unitPriceMinor: string;
   quantity: number;
   lineTotalMinor: string;
+  option?: string;
 }
 
 export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'test_paid' | 'failed' | 'refunded';
-export type OrderStatus = 'pending' | 'confirmed' | 'fulfilled' | 'cancelled';
+/** Built-in stages, or one the shop added in its settings. */
+export type OrderStatus = 'pending' | 'confirmed' | 'fulfilled' | 'cancelled' | (string & {});

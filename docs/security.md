@@ -1,5 +1,7 @@
 # Security notes
 
+> **Legacy:** written for the first single-stack version. For how the project works today see [`AGENTS.md`](../AGENTS.md) and [`docs/README.md`](README.md).
+
 ## In place (and tested)
 - **Tenant isolation** at two layers. In Postgres, each tenant has its own role and database,
   with `CONNECT` revoked from `PUBLIC`. In the API, membership checks come from the session,

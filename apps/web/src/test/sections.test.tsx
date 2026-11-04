@@ -41,6 +41,34 @@ describe('section renderer', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('keeps the buttons of pages saved before sections had button lists', () => {
+    wrap(
+      <SectionRenderer
+        section={{
+          id: 'h',
+          type: 'hero',
+          props: {
+            heading: { en: 'Old hero', fa: '' },
+            primaryCta: { label: { en: 'Book', fa: '' }, href: '/contact' },
+            secondaryCta: { label: { en: 'Projects', fa: '' }, href: '/projects' },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Old hero' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /book/i })).toHaveAttribute('href', '/contact');
+    expect(screen.getByRole('link', { name: /projects/i })).toHaveAttribute('href', '/projects');
+  });
+
+  it('shows any number of buttons, and hero slides as a slider', () => {
+    const slide = (n: number) => ({ heading: { en: `Slide ${n}`, fa: '' }, buttons: [{ label: { en: `Go ${n}`, fa: '' }, href: `/p${n}` }] });
+    wrap(<SectionRenderer section={{ id: 's', type: 'hero', props: { display: 'slider', autoplay: 0, slides: [slide(1), slide(2), slide(3)] } }} />);
+    expect(screen.getByRole('heading', { name: 'Slide 1' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /go 1/i })).toHaveAttribute('href', '/p1');
+    expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /\d \/ 3/ })).toHaveLength(3);
+  });
+
   it('never renders HTML from content', () => {
     wrap(<SectionRenderer section={{ id: 'r', type: 'rich-text', props: { body: { en: '<img src=x onerror=alert(1)> **bold**', fa: '' } } }} />);
     expect(document.querySelector('img[src="x"]')).toBeNull();

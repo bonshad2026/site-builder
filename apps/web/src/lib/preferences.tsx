@@ -1,3 +1,4 @@
+import { currencyDecimals } from '@site-builder/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { en, type Messages } from '../locales/en';
 import { fa } from '../locales/fa';
@@ -5,7 +6,8 @@ import type { Locale, Localized, ThemeId } from '../types/site';
 
 const messages: Record<Locale, Messages> = { en, fa };
 const THEME_KEY = 'site-builder:theme';
-const THEMES: ThemeId[] = ['ivory', 'noir', 'sage'];
+const CURRENCY_FA: Record<string, string> = { IRR: 'ریال', IRT: 'تومان', USD: 'دلار', EUR: 'یورو', GBP: 'پوند', AED: 'درهم', TRY: 'لیر', IQD: 'دینار', AFN: 'افغانی' };
+const CURRENCY_EN: Record<string, string> = { IRT: 'Toman', USD: '$', EUR: '€', GBP: '£' };
 
 /** The URL decides the language: /fa/... is Persian, everything else English. */
 export function localeFromPath(pathname: string): Locale {
@@ -32,14 +34,18 @@ interface PreferencesContextValue {
   format: (template: string, vars: Record<string, string | number>) => string;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: ThemeId | null) => void;
+  /** A site's own direction (null = by language). */
+  setDirection: (dir: 'ltr' | 'rtl' | null) => void;
 }
 
-const PreferencesContext = createContext<PreferencesContextValue | null>(null);
+/** Exported so a site can give its own wording for built-in texts (see SiteTexts). */
+export const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
 function storedTheme(): ThemeId | null {
   try {
-    const v = localStorage.getItem(THEME_KEY) as ThemeId | null;
-    return v && THEMES.includes(v) ? v : null;
+    // Any theme id; one the site no longer has falls back to the site's theme (useEffectiveTheme).
+    const v = localStorage.getItem(THEME_KEY);
+    return v && /^[a-z0-9][a-z0-9_-]{1,39}$/.test(v) ? v : null;
   } catch {
     return null;
   }
@@ -49,18 +55,23 @@ export function PreferencesProvider({
   children,
   locale,
   onLocaleChange,
+  scoped = false,
 }: {
   children: ReactNode;
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
+  /** A preview inside the page (admin): language and direction apply to its children only. */
+  scoped?: boolean;
 }) {
   const [theme, setThemeState] = useState<ThemeId | null>(storedTheme);
-  const dir = locale === 'fa' ? 'rtl' : 'ltr';
+  const [dirOverride, setDirection] = useState<'ltr' | 'rtl' | null>(null);
+  const dir = dirOverride ?? (locale === 'fa' ? 'rtl' : 'ltr');
 
   useEffect(() => {
+    if (scoped) return;
     document.documentElement.lang = locale;
     document.documentElement.dir = dir;
-  }, [locale, dir]);
+  }, [locale, dir, scoped]);
 
   const setTheme = useCallback((next: ThemeId | null) => {
     setThemeState(next);
@@ -86,9 +97,12 @@ export function PreferencesProvider({
       formatNumber: (n) => plain.format(n),
       formatMoney: (minor, currency) => {
         if (minor === null || minor === '') return '—';
-        const amount = grouped.format(Number(minor));
-        if (currency === 'IRR') return locale === 'fa' ? `${amount} ریال` : `${amount} IRR`;
-        return `${amount} ${currency}`;
+        const decimals = currencyDecimals(currency);
+        const value = Number(minor) / 10 ** decimals;
+        const amount = decimals ? new Intl.NumberFormat(tag, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value) : grouped.format(value);
+        if (locale === 'fa') return `${amount} ${CURRENCY_FA[currency] ?? currency}`;
+        const sign = CURRENCY_EN[currency];
+        return sign && sign.length === 1 ? `${sign}${amount}` : `${amount} ${sign ?? currency}`;
       },
       formatDate: (iso) => date.format(new Date(iso)),
       format: (template, vars) =>
@@ -98,10 +112,20 @@ export function PreferencesProvider({
         }),
       setLocale: onLocaleChange,
       setTheme,
+      setDirection,
     };
   }, [locale, dir, theme, onLocaleChange, setTheme]);
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
+}
+
+/** Applies a site's direction setting while mounted ('auto' or missing = by language). */
+export function useSiteDirection(choice: 'auto' | 'rtl' | 'ltr' | undefined) {
+  const { setDirection } = usePreferences();
+  useEffect(() => {
+    setDirection(choice === 'rtl' || choice === 'ltr' ? choice : null);
+    return () => setDirection(null);
+  }, [choice, setDirection]);
 }
 
 export function usePreferences(): PreferencesContextValue {

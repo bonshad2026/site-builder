@@ -118,6 +118,17 @@ export async function provisionTenant(ctx: AppContext, input: ProvisionInput): P
         `INSERT INTO pages (slug, title, is_home, draft) VALUES ('home', $1, true, $2) ON CONFLICT (slug) DO NOTHING`,
         [{ en: 'Home', fa: 'خانه' }, { schemaVersion: 1, sections: [] }],
       );
+      // An About page to start from (draft until the operator fills and publishes it).
+      await tenantClient.query(`INSERT INTO pages (slug, title, is_home, position, draft) VALUES ('about', $1, false, 1, $2) ON CONFLICT (slug) DO NOTHING`, [
+        { en: 'About us', fa: 'درباره ما' },
+        {
+          schemaVersion: 1,
+          sections: [
+            { id: 's1', type: 'page-header', props: { eyebrow: { en: input.name, fa: input.name }, heading: { en: 'About us', fa: 'درباره ما' }, intro: { en: '', fa: '' } } },
+            { id: 's2', type: 'image-text', props: { heading: { en: 'Our story', fa: 'داستان ما' }, body: { en: 'Tell visitors who you are and what you do.', fa: 'به بازدیدکنندگان بگویید چه کسی هستید و چه کاری انجام می‌دهید.' } } },
+          ],
+        },
+      ]);
     } finally {
       await tenantClient.end();
     }
@@ -172,6 +183,50 @@ export async function provisionTenant(ctx: AppContext, input: ProvisionInput): P
     ctx.log.error({ err, tenant: tenant.slug }, 'tenant provisioning failed');
     throw new AppError(500, 'provisioning_failed', 'Site provisioning failed. It can be retried safely.', { step: 'see tenant.provisioningStep' });
   }
+}
+
+/**
+ * Removes a client site for good: its uploaded files, its database and database role, then the
+ * site itself (domains and memberships go with it). Works for failed or half-provisioned sites too.
+ */
+export async function deleteTenant(ctx: AppContext, tenantId: string) {
+  const { rows } = await ctx.control.query<TenantRecord>('SELECT * FROM tenants WHERE id = $1', [tenantId]);
+  const tenant = rows[0];
+  if (!tenant) return null;
+  let files = 0;
+  if (tenant.db_password_enc) {
+    const client = new pg.Client({
+      host: ctx.env.TENANT_DB_HOST,
+      port: ctx.env.TENANT_DB_PORT,
+      database: tenant.db_name,
+      user: tenant.db_user,
+      password: decryptSecret(tenant.db_password_enc, ctx.env.TENANT_SECRETS_KEY),
+    });
+    try {
+      await client.connect();
+      const keys = await client.query<{ storage_key: string }>('SELECT storage_key FROM assets UNION ALL SELECT storage_key FROM request_files');
+      for (const { storage_key } of keys.rows) {
+        await ctx.storage.delete(storage_key).catch(() => undefined);
+        files++;
+      }
+    } catch (err) {
+      // A database that never finished provisioning has no files to remove.
+      ctx.log.warn({ err, tenant: tenant.slug }, 'could not list the site files before deleting it');
+    } finally {
+      await client.end().catch(() => {});
+    }
+  }
+  await ctx.tenantPools.evict(tenant.id);
+  const admin = new pg.Client({ connectionString: ctx.env.PG_ADMIN_URL, application_name: 'site-builder-provisioner' });
+  await admin.connect();
+  try {
+    await admin.query(`DROP DATABASE IF EXISTS ${ident(tenant.db_name)} WITH (FORCE)`);
+    await admin.query(`DROP ROLE IF EXISTS ${ident(tenant.db_user)}`);
+  } finally {
+    await admin.end();
+  }
+  await ctx.control.query('DELETE FROM tenants WHERE id = $1', [tenant.id]);
+  return { slug: tenant.slug, files };
 }
 
 /** Runs pending tenant migrations on every tenant database. One failure does not stop the rest. */

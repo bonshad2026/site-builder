@@ -1,4 +1,4 @@
-import { defaultProps, type PageDocument, type SectionType } from '@site-builder/shared';
+import { defaultProps, normalizedProps, type PageDocument, type SectionType } from '@site-builder/shared';
 
 export type Section = PageDocument['sections'][number];
 
@@ -48,8 +48,11 @@ function commit(state: BuilderState, sections: Section[], extra: Partial<Builder
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
-    case 'load':
-      return { ...initialBuilderState, sections: action.sections, selectedId: action.sections[0]?.id ?? null };
+    case 'load': {
+      // Pages saved in an older shape are edited in the current one.
+      const sections = action.sections.map((s) => ({ ...s, props: normalizedProps(s.type, s.props) }));
+      return { ...initialBuilderState, sections, selectedId: sections[0]?.id ?? null };
+    }
 
     case 'add': {
       const section: Section = { id: action.id ?? newSectionId(), type: action.sectionType, props: defaultProps(action.sectionType) as Record<string, unknown> };

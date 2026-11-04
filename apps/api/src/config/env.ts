@@ -28,18 +28,23 @@ const schema = z
 
     PUBLIC_API_URL: z.string().url().default('http://localhost:4000'),
     WEB_APP_URL: z.string().url().default('http://localhost:5173'),
+    /** Studio: where a site's preview lives, for links in messages and payment returns ({slug} is replaced). */
+    SITE_PREVIEW_URL: z.string().optional(),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     COOKIE_SECURE: bool.optional(),
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).default(24 * 7),
     ALLOW_PUBLIC_SIGNUP: bool.default('false'),
 
-    EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
+    /** `panel`: set in the admin panel (Platform → Messaging). */
+    EMAIL_PROVIDER: z.enum(['console', 'smtp', 'panel']).default('console'),
     SMTP_URL: z.string().optional(),
     EMAIL_FROM: z.string().default('Site Builder <no-reply@localhost>'),
 
-    SMS_PROVIDER: z.enum(['console', 'kavenegar']).default('console'),
+    SMS_PROVIDER: z.enum(['console', 'kavenegar', 'panel']).default('console'),
     KAVENEGAR_API_KEY: z.string().optional(),
     KAVENEGAR_OTP_TEMPLATE: z.string().optional(),
+    /** Sender line for request updates (plain SMS); empty = the account's default line. */
+    KAVENEGAR_SENDER: z.string().optional(),
 
     STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
     STORAGE_LOCAL_DIR: z.string().default('./var/uploads'),
@@ -54,6 +59,13 @@ const schema = z
     UPLOAD_MAX_BYTES: z.coerce.number().int().default(10 * 1024 * 1024),
     /** Local test gateway (no real money). Defaults to on outside production; refused in production. */
     PAYMENT_SANDBOX_ENABLED: bool.optional(),
+
+    /** Cell mode: this API serves exactly one client site, in its own isolated stack. */
+    CELL_SLUG: z.string().regex(/^[a-z0-9][a-z0-9-]{1,40}$/).optional(),
+    /** Shared only with the control panel; signs its one-time sign-in links. */
+    CELL_SSO_SECRET: z.string().min(32).optional(),
+    /** Express "trust proxy" setting (e.g. "uniquelocal" behind the edge proxy). */
+    TRUST_PROXY: z.string().default('loopback'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;

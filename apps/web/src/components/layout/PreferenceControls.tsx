@@ -4,17 +4,29 @@ import { usePreferences } from '../../lib/preferences';
 import type { Locale, ThemeId } from '../../types/site';
 
 const THEMES: ThemeId[] = ['ivory', 'noir', 'sage'];
-const swatches: Record<ThemeId, [string, string]> = {
+const swatches: Record<string, [string, string]> = {
   ivory: ['#f6f2ec', '#8a6a43'],
   noir: ['#121110', '#c9a46c'],
   sage: ['#eef0ea', '#4f6446'],
 };
 
+type Settings = ReturnType<typeof useSiteSettings>['data'];
+
+/** The themes a visitor may pick: the site's list when it has one, else every built-in and own theme. */
+function visitorThemes(settings: Settings): ThemeId[] {
+  const all = [...THEMES, ...(settings?.design?.themes ?? []).map((t) => t.id)];
+  const allowed = settings?.design?.visitorThemes ?? [];
+  return allowed.length ? all.filter((id) => allowed.includes(id)) : all;
+}
+
 /** The theme actually shown: the visitor's choice, else the site's theme. */
 export function useEffectiveTheme(): ThemeId {
   const { theme } = usePreferences();
   const { data: settings } = useSiteSettings();
-  return theme ?? settings?.themeId ?? 'ivory';
+  const known = (id: string | null | undefined) => !!id && (THEMES.includes(id) || !!settings?.design?.themes?.some((t) => t.id === id));
+  // A visitor's earlier choice counts only while the site still offers that theme.
+  if (theme && visitorThemes(settings).includes(theme)) return theme;
+  return known(settings?.themeId) ? settings!.themeId : 'ivory';
 }
 
 export function LanguageSwitch({ className }: { className?: string }) {
@@ -48,20 +60,26 @@ export function LanguageSwitch({ className }: { className?: string }) {
 }
 
 export function ThemeSwitch({ className }: { className?: string }) {
-  const { setTheme, m } = usePreferences();
+  const { setTheme, m, l } = usePreferences();
+  const { data: settings } = useSiteSettings();
   const current = useEffectiveTheme();
+  const own = settings?.design?.themes ?? [];
+  const names: Record<string, string> = { ...m.prefs.themes, ...Object.fromEntries(own.map((t) => [t.id, l(t.name) || t.id])) };
+  const colors: Record<string, [string, string]> = { ...swatches, ...Object.fromEntries(own.map((t) => [t.id, [t.colors.bg, t.colors.accent] as [string, string]])) };
+  const offered = visitorThemes(settings);
+  if (offered.length < 2) return null;
   return (
     <div role="radiogroup" aria-label={m.prefs.theme} className={cn('flex items-center gap-1.5', className)}>
-      {THEMES.map((id) => {
-        const [bg, accent] = swatches[id];
+      {offered.map((id) => {
+        const [bg, accent] = colors[id];
         return (
           <button
             key={id}
             type="button"
             role="radio"
             aria-checked={current === id}
-            aria-label={m.prefs.themes[id]}
-            title={m.prefs.themes[id]}
+            aria-label={names[id]}
+            title={names[id]}
             onClick={() => setTheme(id)}
             className={cn(
               'size-5 rounded-full border transition-transform hover:scale-110',

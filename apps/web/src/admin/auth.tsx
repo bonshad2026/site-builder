@@ -28,6 +28,16 @@ export interface Me {
   sites: MySite[];
 }
 
+/**
+ * Site building (platform, dashboard, pages, builder, design settings) is the operator's.
+ * Client deliveries are built with VITE_ADMIN_SCOPE=client, which leaves that code out entirely.
+ */
+export const OPERATOR_UI = import.meta.env.VITE_ADMIN_SCOPE !== 'client';
+export const isOperator = (me: Me | null | undefined) => OPERATOR_UI && !!me?.user.isPlatformAdmin;
+export function useIsOperator() {
+  return isOperator(useMe().data);
+}
+
 export function useMe() {
   return useQuery({
     queryKey: ['me'],
@@ -122,7 +132,7 @@ export function LoginPage() {
             login.mutate();
           }}
         >
-          <TextField label={t.email} type="email" dir="ltr" value={email} onChange={setEmail} required />
+          <TextField label={t.emailOrUsername} dir="ltr" value={email} onChange={setEmail} required />
           <TextField label={t.password} type="password" dir="ltr" value={password} onChange={setPassword} required />
           <ErrorNote error={login.error} />
           <Button type="submit" disabled={login.isPending}>

@@ -5,6 +5,7 @@ import { useSiteSettings } from '../../features/public-site/data';
 import { cn } from '../../lib/cn';
 import { usePreferences } from '../../lib/preferences';
 import { LanguageSwitch, ThemeSwitch } from './PreferenceControls';
+import { AccountLink } from './Header';
 import { useNavItems } from './nav';
 
 export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -65,22 +66,48 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
       <nav aria-label={m.nav.primary} className="flex-1 overflow-y-auto px-5 pt-6 sm:px-8">
         <ul className="flex flex-col">
-          {[{ to: '/', label: m.nav.home }, ...nav, { to: '/contact', label: m.nav.contact }].map((item, i) => (
-            <li key={item.to} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
-              <NavLink
-                to={item.to}
-                end={item.to === '/'}
-                onClick={onClose}
-                className={({ isActive }) => cn('block py-4 font-display text-3xl transition-colors', isActive ? 'text-accent' : 'hover:text-accent')}
-              >
-                {item.label}
-              </NavLink>
+          {[{ to: '/', label: m.nav.home, children: [] }, ...nav].map((item, i) => (
+            <li key={i} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
+              {!item.to ? (
+                <span className="block py-4 font-display text-3xl">{item.label}</span>
+              ) : item.to.startsWith('/') ? (
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={onClose}
+                  className={({ isActive }) => cn('block py-4 font-display text-3xl transition-colors', isActive ? 'text-accent' : 'hover:text-accent')}
+                >
+                  {item.label}
+                </NavLink>
+              ) : (
+                <a href={item.to} target="_blank" rel="noreferrer noopener" className="block py-4 font-display text-3xl transition-colors hover:text-accent">
+                  {item.label}
+                </a>
+              )}
+              {item.children.length > 0 && (
+                <ul className="flex flex-col pb-3 ps-5">
+                  {item.children.map((c) => (
+                    <li key={c.to + c.label}>
+                      {c.to.startsWith('/') ? (
+                        <NavLink to={c.to} onClick={onClose} className={({ isActive }) => cn('block py-2 text-lg transition-colors', isActive ? 'text-accent' : 'text-ink-soft hover:text-accent')}>
+                          {c.label}
+                        </NavLink>
+                      ) : (
+                        <a href={c.to} target="_blank" rel="noreferrer noopener" className="block py-2 text-lg text-ink-soft transition-colors hover:text-accent">
+                          {c.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
       </nav>
       <div className="flex items-center justify-between border-t border-line px-5 py-6 sm:px-8">
         <ThemeSwitch />
+        <AccountLink />
         <LanguageSwitch />
       </div>
     </div>,
