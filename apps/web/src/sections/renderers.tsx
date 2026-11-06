@@ -13,6 +13,7 @@ import { AddToCartBySlug } from '../features/cart/AddToCart';
 import { ContactForm } from '../features/leads/ContactForm';
 import { CustomRequestForm } from '../features/leads/CustomRequestForm';
 import { GalleryCard, ProductCard, ServiceCard } from '../features/public-site/components/Cards';
+import { ProductRail } from '../features/public-site/components/ProductRail';
 import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
 import { cn } from '../lib/cn';
@@ -68,7 +69,7 @@ function Buttons({ buttons, surface = 'light', className }: { buttons: SectionBu
 function PageHeaderSection({ props }: Props<'page-header'>) {
   const { l } = usePreferences();
   return (
-    <div className="border-b border-line pt-36 pb-4 sm:pt-44">
+    <div className="public-page-heading border-b border-line pt-36 pb-4 sm:pt-44">
       <Container>
         <div className="reveal">
           <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
@@ -100,6 +101,7 @@ function HeroSection({ props }: Props<'hero'>) {
 
   return (
     <section
+      data-hero-frame={contained ? 'contained' : 'full'}
       aria-roledescription={count > 1 ? 'carousel' : undefined}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -256,14 +258,22 @@ function FeaturesSection({ props }: Props<'features'>) {
 
 function StatsSection({ props }: Props<'stats'>) {
   const { l } = usePreferences();
+  const cards = props.layout === 'cards';
+  const icons = {
+    clock: 'M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z',
+    pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+    coffee: 'M4 8h13v8a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5ZM17 9h2a3 3 0 0 1 0 6h-2M7 3v2m4-2v2m4-2v2',
+    star: 'm12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z',
+  };
   return (
     <section aria-label={l(props.eyebrow) || undefined} className="border-b border-line">
-      <Container className="grid gap-12 py-16 lg:grid-cols-12 lg:items-center">
-        <dl className={cn('grid grid-cols-2 gap-8 sm:grid-cols-4', props.publications.length ? 'lg:col-span-7' : 'lg:col-span-12')}>
+      <Container className={cn('grid lg:grid-cols-12 lg:items-center', cards ? 'gap-5 py-6 sm:py-8' : 'gap-12 py-16')}>
+        <dl className={cn(cards ? 'mx-auto grid w-full max-w-xl grid-cols-3 gap-2 sm:gap-4' : 'grid grid-cols-2 gap-8 sm:grid-cols-4', props.publications.length ? 'lg:col-span-7' : 'lg:col-span-12')}>
           {props.items.map((s, i) => (
-            <div key={i} className="flex flex-col-reverse gap-2">
-              <dt className="text-sm leading-snug text-ink-soft">{l(s.label)}</dt>
-              <dd className="font-display text-4xl text-ink sm:text-5xl" dir="ltr">
+            <div key={i} className={cards ? 'flex aspect-square min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border border-accent/20 bg-surface p-2 text-center shadow-sm sm:gap-2 sm:p-4' : 'flex flex-col-reverse gap-2'}>
+              {cards && <svg aria-hidden="true" viewBox="0 0 24 24" className="mb-1 size-6 shrink-0 text-accent sm:size-9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={icons[s.icon]} /></svg>}
+              <dt className={cards ? 'order-last text-[10px] leading-4 text-ink-soft sm:text-xs' : 'text-sm leading-snug text-ink-soft'}>{l(s.label)}</dt>
+              <dd className={cards ? "text-xs font-bold leading-5 text-ink sm:text-lg" : "font-display text-4xl text-ink sm:text-5xl"} dir={cards ? "auto" : "ltr"}>
                 {s.value}
               </dd>
             </div>
@@ -327,9 +337,9 @@ function ProductsSection({ props }: Props<'products'>) {
     .slice(0, props.limit);
   const options = { showDiscount: props.showDiscount, showColors: props.showColors, showStock: props.showStock, showAddToCart: props.showAddToCart };
   return (
-    <Section className="bg-surface">
+    <Section className={props.layout === 'horizontal' ? 'bg-surface !py-6 sm:!py-8' : 'bg-surface'}>
       <Container>
-        <SectionHeading
+        <div className={props.layout === 'horizontal' ? '[&>div]:mb-4 [&_h2]:text-2xl' : undefined}><SectionHeading
           eyebrow={l(props.eyebrow)}
           title={l(props.heading)}
           intro={l(props.intro)}
@@ -339,8 +349,11 @@ function ProductsSection({ props }: Props<'products'>) {
             </SmartLink>
           }
         />
+        </div>
         {isLoading ? (
           <LoadingGrid />
+        ) : props.layout === 'horizontal' ? (
+          <ProductRail products={items} options={options} label={l(props.heading)} />
         ) : (
           <div className={cn('grid grid-cols-1 gap-x-6 gap-y-12', productColumns(props.columns))}>
             {items.map((p) => (
@@ -542,7 +555,7 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
   const requestType = types.find((t) => t.slug === params.get('type')) ?? types.find((t) => t.slug === props.requestType) ?? types.find((t) => t.slug === props.formType);
   return (
     <>
-      <div className="border-b border-line pt-36 pb-4 sm:pt-44">
+      <div className="public-page-heading border-b border-line pt-36 pb-4 sm:pt-44">
         <Container>
           <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
           <Buttons buttons={props.buttons} className="mb-8" />

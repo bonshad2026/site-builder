@@ -14,6 +14,7 @@ import {
 } from '@site-builder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { InstagramConnection } from '../interactions/InstagramConnection';
 import { Button } from '../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { api } from '../../lib/api';
@@ -226,6 +227,7 @@ export function TextsTab({ s, set }: TabProps) {
 
 export function HeaderTab({ s, set, siteId }: TabProps) {
   const t = useT();
+  const fa = usePreferencesLocale() === 'fa';
   const h = s.header;
   const up = (patch: Partial<typeof h>) => set('header', { ...h, ...patch });
   return (
@@ -264,6 +266,17 @@ export function HeaderTab({ s, set, siteId }: TabProps) {
           ]}
         />
       </div>
+      <SelectField label={fa ? 'ناوبری موبایل' : 'Mobile navigation'} value={h.mobileNavigation} onChange={(mobileNavigation) => up({ mobileNavigation })} options={[{ value: 'drawer', label: fa ? 'منوی کشویی' : 'Drawer menu' }, { value: 'bottom', label: fa ? 'نوار پایین با آیکن' : 'Bottom icon navigation' }]} />
+      {h.mobileNavigation === 'bottom' && <Card title={fa ? 'آیتم‌های نوار پایین (حداکثر ۴)' : 'Bottom links (up to 4)'}>
+        <p className="mb-3 text-sm text-ink-soft">{fa ? 'اگر خالی باشد، خانه، محصولات، سبد و حساب به صورت خودکار نمایش داده می‌شوند. گزینه بیشتر، منوی کامل را باز می‌کند.' : 'Leave empty for automatic Home, Products, Cart and Account links. More opens the full menu.'}</p>
+        {h.mobileLinks.map((item, i) => <div key={i} className="mb-4 grid gap-3 border-b border-line pb-4">
+          <LocalizedField label={fa ? 'عنوان' : 'Label'} value={item.label} onChange={(label) => up({ mobileLinks: h.mobileLinks.map((v, n) => n === i ? { ...v, label } : v) })} />
+          <LinkPicker siteId={siteId} label={fa ? 'مقصد' : 'Destination'} value={item.href} onChange={(href) => up({ mobileLinks: h.mobileLinks.map((v, n) => n === i ? { ...v, href } : v) })} />
+          <SelectField label={fa ? 'آیکن' : 'Icon'} value={item.icon} options={['home','coffee','bag','user','heart','receipt','phone','grid'].map((value, n) => ({ value, label: (fa ? ['خانه','قهوه','سبد','حساب','علاقه‌مندی','رسید','تماس','دسته‌بندی'] : ['Home','Coffee','Bag','Account','Heart','Receipt','Phone','Grid'])[n] }))} onChange={(icon) => up({ mobileLinks: h.mobileLinks.map((v, n) => n === i ? { ...v, icon: icon as typeof item.icon } : v) })} />
+          <Button variant="outline" onClick={() => up({ mobileLinks: h.mobileLinks.filter((_, n) => n !== i) })}>{fa ? 'حذف' : 'Remove'}</Button>
+        </div>)}
+        {h.mobileLinks.length < 4 && <Button variant="outline" onClick={() => up({ mobileLinks: [...h.mobileLinks, { label: { fa: 'آیتم جدید', en: 'New link' }, href: '/', icon: 'grid' }] })}>{fa ? 'افزودن آیتم' : 'Add link'}</Button>}
+      </Card>}
       <LinkPicker siteId={siteId} label={t.logoLink} value={h.logoHref ?? ''} onChange={(logoHref) => up({ logoHref })} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Checkbox label={t.showMenu} checked={h.showMenu} onChange={(showMenu) => up({ showMenu })} />
@@ -370,6 +383,7 @@ export function FooterTab({ s, set, siteId }: TabProps) {
 export function ShopPageTab({ s, set }: TabProps) {
   const t = useT();
   const { m } = usePreferences();
+  const fa = usePreferencesLocale() === 'fa';
   const p = s.shopPage;
   const up = (patch: Partial<typeof p>) => set('shopPage', { ...p, ...patch });
   const card = p.card;
@@ -377,6 +391,7 @@ export function ShopPageTab({ s, set }: TabProps) {
   const sortName = { featured: m.products.sortFeatured, 'price-asc': m.products.sortPriceAsc, 'price-desc': m.products.sortPriceDesc, newest: m.products.sortNewest, name: m.products.sortName };
   return (
     <>
+      <SelectField label={fa ? 'چیدمان فهرست محصولات' : 'Product list layout'} value={p.layout} onChange={(layout) => up({ layout })} options={[{ value: 'grid', label: fa ? 'شبکه‌ای' : 'Grid' }, { value: 'category-rows', label: fa ? 'عنوان دسته‌ها و ردیف افقی جمع‌وجور' : 'Category headings with compact horizontal rows' }]} />
       <SelectField label={t.columns} value={String(p.columns)} onChange={(v) => up({ columns: Number(v) })} options={[1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n) }))} className="max-w-xs" />
       <div className="grid gap-3 sm:grid-cols-2">
         <Checkbox label={t.showCategoryFilter} checked={p.showCategoryFilter} onChange={(showCategoryFilter) => up({ showCategoryFilter })} />
@@ -533,7 +548,7 @@ export function SystemPagesTab({ s, set, siteId }: TabProps) {
 
 /* ---------- shop rules ---------- */
 
-export function ShopTab({ s, set }: TabProps) {
+export function ShopTab({ s, set, siteId }: TabProps) {
   const t = useT();
   const shop = s.shop;
   const up = (patch: Partial<typeof shop>) => set('shop', { ...shop, ...patch });
@@ -579,6 +594,7 @@ export function ShopTab({ s, set }: TabProps) {
         )}
       />
       <CheckoutSettingsEditor shop={shop} up={up} />
+      {shop.orderMode === 'instagram' && <InstagramConnection siteId={siteId} />}
     </>
   );
 }
@@ -587,6 +603,8 @@ export function ShopTab({ s, set }: TabProps) {
 function CheckoutSettingsEditor({ shop, up }: { shop: SiteSettings['shop']; up: (patch: Partial<SiteSettings['shop']>) => void }) {
   const t = useT();
   const x = t.sx;
+  const locale = usePreferencesLocale();
+  const T = (en: string, fa: string) => locale === 'fa' ? fa : en;
   const c = shop.checkout;
   const setC = (patch: Partial<typeof c>) => up({ checkout: { ...c, ...patch } });
   const rule = [
@@ -597,6 +615,15 @@ function CheckoutSettingsEditor({ shop, up }: { shop: SiteSettings['shop']; up: 
   const toSlug = (v: string) => v.toLowerCase().replace(/[^a-z0-9_-]/g, '');
   return (
     <>
+      <Card title={T('Order submission', 'روش ثبت سفارش')}>
+        <SelectField label={T('Mode', 'روش ارسال')} value={shop.orderMode} onChange={(orderMode) => up({orderMode})} options={[{value:'checkout',label:T('Online checkout','ثبت سفارش و پرداخت آنلاین')},{value:'share',label:T('Mobile share menu','منوی ارسال موبایل')},{value:'instagram',label:T('Server Instagram delivery','ثبت سفارش و ارسال خودکار اینستاگرام')}]} />
+        {shop.orderMode === 'instagram' && <><TextField label={T('Recipient Instagram username','آیدی اینستاگرام گیرنده')} dir="ltr" value={shop.instagramUsername} onChange={instagramUsername=>up({instagramUsername})} /><p className="mt-3 text-sm text-ink-soft">{T('Requires customer accounts, saved addresses and a separately configured server relay. Orders are saved before delivery.','نیازمند حساب مشتری، آدرس ذخیره‌شده و راه‌اندازی واسط سرور است. سفارش پیش از ارسال ذخیره می‌شود.')}</p></>}
+        {shop.orderMode === 'share' && <>
+          <SelectField label={T('Destination', 'مقصد ارسال')} value={shop.shareTarget} onChange={(shareTarget) => up({shareTarget})} options={[{value:'chooser',label:T('Device share menu','منوی ارسال دستگاه')},{value:'instagram',label:T('Instagram chat (copy message)','دایرکت اینستاگرام (کپی متن)')}]} />
+          {shop.shareTarget === 'instagram' && <><TextField label={T('Instagram username', 'آیدی اینستاگرام')} dir="ltr" value={shop.instagramUsername} onChange={(instagramUsername) => up({instagramUsername})} /><p className="mt-3 text-sm text-ink-soft">{T('Copies the order and opens ig.me. The customer pastes and sends it. Test the chat link on the customer device.', 'متن سفارش کپی و لینک ig.me باز می‌شود. مشتری متن را جای‌گذاری و ارسال می‌کند؛ لینک گفت‌وگو را روی گوشی آزمایش کنید.')}</p></>}
+          {shop.shareTarget === 'chooser' && <TextField label={T('Recipient hint (e.g. Instagram username)', 'راهنمای گیرنده (مثلاً آیدی اینستاگرام)')} value={shop.shareRecipient} onChange={(shareRecipient) => up({shareRecipient})} />}<p className="mt-3 text-sm text-ink-soft">{shop.shareTarget === 'instagram' ? T('The customer pastes and sends the copied order in the recipient chat. No server order or payment is created.', 'مشتری متن کپی‌شده را در گفت‌وگوی گیرنده جای‌گذاری و ارسال می‌کند. سفارش در سرور ذخیره نمی‌شود و پرداختی ندارد.') : T('Customers select the app and recipient and confirm sending. This mode does not create server orders or charge payments.', 'مشتری برنامه و گیرنده را انتخاب و ارسال را تأیید می‌کند. در این حالت سفارش در سرور ذخیره نمی‌شود و پرداختی انجام نمی‌گیرد.')}</p></>}
+        <Checkbox label={T('Show prices', 'نمایش قیمت‌ها')} checked={shop.showPrices} onChange={(showPrices) => up({showPrices})} />
+      </Card>
       <Card title={x.checkout}>
         <div className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-3">

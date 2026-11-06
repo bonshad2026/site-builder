@@ -202,14 +202,16 @@ export const sectionDefinitions = {
     buttons,
   }),
   stats: z.object({
+    layout: z.enum(['plain', 'cards']).default('plain'),
     eyebrow: loc(80),
-    items: z.array(z.object({ value: z.string().max(20).default(''), label: loc(80) })).max(8).default([]),
+    items: z.array(z.object({ value: z.string().max(20).default(''), label: loc(80), icon: z.enum(['clock', 'pin', 'coffee', 'star']).default('star') })).max(8).default([]),
     publications: z.array(z.string().max(60)).max(10).default([]),
     buttons,
   }),
   services: z.object({ ...eyebrowHeading, intro: loc(600), limit: z.number().int().min(1).max(24).default(4), layout: z.enum(['cards', 'rows']).default('cards'), buttons }),
   products: z.object({
     ...eyebrowHeading,
+    layout: z.enum(['grid', 'horizontal']).default('grid'),
     intro: loc(600),
     filter: z.enum(['featured', 'all']).default('featured'),
     limit: z.number().int().min(1).max(48).default(4),

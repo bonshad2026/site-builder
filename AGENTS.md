@@ -62,7 +62,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Before you say a change is done
 1. `npm run typecheck` (clean as of 2026-11-02).
-2. Tests: all web and API tests pass as of 2026-11-02 (web 43, API 104). A new failure is yours to explain.
+2. Tests (2026-11-06): API 123/123 pass; last full web run 50 pass and 4 pre-existing failures (54 total); 3 newer focused tests pass (57 total, full suite not rerun). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").
@@ -86,7 +86,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
   `bank.ts` (site kits / content bank), `starters.ts` (starter packs), `constants.ts`.
 - `apps/api` — Express 5 + pg. Control DB `sb_control` plus **one database per site** (tenant).
   Migrations: `src/database/control-plane/migrations` (latest `006_kit_tables.sql`) and
-  `src/database/tenant/migrations` (latest `011_payment_gateways.sql`); numbered, never edit an applied one.
+  `src/database/tenant/migrations` (latest `014_order_live_events.sql`); numbered, never edit an applied one.
   Modules in `src/modules/<name>/` (`*.routes.ts` + `*.service.ts`). Routes use `ApiRouter`
   (`src/common/http.ts`) with zod `body` / `query` / `params`. Site routes are `/api/v1/sites/:siteId/…`
   where **`:siteId` is the site's slug**. CLI: `src/cli.ts`.
@@ -123,6 +123,8 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 | Content tables, box designer, filters, item pages | [collections.md](docs/features/collections.md) |
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |
+| Mobile storefront: bottom navigation, category rows, cart, square icon cards | [mobile-storefront.md](docs/features/mobile-storefront.md) |
+| Account-based Instagram orders, sender management and worker | [instagram-orders.md](docs/features/instagram-orders.md) |
 | Starters: packs, groups, previews, ready-made starters, header/footer | [starters.md](docs/features/starters.md) |
 | User guide (Persian, one page + video per task) | [docs/guide/](docs/guide/README.md) |
 | Developer guide (Persian: architecture, layers, recipes, operations) | [docs/dev/](docs/dev/README.md) |

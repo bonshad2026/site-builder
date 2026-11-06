@@ -34,6 +34,7 @@ export function AccountsTab({ s, set, part }: { s: SiteSettings; set: <K extends
                     { value: 'email', label: t(L('Email (code by email)', 'ایمیل (کد با ایمیل)')) },
                   ]}
                 />
+                <Checkbox label={t(L('Verify signup with a code','تأیید ثبت‌نام با کد'))} checked={a.signupVerification} onChange={signupVerification=>set('accounts',{...a,signupVerification})} />
                 <Checkbox label={t(L('Allow passwords', 'امکان رمز عبور'))} checked={a.passwords} onChange={(passwords) => set('accounts', { ...a, passwords })} hint={t(L('Signing in with a one-time code always works.', 'ورود با کد یک‌بارمصرف همیشه فعال است.'))} />
               </div>
             )}

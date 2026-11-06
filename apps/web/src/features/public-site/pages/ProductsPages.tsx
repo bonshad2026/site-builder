@@ -18,6 +18,7 @@ import type { SortOption } from '@site-builder/shared';
 import { useMaxQuantity } from '../../cart/AddToCart';
 import { cn } from '../../../lib/cn';
 import { productColumns } from '../../../sections/renderers';
+import { ProductRail } from '../components/ProductRail';
 import { ProductReviews } from '../components/ProductReviews';
 import { WishlistButton } from '../../wishlist/wishlist';
 
@@ -110,7 +111,17 @@ export function ProductsPage() {
             </p>
           )}
 
-          {visible.length || isLoading ? (
+          {page?.layout === 'category-rows' && visible.length > 0 ? (
+            <div className="space-y-8">
+              {[...new Set([...(settings?.productCategories.map(c => c.slug) ?? []), ...visible.map(p => p.category ?? '')])].map(key => {
+                const items = visible.filter(p => (p.category ?? '') === key);
+                return items.length ? <section key={key}>
+                  <h2 className="mb-3 font-display text-2xl font-bold text-ink">{key ? label(key) : (m.common.all)}</h2>
+                  <ProductRail products={items} options={page.card} label={key ? label(key) : m.common.all} />
+                </section> : null;
+              })}
+            </div>
+          ) : visible.length || isLoading ? (
             <div className={cn('grid grid-cols-1 gap-x-6 gap-y-14', !page || page.columns === 4 ? 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : productColumns(page.columns))}>
               {visible.map((p) => (
                 <ProductCard key={p.id} product={p} options={page?.card} />
@@ -170,7 +181,7 @@ export function ProductDetailPage() {
   const variant = variants.find((v) => l(v.name) === variantName) ?? variants[0];
   const priced = variant && variant.priceMinor !== null ? { ...product, priceMinor: String(variant.priceMinor) } : product;
   const soldOut = isSoldOut(product) || variant?.stock === 0;
-  const canOrder = !!settings?.modules.orders && !soldOut && priced.priceMinor !== null;
+  const canOrder = !!settings?.modules.orders && !soldOut && (priced.priceMinor !== null || settings?.shop.orderMode !== 'checkout');
   const maxQty = maxQuantity(product);
   const discount = product.discountPercent ?? 0;
   const colors = product.colors ?? [];
@@ -212,7 +223,7 @@ export function ProductDetailPage() {
                 <h1 className="font-display text-5xl leading-tight text-ink sm:text-6xl">{l(product.name)}</h1>
                 <WishlistButton product={product} />
               </div>
-              <p className="mt-6 flex flex-wrap items-baseline gap-3 text-2xl text-ink">
+              {settings?.shop.showPrices !== false && <p className="mt-6 flex flex-wrap items-baseline gap-3 text-2xl text-ink">
                 {formatMoney(discount ? finalPrice(priced) : priced.priceMinor, product.currency)}
                 {discount > 0 && (
                   <>
@@ -221,7 +232,7 @@ export function ProductDetailPage() {
                   </>
                 )}
                 {soldOut && <span className="bg-ink px-2 py-0.5 text-sm text-bg">{m.shop.soldOut}</span>}
-              </p>
+              </p>}
               <p className="mt-8 text-lg leading-relaxed text-ink-soft">{l(product.description)}</p>
               {slots.showDetails !== false && (
               <dl className="mt-10 divide-y divide-line border-y border-line text-sm">
@@ -301,7 +312,7 @@ export function ProductDetailPage() {
                   <Button
                     onClick={() => {
                       cart.add(
-                        { productId: product.id, slug: product.slug, name: product.name, priceMinor: finalPrice(priced)!, currency: product.currency, imageUrl: product.imageUrl, option: chosen, variant: variant ? l(variant.name) : '', max: variant?.stock !== null && variant?.stock !== undefined ? Math.min(maxQty, variant.stock) : maxQty },
+                        { productId: product.id, slug: product.slug, name: product.name, priceMinor: finalPrice(priced) ?? '0', currency: product.currency, imageUrl: product.imageUrl, option: chosen, variant: variant ? l(variant.name) : '', max: variant?.stock !== null && variant?.stock !== undefined ? Math.min(maxQty, variant.stock) : maxQty },
                         quantity,
                       );
                       setAdded(true);

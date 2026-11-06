@@ -45,3 +45,30 @@ access tokens, notify), `src/modules/customers/` (accounts, sessions, codes), `s
 (staff inbox); web `src/admin/interactions/` (form and workflow designer, timeline, customers),
 `src/features/account/` (sign-in, account, `/track`, request page), `src/features/leads/CustomRequestForm.tsx`.
 Tenant migrations `007_interactions.sql`, `008_request_files.sql`.
+
+## Account addresses and optional unverified signup
+accounts.signupVerification defaults true. False requires a signup password and leaves verified_at
+NULL; signup/password login cannot claim old guest cases by matching an unverified identifier.
+Profile addresses (up to ten named entries) are tenant-local and visible to authorized customer staff.
+Instagram checkout rechecks the selected address and session identity server-side.
+See instagram-orders.md.
+
+## SMS opt-out footer
+All Console and Kavenegar plain-text SMS adapters use withSmsFooter to normalize trailing legacy
+cancellation lines and append exactly one newline plus `لغو ۱۱`. This applies centrally to OTP
+console text, workflow/order notifications and panel test SMS; editable message templates are not
+rewritten. Stored verification codes remain unchanged. See auth/notifications.ts and sms-footer.test.ts.
+
+Kavenegar OTP uses the operator-configured remote verify/lookup template. A numeric OTP token
+cannot carry whitespace/newlines: put the footer in the provider's template itself, retaining its
+verification placeholder and delivery policy. Enabling SMS or selecting a template does not update
+that remote template. Configure and verify it separately for each provider account. The maintenance
+helper stops if provider fallback policy cannot be safely preserved. No generic guarantee of a live
+OTP footer can be made from local unit tests. Per-client completion belongs in operational records.
+
+## Account/profile configuration and ownership
+AccountsTab exposes signupVerification. Default true uses the existing code-verification flow;
+false requires a password and does not verify identifier ownership. Customer profile addresses
+use existing customer APIs and permissions; they do not add a separate business/customer database.
+Staff visibility remains tenant-scoped. See instagram-orders.md for identity/address checks during
+submission. Changing this option is a per-site decision, not a product-wide disabling of OTP.

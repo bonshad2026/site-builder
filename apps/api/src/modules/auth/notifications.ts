@@ -2,6 +2,12 @@ import nodemailer from 'nodemailer';
 import type { Env } from '../../config/env.js';
 import type { Logger } from '../../common/logger.js';
 
+export const SMS_OPT_OUT_FOOTER = 'لغو ۱۱';
+/** Normalize old trailing forms and append the footer exactly once on its own line. */
+export function withSmsFooter(text:string):string {
+  const body=text.replace(/(?:\s*لغو[ \t]*[۱١1]{2})+\s*$/u,'').trimEnd();
+  return body ? body+'\n'+SMS_OPT_OUT_FOOTER : SMS_OPT_OUT_FOOTER;
+}
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -37,14 +43,16 @@ export class ConsoleEmailSender implements EmailSender {
 
 export class ConsoleSmsSender implements SmsSender {
   readonly name = 'console';
-  readonly outbox: { phone: string; code: string }[] = [];
+  readonly outbox: { phone: string; code: string; text:string }[] = [];
   readonly texts: { phone: string; text: string }[] = [];
   constructor(private readonly log: Logger) {}
   async sendOtp(phone: string, code: string) {
-    this.outbox.push({ phone, code });
-    this.log.info({ phone }, `[dev sms] one-time code: ${code}`);
+    const text=withSmsFooter(`کد تأیید شما: ${code}`);
+    this.outbox.push({ phone, code, text });
+    this.log.info({ phone }, `[dev sms] ${text}`);
   }
   async sendText(phone: string, text: string) {
+    text=withSmsFooter(text);
     this.texts.push({ phone, text });
     this.log.info({ phone }, `[dev sms] ${text}`);
   }
@@ -75,7 +83,7 @@ export class KavenegarSmsSender implements SmsSender {
   async sendText(phone: string, text: string) {
     const url = new URL(`https://api.kavenegar.com/v1/${encodeURIComponent(this.apiKey)}/sms/send.json`);
     url.searchParams.set('receptor', phone);
-    url.searchParams.set('message', text);
+    url.searchParams.set('message', withSmsFooter(text));
     if (this.sender) url.searchParams.set('sender', this.sender);
     const res = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10_000) });
     const body = (await res.json().catch(() => null)) as { return?: { status?: number; message?: string } } | null;

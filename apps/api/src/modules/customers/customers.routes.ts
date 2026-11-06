@@ -12,7 +12,7 @@ export function customersRoutes() {
     { method: 'get', path: '/', summary: 'List customer accounts with their request and order counts', query: paginationQuery.extend({ q: z.string().trim().max(100).optional() }), middleware: [requirePermission('leads:read')] },
     async ({ req, query }) => {
       const { rows } = await req.tenant!.db.query(
-        `SELECT c.id, c.name, c.phone, c.email, c.status, c.created_at AS "createdAt", c.last_login_at AS "lastLoginAt",
+        `SELECT c.id, c.name, c.phone, c.email, c.addresses, c.status, c.created_at AS "createdAt", c.last_login_at AS "lastLoginAt",
                 (SELECT count(*)::int FROM leads l WHERE l.customer_id = c.id) AS requests,
                 (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS orders,
                 count(*) OVER()::int AS total
@@ -27,7 +27,7 @@ export function customersRoutes() {
 
   r.route({ method: 'get', path: '/:id', summary: 'A customer account', params: idParam, middleware: [requirePermission('leads:read')] }, async ({ req, params }) => {
     const { rows } = await req.tenant!.db.query(
-      `SELECT id, name, phone, email, status, created_at AS "createdAt", last_login_at AS "lastLoginAt" FROM customers WHERE id = $1`,
+      `SELECT id, name, phone, email, addresses, status, created_at AS "createdAt", last_login_at AS "lastLoginAt" FROM customers WHERE id = $1`,
       [params.id],
     );
     if (!rows[0]) throw notFound('Customer');

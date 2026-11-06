@@ -365,6 +365,7 @@ export type LeadInput = z.input<typeof leadInputSchema>;
 /* ---------- Orders ---------- */
 
 export const orderInputSchema = z.object({
+  requestId: z.string().uuid().optional(),
   /** What is required depends on the shop's checkout settings (checked on the server). */
   customer: z.object({
     name: z.string().trim().min(2).max(120),
@@ -405,6 +406,14 @@ export const orderInputSchema = z.object({
 });
 
 /** A built-in status or one the shop added (see `shop.orderStatuses`). */
+export const walkInOrderSchema = z.object({
+  requestId: z.string().uuid(),
+  items: orderInputSchema.shape.items.refine(items=>items.every(item=>!!item.productId), 'Catalog products only'),
+  note: z.string().trim().max(1000).optional(),
+}).strict();
+export const orderManualPaymentSchema = z.object({
+  paymentStatus: z.enum(['unpaid','paid','refunded']),
+});
 export const orderUpdateSchema = z.object({
   status: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,39}$/),
 });

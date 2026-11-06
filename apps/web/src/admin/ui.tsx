@@ -328,7 +328,7 @@ export function IconButton({ label, onClick, children, disabled, className }: { 
 
 /* ---------- dialogs & toasts ---------- */
 
-export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean | 'xl' }) {
+export function Modal({ open, onClose, title, children, wide, fullScreen = false }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean | 'xl'; fullScreen?: boolean }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   // Callers usually pass a new onClose on every render; keep the latest without re-running the
@@ -350,9 +350,9 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   }, [open]);
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-10" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cn('w-full bg-bg p-6 shadow-xl', wide === 'xl' ? 'max-w-7xl' : wide ? 'max-w-4xl' : 'max-w-lg')}>
-        <div className="mb-5 flex items-center justify-between gap-4">
+    <div className={cn("fixed inset-0 z-50 flex items-start justify-center bg-black/40",fullScreen?"overflow-hidden p-2 sm:p-3":"overflow-y-auto p-4 sm:p-10")} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cn('w-full bg-bg p-6 shadow-xl', fullScreen ? 'flex h-full max-w-none flex-col overflow-hidden p-3! sm:p-4!' : wide === 'xl' ? 'max-w-7xl' : wide ? 'max-w-4xl' : 'max-w-lg')}>
+        <div className={cn("flex shrink-0 items-center justify-between gap-4",fullScreen?"mb-2":"mb-5")}>
           <h2 className="font-display text-2xl text-ink">{title}</h2>
           <IconButton label={t.close} onClick={onClose}>
             ✕

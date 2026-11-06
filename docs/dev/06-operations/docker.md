@@ -92,3 +92,24 @@ docker exec -it sb-studio-db psql -U sb_admin -d sb_control
 
 ## اگر بخواهید…
 - مشکلی را حل کنید → [عیب‌یابی](troubleshooting.md)
+
+## آماده‌سازی تونل Matstack
+
+پوشهٔ deploy/matstack/ مخصوص عامل ویندوز این پروژه است. کلید در فایل .env و عامل در bin قرار می‌گیرد؛ هر دو از Git خارج‌اند. اسکریپت start.ps1 ابتدا پورت محلی 8725 را بررسی می‌کند. مقصد باید نسخهٔ مستقل سایت باشد؛ نسخهٔ مستقل کافه و دسترسی عمومی آن در ۲۰۲۶-۱۱-۰۶ بررسی شدند. راهنمای اجرا در deploy/matstack/README.md است و تنظیمات لیارا مستقل می‌ماند.
+
+کد اپ اندروید در mobile/cafe-mohammad است؛ build.ps1 با SDK و Gradle همراه Unity و mirror مایکت، APK آزمایشی را در exports می‌سازد. امضای APK بررسی شده، اما نصب و نمایش اسپلش روی گوشی هنوز آزمایش نشده است.
+
+## توقف و ادامهٔ کافهٔ محلی (۲۰۲۶-۱۱-۰۶)
+سرویس‌های کافه، استودیو، worker اینستاگرام، دیتابیس تست و تونل به درخواست مالک متوقف‌اند؛
+کانتینر و داده حذف نشده‌اند. تنها با درخواست بعدی مالک روشن شوند. ترتیب ادامه از ریشهٔ مخزن:
+
+```powershell
+docker compose -f deploy/docker-compose.yml up -d
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/matstack/start-local-site.ps1
+docker compose -f deploy/instagram-relay/worker.compose.yml up -d
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/matstack/start.ps1 -Check
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/matstack/start.ps1
+```
+استودیو برای اجرای خود کافه الزامی نیست. تونل در foreground اجرا می‌شود؛ PID قدیمی را معتبر
+فرض نکنید. اسکریپت‌های ساخت اولیهٔ منو و setup worker دستور راه‌اندازی مجدد نیستند و ممکن است
+تنظیمات دستی را تغییر دهند. جزئیات: `docs/clients/cafe-mohammad/operations.md`.

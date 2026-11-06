@@ -160,3 +160,25 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Keep app navigation pages below the header without per-page offsets. */
+@media (width < 64rem) {
+  .mobile-app-header {
+    position: sticky;
+    background: var(--bg);
+    color: var(--ink);
+    padding-block: 12px;
+    box-shadow: 0 1px 0 var(--line);
+  }
+}
+
+/* The mobile app header occupies its own row; fixed-header offsets are unnecessary. */
+@media (width < 64rem) {
+  [data-app-navigation="true"] .public-page-heading,
+  [data-app-navigation="true"] .public-account-spacing {
+    padding-top: 1.5rem;
+  }
+  [data-app-navigation="true"] [data-hero-frame="contained"] {
+    margin-top: 1rem;
+  }
+}

@@ -35,7 +35,9 @@ interface ProductRow {
 }
 
 export const ORDER_COLUMNS = `id, number::text AS number, status, payment_status AS "paymentStatus", payment_method AS "paymentMethod", customer, note, currency,
-  customer_id AS "customerId", unread,
+  customer_id AS "customerId", unread, pricing_pending AS "pricingPending",
+  (SELECT state FROM instagram_outbox WHERE order_id = orders.id) AS "instagramState",
+  EXISTS(SELECT 1 FROM payments WHERE order_id = orders.id) AS "hasGatewayPayment",
   subtotal_minor::text AS "subtotalMinor", total_minor::text AS "totalMinor", shipping_minor::text AS "shippingMinor", shipping_method AS "shippingMethod",
   discount_minor::text AS "discountMinor", coupon_code AS "couponCode", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
@@ -93,7 +95,7 @@ function labelledCheckoutAnswers(input: OrderInput, checkout: CheckoutSettings) 
  * Payment is never marked as done here. Discounts come from the product or a valid code, shipping
  * from the shop's methods; the buyer's figures are never used.
  */
-export async function createOrder(db: pg.Pool, input: OrderInput, customerId: string | null = null) {
+export async function createOrder(db: pg.Pool, input: OrderInput, customerId: string | null = null, staffActor?: string) {
   // Merge duplicate lines (same product, colour and variant); limits and stock use each product's total.
   const merged = new Map<string, { productId: string; option: string; variant: string; quantity: number }>();
   for (const item of input.items) {
@@ -113,19 +115,32 @@ export async function createOrder(db: pg.Pool, input: OrderInput, customerId: st
   const orderToken = randomToken(24);
 
   const rules = await shopRules(db);
-  checkCheckout(input, rules.checkout);
+  const instagram = rules.orderMode === 'instagram' && !staffActor;
+  if (instagram && input.items.some(l=>l.itemId)) throw badRequest('Instagram ordering supports catalog products only');
+  if (instagram && (!customerId || !rules.instagramUsername)) throw badRequest('Instagram ordering requires an account and recipient');
+  if (!staffActor) checkCheckout(input, rules.checkout);
   const totalUnits = [...quantities.values(), ...seats.values()].reduce((a, b) => a + b, 0);
   if (rules.maxItemsPerOrder !== null && totalUnits > rules.maxItemsPerOrder) throw badRequest(`An order can have at most ${rules.maxItemsPerOrder} items`);
-  const method = rules.shipping.length ? rules.shipping.find((m) => m.id === input.shippingMethod) : undefined;
-  if (rules.shipping.length && !method) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'shippingMethod', message: 'required', code: 'too_small' }]);
+  const method = !staffActor && rules.shipping.length ? rules.shipping.find((m) => m.id === input.shippingMethod) : undefined;
+  if (!staffActor && rules.shipping.length && !method) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'shippingMethod', message: 'required', code: 'too_small' }]);
 
   return withTransaction(db, async (tx) => {
+    if (staffActor && input.requestId) {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['walk-in:'+staffActor+':'+input.requestId]);
+      const existing = await tx.query('SELECT ' + ORDER_COLUMNS + " FROM orders WHERE customer_id IS NULL AND request_id=$1 AND customer->>'staffId'=$2 AND customer->>'source'='walk_in'", [input.requestId, staffActor]);
+      if (existing.rows[0]) return {...existing.rows[0], orderToken:'', lowStock:[], items: await orderItems(tx,existing.rows[0].id)};
+    }
+    if (instagram && input.requestId) {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [customerId + ':' + input.requestId]);
+      const existing = await tx.query('SELECT ' + ORDER_COLUMNS + ' FROM orders WHERE customer_id = $1 AND request_id = $2', [customerId, input.requestId]);
+      if (existing.rows[0]) return {...existing.rows[0], orderToken:'', lowStock:[], items: await orderItems(tx, existing.rows[0].id)};
+    }
     const ids = [...quantities.keys()];
     const { rows: products } = !ids.length ? { rows: [] as ProductRow[] } : await tx.query<ProductRow>(
       `SELECT id, slug, name, price_minor::text AS price_minor, currency, stock, discount_percent, colors, max_per_order, variants FROM products
-        WHERE id = ANY($1::uuid[]) AND status = 'published' AND is_available AND price_minor IS NOT NULL
+        WHERE id = ANY($1::uuid[]) AND status = 'published' AND is_available AND (price_minor IS NOT NULL OR $2::boolean)
         FOR UPDATE`,
-      [ids],
+      [ids, instagram],
     );
     const byId = new Map(products.map((p) => [p.id, p]));
     const unavailable = ids.filter((id) => !byId.has(id));
@@ -151,7 +166,7 @@ export async function createOrder(db: pg.Pool, input: OrderInput, customerId: st
       const variants = product.variants ?? [];
       const chosen = variants.find((v) => Object.values(v.name).includes(variant));
       if (variants.length ? !chosen : variant !== '') throw badRequest(`Choose a valid option for ${product.slug}`);
-      const base = BigInt(chosen?.priceMinor ?? product.price_minor!);
+      const base = BigInt(chosen?.priceMinor ?? product.price_minor ?? 0);
       const unit = (base * BigInt(100 - (product.discount_percent ?? 0))) / 100n;
       const lineTotal = unit * BigInt(quantity);
       subtotal += lineTotal;
@@ -204,28 +219,30 @@ export async function createOrder(db: pg.Pool, input: OrderInput, customerId: st
     }
     const shipping = method ? BigInt(shippingCost(method, Number(subtotal - discount))) : 0n;
     const total = subtotal - discount + shipping;
-    const customer = { ...input.customer, answers: labelledCheckoutAnswers(input, rules.checkout) };
+    const customer = { ...input.customer, answers: staffActor ? [] : labelledCheckoutAnswers(input, rules.checkout), ...(staffActor ? {source:'walk_in',staffId:staffActor} : {}) };
 
     const { rows } = await tx.query(
-      `INSERT INTO orders (customer, note, currency, subtotal_minor, total_minor, public_token_hash, payment_method, customer_id, shipping_minor, shipping_method, discount_minor, coupon_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${ORDER_COLUMNS}`,
+      `INSERT INTO orders (customer, note, currency, subtotal_minor, total_minor, public_token_hash, payment_method, customer_id, shipping_minor, shipping_method, discount_minor, coupon_code, status, request_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING ${ORDER_COLUMNS}`,
       [
         customer,
         input.note ?? null,
         [...currencies][0],
         subtotal.toString(),
         total.toString(),
-        sha256(orderToken),
+        staffActor ? null : sha256(orderToken),
         input.paymentMethod,
         customerId,
         shipping.toString(),
         method ? { id: method.id, label: method.label } : null,
         discount.toString(),
         couponCode,
+        staffActor ? 'confirmed' : 'pending',
+        staffActor ? input.requestId : null,
       ],
     );
     const order = rows[0];
-    await addEvent(tx, { orderId: order.id }, { kind: 'created', public: true, data: { stage: order.status }, byCustomer: true });
+    await addEvent(tx, { orderId: order.id }, { kind: 'created', public: true, data: { stage: order.status, source: staffActor ? 'walk_in' : 'online' }, byCustomer: !staffActor, actorUserId: staffActor });
     for (const line of lines) {
       await tx.query(
         `INSERT INTO order_items (order_id, product_id, product_slug, product_name, unit_price_minor, quantity, line_total_minor, option, variant)
@@ -240,7 +257,19 @@ export async function createOrder(db: pg.Pool, input: OrderInput, customerId: st
         [order.id, l.slug, l.title, l.unit.toString(), l.quantity, (l.unit * BigInt(l.quantity)).toString(), l.id],
       );
     }
-    await auditTenant(tx, { action: 'order.created', target: order.id, metadata: { number: order.number } });
+    if (instagram) {
+      await tx.query('UPDATE orders SET pricing_pending = true, request_id = $2 WHERE id = $1', [order.id, input.requestId ?? null]);
+      const title = (name: Record<string,string>) => name.fa || name.en || '';
+      const text = [
+        'سفارش کافه #' + order.number,
+        ...lines.map(l => title(l.product.name) + (l.variant ? ' (' + l.variant + ')' : '') + (l.option ? ' / ' + l.option : '') + ' × ' + l.quantity),
+        'نام: ' + customer.name, 'موبایل: ' + customer.phone, 'نشانی: ' + customer.address,
+        input.note ? 'توضیحات: ' + input.note : '', 'قیمت و تأیید نهایی با کافه است.'
+      ].filter(Boolean).join('\n');
+      if (text.length > 1000) throw badRequest('Order message is too long; shorten the note or basket');
+      await tx.query('INSERT INTO instagram_outbox(order_id, recipient, message) VALUES ($1,$2,$3)', [order.id, rules.instagramUsername.replace(/^@/, ''), text]);
+    }
+    await auditTenant(tx, { actorUserId: staffActor, action: 'order.created', target: order.id, metadata: { number: order.number, source: staffActor ? 'walk_in' : 'online' } });
     return { ...order, orderToken, lowStock, items: await orderItems(tx, order.id) };
   });
 }
@@ -371,6 +400,7 @@ export async function orderCustomerView(
     payment_status: string;
     currency: string;
     total_minor: string;
+    pricing_pending?: boolean;
     payment_method?: string;
     subtotal_minor?: string;
     shipping_minor?: string;
@@ -398,6 +428,7 @@ export async function orderCustomerView(
     status: order.status,
     stage: { key: order.status, label: label(order.status), kind: order.status === 'fulfilled' ? 'done' : order.status === 'cancelled' ? 'cancelled' : 'open' },
     path: path.map((key) => ({ key, label: label(key), kind: key === 'fulfilled' ? 'done' : 'open', reached: reached.has(key) || key === order.status })),
+    pricingPending: order.pricing_pending ?? false,
     paymentStatus: order.payment_status,
     paymentMethod: order.payment_method,
     currency: order.currency,

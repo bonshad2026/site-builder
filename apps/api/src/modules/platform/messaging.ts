@@ -79,7 +79,7 @@ export function messagingRoutes(ctx: AppContext, reset: () => void) {
       }
       if (body.phone) {
         try {
-          await ctx.sms.sendText(body.phone, 'پیامک آزمایشی از سایت شما');
+          await ctx.sms.sendText(body.phone, 'پیام آزمایشی \n لغو۱۱');
           result.sms = 'ok';
         } catch (err) {
           result.sms = (err as Error).message;

@@ -1,0 +1,9 @@
+services:
+  probe:
+    build: .
+    env_file: .env
+    volumes:
+      - ../../var/instagram-relay:/state
+    stdin_open: true
+    tty: true
+    restart: "no"

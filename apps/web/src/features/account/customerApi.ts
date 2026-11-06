@@ -4,6 +4,7 @@ import { usePreferences } from '../../lib/preferences';
 import { useSiteId, useSiteSettings } from '../public-site/data';
 
 export interface Customer {
+  addresses: {id:string; label:string; address:string}[];
   id: string;
   name: string;
   phone: string | null;

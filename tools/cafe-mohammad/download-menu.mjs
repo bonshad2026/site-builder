@@ -1,0 +1,7 @@
+import {mkdir,writeFile,access,copyFile} from 'node:fs/promises';
+const dir='var/cafe-mohammad/menu'; await mkdir(dir,{recursive:true});
+const photos={1:'1525351484163-7529414344d8',2:'1533089860892-a7c6f0a88666',3:'1528207776546-365bb710ee93',5:'1484723091739-30a097e8f929',9:'1515543904379-3d757afe72e4',11:'1555507036-ab1f4038808a',12:'1551024506-0bccd828d307',13:'1509042239860-f550ce710b93',14:'1461023058943-07fcbe16d735',15:'1495474472287-4d71bcdd2085',16:'1514432324607-a09d9b4aefdd',17:'1442512595331-e89e73853f31',18:'1570968915860-54d5c301fa9f',20:'1544145945-f90425340c7e',22:'1622597467836-f3285f2131b8',23:'1600271886742-f049cd451bba',24:'1551024709-8f23befc6f87',25:'1578985545062-69928b1d9587',26:'1535141192574-5d4897c12636',27:'1488477181946-6428a0291777',29:'1565958011703-44f9829ba187',30:'1563729784474-d77dbb933a9e'};
+const failures=[];
+await Promise.all(Object.entries(photos).map(async([n,id])=>{const file=`${dir}/${n}.jpg`;try{await access(file);return;}catch{}
+try{try{await copyFile(`var/demo-images/${id}.jpg`,file);}catch{const r=await fetch(`https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=900&q=85`,{signal:AbortSignal.timeout(25000)});if(!r.ok)throw Error(r.status);await writeFile(file,new Uint8Array(await r.arrayBuffer()));}console.log('OK',n);}catch(e){failures.push(n);console.error('FAIL',n,e.message);}}));
+if(failures.length)process.exitCode=1;

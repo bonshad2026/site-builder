@@ -134,6 +134,11 @@ export const headerSchema = z
     layout: z.enum(['standard', 'centered', 'menu-start', 'stacked']).default('standard'),
     size: z.enum(['compact', 'normal', 'large']).default('normal'),
     showMenu: z.boolean().default(true),
+    mobileNavigation: z.enum(['drawer', 'bottom']).default('drawer'),
+    mobileLinks: z.array(z.object({
+      label: loc(40), href: hrefSchema,
+      icon: z.enum(['home', 'coffee', 'bag', 'user', 'heart', 'receipt', 'phone', 'grid']).default('grid'),
+    })).max(4).default([]),
     showCart: z.boolean().default(true),
     showLanguage: z.boolean().default(true),
     showTheme: z.boolean().default(true),
@@ -214,6 +219,7 @@ export type ProductCardSettings = z.output<typeof productCardSchema>;
 
 export const shopPageSchema = z
   .object({
+    layout: z.enum(['grid', 'category-rows']).default('grid'),
     /** Products per row on large screens. */
     columns: z.number().int().min(1).max(6).default(4),
     showCategoryFilter: z.boolean().default(true),
@@ -331,6 +337,12 @@ export const shippingCost = (m: ShippingMethod, subtotal: number) => (m.freeAbov
 
 export const shopSchema = z
   .object({
+    /** Share mode prepares a message; only checkout mode creates a server order/payment. */
+    orderMode: z.enum(['checkout', 'share', 'instagram']).default('checkout'),
+    shareRecipient: z.string().trim().max(120).default(''),
+    shareTarget: z.enum(['chooser', 'instagram']).default('chooser'),
+    instagramUsername: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$|^$/).default(''),
+    showPrices: z.boolean().default(true),
     /** Currency for new products (existing products keep theirs). */
     currency: z.enum(CURRENCIES).default('IRR'),
     /** Most units of one product in an order (a product can set a lower limit). */

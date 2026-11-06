@@ -21,9 +21,11 @@ export const customerCookie = (slug: string) => `sb_c_${slug}`;
 export const customerCsrfCookie = (slug: string) => `sb_cc_${slug}`;
 export const CUSTOMER_CSRF_HEADER = 'x-customer-csrf';
 
-const COLUMNS = 'c.id, c.name, c.phone, c.email, c.password_hash IS NOT NULL AS has_password';
+const COLUMNS = 'c.id, c.name, c.phone, c.email, c.password_hash IS NOT NULL AS has_password, c.addresses, c.verified_at IS NOT NULL AS verified';
 
 interface CustomerRow {
+  addresses: {id:string; label:string; address:string}[];
+  verified: boolean;
   id: string;
   name: string;
   phone: string | null;
@@ -31,11 +33,13 @@ interface CustomerRow {
   has_password: boolean;
 }
 
-export const publicCustomer = (c: { id: string; name: string; phone: string | null; email: string | null; hasPassword?: boolean; has_password?: boolean }) => ({
+export const publicCustomer = (c: { id: string; name: string; phone: string | null; email: string | null; hasPassword?: boolean; has_password?: boolean; addresses?: {id:string; label:string; address:string}[]; verified?: boolean }) => ({
   id: c.id,
   name: c.name,
   phone: c.phone,
   email: c.email,
+  addresses: c.addresses ?? [],
+  verified: c.verified ?? false,
   hasPassword: c.hasPassword ?? c.has_password ?? false,
 });
 
@@ -147,17 +151,18 @@ async function consumeCode(db: pg.Pool, identifier: string, purpose: string, cod
 
 /* ---------- accounts ---------- */
 
-export async function signup(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code: string; name: string; password?: string }) {
+export async function signup(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code?: string; name: string; password?: string }) {
   const identifier = identifierOf(settings, input.identifier);
   if (input.password && !settings.passwords) throw badRequest('Passwords are not used on this site');
-  await consumeCode(db, identifier, 'signup', input.code);
+  if (settings.signupVerification) await consumeCode(db, identifier, 'signup', input.code ?? '');
+  else if (!settings.passwords || !input.password) throw badRequest('A password is required for signup without verification');
   const passwordHash = input.password ? await hashPassword(input.password) : null;
   try {
     const { rows } = await db.query<CustomerRow>(
-      `INSERT INTO customers AS c (${column(settings)}, name, password_hash) VALUES ($1, $2, $3) RETURNING ${COLUMNS}`,
-      [identifier, input.name, passwordHash],
+      `INSERT INTO customers AS c (${column(settings)}, name, password_hash, verified_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END) RETURNING ${COLUMNS}`,
+      [identifier, input.name, passwordHash, settings.signupVerification],
     );
-    await linkCases(db, rows[0].id, settings, identifier);
+    if (settings.signupVerification) await linkCases(db, rows[0].id, settings, identifier);
     return rows[0];
   } catch (err) {
     if ((err as { code?: string }).code === '23505') throw conflict('An account with this phone or email already exists. Sign in instead.');
@@ -188,7 +193,8 @@ export async function login(db: pg.Pool, settings: AccountsSettings, input: { id
   }
   if (customer.status !== 'active') throw forbidden('This account is blocked. Contact the site.');
   await db.query('UPDATE customers SET failed_logins = 0, locked_until = NULL, last_login_at = now() WHERE id = $1', [customer.id]);
-  await linkCases(db, customer.id, settings, identifier);
+  if (input.code) await db.query('UPDATE customers SET verified_at = now() WHERE id = $1', [customer.id]);
+  if (customer.verified || input.code) await linkCases(db, customer.id, settings, identifier);
   return customer;
 }
 
@@ -240,7 +246,7 @@ export async function updateProfile(
   db: pg.Pool,
   settings: AccountsSettings,
   customer: CustomerSession,
-  input: { name?: string; email?: string; phone?: string; password?: string; currentPassword?: string },
+  input: { name?: string; email?: string; phone?: string; password?: string; currentPassword?: string; addresses?: {id:string; label:string; address:string}[] },
 ) {
   const sets: string[] = [];
   const values: unknown[] = [customer.id];
@@ -248,6 +254,7 @@ export async function updateProfile(
     values.push(v);
     sets.push(`${col} = $${values.length}`);
   };
+  if (input.addresses) add('addresses', JSON.stringify(input.addresses));
   if (input.name) add('name', input.name);
   // The verified identifier cannot be changed here; the other contact detail can.
   if (input.email !== undefined && settings.identifier === 'phone') add('email', input.email ? normalizeIdentifier(input.email, 'email') : null);

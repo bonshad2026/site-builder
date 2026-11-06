@@ -155,7 +155,8 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
     description: L('Key numbers and press mentions', 'اعداد کلیدی و رسانه‌ها'),
     fields: [
       { ...eyebrow, label: L('Label above press list', 'برچسب رسانه‌ها') },
-      { key: 'items', kind: 'list', label: L('Numbers', 'اعداد'), item: [{ key: 'value', kind: 'text', label: L('Value', 'مقدار') }, { key: 'label', kind: 'loc', label: L('Label', 'برچسب') }] },
+      { key: 'layout', kind: 'select', label: L('Layout', 'چیدمان'), options: [{ value: 'plain', label: L('Plain numbers', 'نوشته‌های ساده') }, { value: 'cards', label: L('Square icon cards', 'کارت مربعی با آیکن') }] },
+      { key: 'items', kind: 'list', label: L('Numbers', 'اعداد'), item: [{ key: 'value', kind: 'text', label: L('Value', 'مقدار') }, { key: 'label', kind: 'loc', label: L('Label', 'برچسب') }, { key: 'icon', kind: 'select', label: L('Icon', 'آیکن'), options: [{ value: 'clock', label: L('Clock', 'ساعت') }, { value: 'pin', label: L('Location', 'موقعیت') }, { value: 'coffee', label: L('Coffee', 'قهوه') }, { value: 'star', label: L('Star', 'ستاره') }] }] },
       { key: 'publications', kind: 'strings', label: L('Press / clients', 'رسانه‌ها / مشتریان') },
       buttons,
     ],
@@ -176,6 +177,7 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       intro,
       { key: 'filter', kind: 'select', label: L('Show', 'نمایش'), options: [{ value: 'featured', label: L('Featured only', 'فقط منتخب') }, { value: 'all', label: L('All', 'همه') }] },
       { key: 'limit', kind: 'number', label: L('How many', 'تعداد'), min: 1, max: 48 },
+      { key: 'layout', kind: 'select', label: L('Layout', 'چیدمان'), options: [{ value: 'grid', label: L('Grid', 'شبکه‌ای') }, { value: 'horizontal', label: L('Compact horizontal row', 'ردیف افقی جمع‌وجور') }] },
       { key: 'category', kind: 'category', label: L('Only this category', 'فقط این گروه') },
       { key: 'showDiscount', kind: 'bool', label: L('Show discounts', 'نمایش تخفیف') },
       { key: 'showColors', kind: 'bool', label: L('Show colours', 'نمایش رنگ‌ها') },

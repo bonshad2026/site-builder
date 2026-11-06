@@ -1,5 +1,8 @@
 # Starters
 
+General mobile/header/catalog/card behavior: [mobile-storefront.md](mobile-storefront.md).
+Client examples later in this file are configuration examples, not feature requirements.
+
 The studio's own starting points, usable on any site (even an empty one): pages, tables, headers and
 footers. Stored in the control DB (`starters`: `kind`, `name`, `description`, `group_name`,
 `sample_key`, `data`; migrations `004_starters.sql`, `005_starter_groups.sql`).
@@ -57,3 +60,26 @@ add-sample-starters` (run by `deploy/studio/api-start.sh`) adds those whose key 
 key. Pages should be used at the slug named in their description (e.g. `not-found`, `products`,
 `account`) to replace a built-in page. Test: `apps/api/test/starters.test.ts` builds every sample on an
 empty site.
+
+## Mobile navigation
+Header settings now offer `mobileNavigation: drawer | bottom` (default drawer). Bottom mode
+uses up to four editable `mobileLinks` (localized label, destination, SVG icon) plus More,
+which opens the existing complete menu and preferences. Empty links use module-aware defaults.
+The bar supports active routes, cart quantity, RTL and bottom safe-area spacing; desktop is unchanged.
+Edit in Settings > Header; header starters carry these settings like other header options.
+In bottom mode the mobile header stays in document flow (sticky, opaque) to avoid covering
+embedded account forms. Responsive wrappers hide duplicate cart/account header tools; closing
+More restores focus to its bottom trigger. Drawer and desktop header positions are unchanged.
+
+## Mobile page spacing
+With bottom navigation enabled, the in-flow mobile header replaces fixed-header clearance.
+Shared page headings and account/tracking containers use 24px top spacing; contained home
+heroes use a 16px top margin. These scoped rules apply below 1024px only; desktop and drawer
+mode retain their offsets. Shared headings include built-in catalog/cart checkout and builder
+page-header sections, so new pages reuse the same mobile treatment.
+
+## Square stats cards
+The existing Stats section offers plain (default) or cards layout. Cards use three equal columns,
+square surfaces, theme accent SVG icons (clock, location, coffee, star), a value and localized label.
+Layout and each icon are editable in the builder. Cafe's three home stats retain their texts and
+use clock/location/coffee. Standard stats elsewhere retain the previous layout.

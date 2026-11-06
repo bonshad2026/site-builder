@@ -40,3 +40,10 @@ builder and platform pages. Operators reach a client's admin with SSO (`src/modu
 - `deploy/backup/studio-backup.sh` → `backups/*.tar.gz` (databases, uploads, control data).
 - `deploy/backup/studio-restore.sh <file> [--replace]` (Windows: `studio-restore.ps1 -Backup <file> [-Replace]`).
 - After copying data between databases run `deploy/export/fix-sequences.sql`.
+
+## Local Matstack preparation
+
+deploy/matstack/ holds a dedicated Windows agent setup, an ignored .env and bin folder,
+and start.ps1. It targets a separate local cafe install on 127.0.0.1:8725; it does not
+change Liara or publish the studio preview. See deploy/matstack/README.md. The isolated
+install and public tunnel were verified on 2026-11-06 (cafe site and public API: HTTP 200).

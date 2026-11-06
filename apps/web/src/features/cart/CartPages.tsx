@@ -1,3 +1,4 @@
+import { ShareCheckoutPage } from './ShareCheckoutPage';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IRAN_PROVINCES, shippingCost, type CheckoutSettings } from '@site-builder/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -19,85 +20,94 @@ import { usePaymentMethods, useSiteErrorLanguage, useSiteId, useSiteSettings } f
 import { errorLine } from '../../lib/errorText';
 import { lineKey, MAX_QUANTITY, useCart } from './cart';
 import { PageSlot, useSystemPage } from '../../sections/PageSlot';
+import { InstagramCheckoutPage } from './InstagramCheckoutPage';
 import { customerRequest, useCustomer } from '../account/customerApi';
 
 export function CartPage() {
   const slots = useSystemPage('cart');
-  const { m, l, formatMoney } = usePreferences();
+  const { m, l, locale, formatMoney, formatNumber } = usePreferences();
   const cart = useCart();
+  const { data: settings } = useSiteSettings();
   usePageMeta(m.shop.cart, undefined, { noIndex: true });
   const currency = cart.lines[0]?.currency ?? 'IRR';
+  const fa = locale === 'fa';
+  const showPrices = settings?.shop.showPrices !== false;
+  const appNavigation = settings?.header.mobileNavigation === 'bottom';
+  const checkoutLabel = settings?.shop.orderMode !== 'checkout' ? (fa ? 'ادامه و ثبت سفارش' : 'Continue to place order') : m.shop.checkout;
 
-  return (
-    <>
-      <PageSlot slug={slots.before} />
-      <PageHeader eyebrow={m.shop.cart} title={m.shop.cartTitle} />
-      <Section className="pt-10">
-        <Container>
-          {cart.lines.length === 0 ? (
-            <EmptyState message={m.shop.empty} />
-          ) : (
-            <div className="grid gap-12 lg:grid-cols-12">
-              <ul className="divide-y divide-line border-y border-line lg:col-span-8">
-                {cart.lines.map((line) => (
-                  <li key={lineKey(line)} className="flex gap-5 py-6">
-                    <Image src={line.imageUrl} alt="" className="aspect-square w-24 shrink-0" />
-                    <div className="flex flex-1 flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                      <div>
-                        <Link to={line.href ?? `/products/${line.slug}`} className="font-display text-2xl text-ink hover:text-accent">
-                          {l(line.name)}
-                        </Link>
-                        {line.variant && <p className="text-sm text-ink-soft">{m.shop.variant}: {line.variant}</p>}
-                        {line.option && <p className="text-sm text-ink-soft">{m.shop.color}: {line.option}</p>}
-                        <p className="text-sm text-ink-soft">{formatMoney(line.priceMinor, line.currency)}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2 text-sm text-ink-soft">
-                          <span className="sr-only">{m.shop.quantity}</span>
-                          <Select value={line.quantity} onChange={(e) => cart.setQuantity(lineKey(line), Number(e.target.value))} className="w-20 py-2">
-                            {Array.from({ length: Math.max(10, line.quantity) }, (_, i) => i + 1)
-                              .filter((n) => n <= Math.min(MAX_QUANTITY, line.max ?? 50))
-                              .map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                          </Select>
-                        </label>
-                        <button type="button" onClick={() => cart.setQuantity(lineKey(line), 0)} className="text-sm text-ink-soft underline underline-offset-4 hover:text-danger">
-                          {m.shop.remove}
-                        </button>
+  return <>
+    <PageSlot slug={slots.before} />
+    <section className={appNavigation ? 'py-6 sm:py-10 lg:pt-32' : 'pt-28 pb-12 sm:pt-36'}>
+      <Container>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <p className="mb-1 text-xs font-semibold text-accent">{l(settings?.name)}</p>
+            <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">{m.shop.cart}</h1>
+          </div>
+          <Link to="/products" className="rounded-full border border-line bg-surface px-4 py-2.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent">{fa ? 'افزودن آیتم' : 'Add items'} <span aria-hidden="true">+</span></Link>
+        </div>
+        {cart.lines.length === 0 ? (
+          <div className="rounded-3xl border border-line bg-surface px-6 py-12 text-center">
+            <span className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 7h14l2 14H3ZM8 8V6a4 4 0 0 1 8 0v2" /></svg>
+            </span>
+            <h2 className="text-xl font-bold text-ink">{m.shop.empty}</h2>
+            <p className="mx-auto mt-3 max-w-xs text-sm leading-7 text-ink-soft">{fa ? 'از منو، خوشمزه‌های مورد علاقه‌ات را انتخاب کن و به سبد اضافه کن.' : 'Choose your favourites from the menu and add them to your cart.'}</p>
+            <ButtonLink to="/products" className="mt-6">{m.shop.backToShop} <Arrow /></ButtonLink>
+          </div>
+        ) : (
+          <div className="grid items-start gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-8">
+              <p className="mb-3 text-xs text-ink-soft">{formatNumber(cart.count)} {fa ? 'آیتم در سبد شما' : 'items in your cart'}</p>
+              <ul className="space-y-3">
+                {cart.lines.map(line => {
+                  const key = lineKey(line);
+                  const max = Math.min(MAX_QUANTITY, line.max ?? 50);
+                  return <li key={key} className="rounded-2xl border border-line bg-surface p-3 sm:p-4">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <Link to={line.href ?? ('/products/' + line.slug)} aria-label={l(line.name)} className="w-20 shrink-0 overflow-hidden rounded-xl sm:w-24"><Image src={line.imageUrl} alt="" className="aspect-square" /></Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <Link to={line.href ?? ('/products/' + line.slug)} className="text-sm font-bold leading-6 text-ink hover:text-accent sm:text-base">{l(line.name)}</Link>
+                          <button type="button" onClick={() => cart.setQuantity(key, 0)} aria-label={m.shop.remove + ' ' + l(line.name)} className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-bg hover:text-danger">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7" /></svg>
+                          </button>
+                        </div>
+                        {line.variant && <p className="text-xs text-ink-soft">{m.shop.variant}: {line.variant}</p>}
+                        {line.option && <p className="text-xs text-ink-soft">{m.shop.color}: {line.option}</p>}
+                        {showPrices && <p className="mt-1 text-xs text-ink-soft">{formatMoney(line.priceMinor, line.currency)}</p>}
                       </div>
                     </div>
-                  </li>
-                ))}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+                      <div className="inline-flex items-center gap-1 rounded-full border border-line bg-bg p-1" role="group" aria-label={m.shop.quantity + ' ' + l(line.name)}>
+                        <button type="button" disabled={line.quantity >= max} onClick={() => cart.setQuantity(key, line.quantity + 1)} aria-label={(fa ? 'افزایش تعداد ' : 'Increase quantity ') + l(line.name)} className="flex size-10 items-center justify-center rounded-full bg-accent text-2xl font-bold text-accent-ink disabled:opacity-30">+</button>
+                        <span aria-live="polite" className="min-w-9 text-center text-sm font-bold tabular-nums">{formatNumber(line.quantity)}</span>
+                        <button type="button" disabled={line.quantity <= 1} onClick={() => cart.setQuantity(key, line.quantity - 1)} aria-label={(fa ? 'کاهش تعداد ' : 'Decrease quantity ') + l(line.name)} className="flex size-10 items-center justify-center rounded-full bg-surface text-2xl font-bold text-ink disabled:opacity-30">−</button>
+                      </div>
+                      {showPrices && <span className="text-sm font-bold text-ink tabular-nums">{formatMoney(String(BigInt(line.priceMinor) * BigInt(line.quantity)), line.currency)}</span>}
+                    </div>
+                  </li>;
+                })}
               </ul>
-              <aside className="h-fit border border-line bg-surface p-8 lg:col-span-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <span className="text-ink-soft">{m.shop.subtotal}</span>
-                  <span className="font-display text-3xl text-ink">{formatMoney(cart.subtotalMinor, currency)}</span>
-                </div>
-                <p className="mt-3 text-xs text-ink-soft">{m.shop.priceNote}</p>
-                <ButtonLink to="/checkout" className="mt-8 w-full">
-                  {m.shop.checkout} <Arrow />
-                </ButtonLink>
-              </aside>
             </div>
-          )}
-          <div className="mt-10">
-            <ButtonLink to="/products" variant="ghost">
-              {m.shop.backToShop}
-            </ButtonLink>
+            <aside className="rounded-3xl border border-line bg-surface p-5 lg:sticky lg:top-28 lg:col-span-4">
+              <h2 className="mb-5 text-lg font-bold text-ink">{fa ? 'خلاصه سفارش' : 'Order summary'}</h2>
+              <div className="flex items-center justify-between text-sm text-ink-soft"><span>{m.shop.quantity}</span><span className="font-semibold">{formatNumber(cart.count)}</span></div>
+              {showPrices && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-line pt-4"><span className="text-sm text-ink-soft">{m.shop.subtotal}</span><strong className="text-xl text-ink tabular-nums">{formatMoney(cart.subtotalMinor, currency)}</strong></div>}
+              {showPrices && <p className="mt-3 text-xs leading-6 text-ink-soft">{m.shop.priceNote}</p>}
+              <ButtonLink to="/checkout" className="mt-5 w-full">{checkoutLabel} <Arrow /></ButtonLink>
+              <Link to="/products" className="mt-4 block text-center text-xs text-ink-soft hover:text-accent">{m.shop.backToShop}</Link>
+            </aside>
           </div>
-        </Container>
-      </Section>
-      <PageSlot slug={slots.after} />
-    </>
-  );
+        )}
+      </Container>
+    </section>
+    <PageSlot slug={slots.after} />
+  </>;
 }
 
 /** The checkout form for this shop: which questions it asks and which are required come from its settings. */
-function checkoutFormSchema(c: CheckoutSettings) {
+export function checkoutFormSchema(c: CheckoutSettings) {
   const text = (rule: 'off' | 'optional' | 'required', max: number) => (rule === 'required' ? z.string().trim().min(1).max(max) : z.string().trim().max(max).optional());
   return z.object({
     name: z.string().trim().min(2).max(120),
@@ -120,10 +130,16 @@ function checkoutFormSchema(c: CheckoutSettings) {
     answers: z.object(Object.fromEntries(c.fields.map((f) => [f.id, f.required ? z.string().trim().min(1).max(2000) : z.string().trim().max(2000).optional()]))).optional(),
   });
 }
-type CheckoutData = z.output<ReturnType<typeof checkoutFormSchema>>;
-type CheckoutInput = z.input<ReturnType<typeof checkoutFormSchema>>;
+export type CheckoutData = z.output<ReturnType<typeof checkoutFormSchema>>;
+export type CheckoutInput = z.input<ReturnType<typeof checkoutFormSchema>>;
 
 export function CheckoutPage() {
+  const { data: settings } = useSiteSettings();
+  if (settings?.shop.orderMode === 'instagram') return <InstagramCheckoutPage />;
+  return settings?.shop.orderMode === 'share' ? <ShareCheckoutPage /> : <StandardCheckoutPage />;
+}
+
+function StandardCheckoutPage() {
   const slots = useSystemPage('checkout');
   const { m, l, locale, formatMoney, format } = usePreferences();
   const site = useSiteId();

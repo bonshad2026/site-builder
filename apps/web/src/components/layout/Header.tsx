@@ -10,6 +10,7 @@ import { SmartLink } from '../ui/SmartLink';
 import { Container } from '../ui/Layout';
 import { WishlistLink } from '../../features/wishlist/wishlist';
 import { MobileMenu } from './MobileMenu';
+import { MobileBottomNav } from './MobileBottomNav';
 import { LanguageSwitch, ThemeSwitch } from './PreferenceControls';
 import { useNavItems, type NavItem } from './nav';
 
@@ -213,7 +214,9 @@ export function Header() {
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
-    menuButton.current?.focus();
+    const trigger = document.querySelector<HTMLButtonElement>('[data-mobile-more]');
+    if (trigger && trigger.getBoundingClientRect().width) trigger.focus();
+    else menuButton.current?.focus();
   }, []);
 
   const size = h?.size ?? 'normal';
@@ -269,9 +272,9 @@ export function Header() {
       {h?.showTheme !== false && <ThemeSwitch className="hidden sm:flex" />}
       {h?.showLanguage !== false && <LanguageSwitch className="hidden sm:flex" />}
       <WishlistLink className="hidden sm:inline-flex" />
-      {shop && <CartLink />}
+      {shop && <span className={h?.mobileNavigation === 'bottom' ? 'hidden lg:block' : undefined}><CartLink /></span>}
       {h?.showSearch && <HeaderSearch light={overHero} />}
-      {h?.showAccount !== false && <AccountLink className="hidden sm:inline-flex" />}
+      {h?.showAccount !== false && <span className={h?.mobileNavigation === 'bottom' ? 'hidden lg:block' : 'hidden sm:block'}><AccountLink /></span>}
       {h?.showButton !== false &&
         buttons.map((b, i) => (
           <span key={i} className="hidden md:block">
@@ -286,7 +289,7 @@ export function Header() {
             )}
           </span>
         ))}
-      <button ref={menuButton} type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="mobile-menu" className="flex items-center gap-2 py-2 text-sm lg:hidden">
+      <button ref={menuButton} type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="mobile-menu" className={cn("flex items-center gap-2 py-2 text-sm lg:hidden", h?.mobileNavigation === 'bottom' && 'hidden')}>
         <span className="flex w-6 flex-col gap-1.5" aria-hidden="true">
           <span className="h-px w-full bg-current" />
           <span className="h-px w-2/3 bg-current" />
@@ -301,6 +304,7 @@ export function Header() {
       className={cn(
         'fixed inset-x-0 top-0 z-40 transition-[background-color,color,box-shadow,padding] duration-500 ease-(--ease-soft)',
         pad,
+        h?.mobileNavigation === 'bottom' && 'mobile-app-header',
         overHero ? 'bg-transparent text-white' : 'bg-bg/90 text-ink shadow-[0_1px_0_var(--line)] backdrop-blur-md',
       )}
       style={{ top: 'var(--bar-h, 0px)' }}
@@ -338,6 +342,7 @@ export function Header() {
         </Container>
       )}
 
+      {h?.mobileNavigation === 'bottom' && <MobileBottomNav onMore={() => setMenuOpen(true)} />}
       <MobileMenu open={menuOpen} onClose={closeMenu} />
     </header>
   );

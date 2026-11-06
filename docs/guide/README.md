@@ -11,6 +11,11 @@
 |---|---|
 | **همه‌ی امکانات سایت‌ساز** (قبل از هر کار ببینید) | [features.md](features.md) |
 | **شروع یک سایت از حالت خالی** (روال قدم‌به‌قدم) | [start-empty-site.md](start-empty-site.md) |
+| طراحی موبایل، منوی افقی و کارت‌های آیکن‌دار | [mobile-storefront.md](mobile-storefront.md) |
+| ثبت سریع سفارش حضوری | [walk-in-orders.md](walk-in-orders.md) |
+| مدیریت زندهٔ جدول سفارش‌ها | [order-inbox.md](order-inbox.md) |
+| ثبت سفارش حساب‌محور و مدیریت واسط اینستاگرام | [instagram-orders.md](instagram-orders.md) |
+| سبد خرید و ثبت سفارش از منوی ارسال موبایل | [share-orders.md](share-orders.md) |
 | روشن کردن درگاه پرداخت | [payment-gateways.md](payment-gateways.md) |
 
 </div>

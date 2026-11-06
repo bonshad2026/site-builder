@@ -1,0 +1,15 @@
+services:
+  worker:
+    build: .
+    entrypoint: ["python", "/app/worker.py"]
+    env_file: [.worker.env]
+    volumes:
+      - ../../var/instagram-relay:/state
+      - ./worker.py:/app/worker.py:ro
+    networks: [tenant, internet]
+    restart: "no"
+networks:
+  tenant:
+    external: true
+    name: site-cafe-mohammad_internal
+  internet: {}

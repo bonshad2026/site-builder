@@ -227,3 +227,15 @@ describe('site settings on a client server', () => {
     expect(res.body.data.texts).toEqual(current.texts);
   });
 });
+
+describe('share order settings', () => {
+  it('persists share mode and recipient to public settings and rejects unknown submission modes', async () => {
+    const current = (await owner.get(`${base}/settings`)).body.data;
+    const shared = { ...current, shop: { ...current.shop, orderMode: 'share', shareRecipient: '@test-recipient', showPrices: false, shareTarget: 'instagram', instagramUsername: '_test.user' } };
+    expect((await owner.put(`${base}/settings`, shared)).status).toBe(200);
+    expect((await request(app).get(`${pub}/settings`)).body.data.shop).toMatchObject({orderMode:'share',shareRecipient:'@test-recipient',showPrices:false,shareTarget:'instagram',instagramUsername:'_test.user'});
+    expect((await owner.put(`${base}/settings`, { ...shared, shop: { ...shared.shop, orderMode: 'automatic-dm' } })).status).toBe(400);
+    expect((await owner.put(`${base}/settings`, { ...shared, shop: { ...shared.shop, instagramUsername: '../wrong' } })).status).toBe(400);
+    await owner.put(`${base}/settings`, current);
+  });
+});

@@ -376,6 +376,7 @@ export const accountsSchema = z
     identifier: z.enum(['phone', 'email']).default('phone'),
     /** Accounts may set a password; signing in with a one-time code always works. */
     passwords: z.boolean().default(true),
+    signupVerification: z.boolean().default(true),
   })
   .default({});
 export type AccountsSettings = z.output<typeof accountsSchema>;
@@ -462,7 +463,7 @@ const identifierSchema = z.string().trim().min(5).max(254);
 export const customerCodeSchema = z.object({ identifier: identifierSchema, purpose: z.enum(['signup', 'login', 'reset']) });
 export const customerSignupSchema = z.object({
   identifier: identifierSchema,
-  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code').optional(),
   name: z.string().trim().min(2).max(120),
   password: z.string().min(8).max(200).optional(),
 });
@@ -470,7 +471,21 @@ export const customerLoginSchema = z
   .object({ identifier: identifierSchema, password: z.string().max(200).optional(), code: z.string().trim().regex(/^\d{6}$/).optional() })
   .refine((v) => !!v.password !== !!v.code, 'Enter a password or a code');
 export const customerResetSchema = z.object({ identifier: identifierSchema, code: z.string().trim().regex(/^\d{6}$/), password: z.string().min(8).max(200) });
+export const instagramConnectionSchema = z.object({
+  username: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$/),
+  password: z.string().min(1).max(200).optional(),
+});
+export const instagramConnectionActionSchema = z.object({
+  action: z.enum(['login','disconnect','code']),
+  code: z.string().trim().regex(/^\d{6,8}$/).optional(),
+});
+export const customerAddressSchema = z.object({
+  id: z.string().uuid(),
+  label: z.string().trim().min(1).max(60),
+  address: z.string().trim().min(5).max(1000),
+});
 export const customerProfileSchema = z.object({
+  addresses: z.array(customerAddressSchema).max(10).optional(),
   name: z.string().trim().min(2).max(120).optional(),
   /** The other way to reach the customer (email when the account is a phone, or the other way round). */
   email: z.union([z.string().trim().toLowerCase().email().max(254), z.literal('')]).optional(),

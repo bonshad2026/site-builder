@@ -43,6 +43,7 @@ interface CaseData {
   canPay?: boolean;
   files?: { id: string; name: string; url: string; contentType: string }[];
   // order
+  pricingPending?: boolean;
   paymentStatus?: string;
   paymentMethod?: string;
   currency?: string;
@@ -166,7 +167,7 @@ export function CaseView({ code, token, paymentResult }: { code: string; token?:
         <section className="flex flex-wrap items-center justify-between gap-4 border border-accent/40 bg-surface p-5">
           <div>
             <p className="text-sm text-ink-soft">{t(L('Amount to pay', 'مبلغ قابل پرداخت'))}</p>
-            <p className="font-display text-2xl text-ink">{due ? formatMoney(c.payment!.dueMinor, c.payment!.currency) : formatMoney(c.totalMinor ?? '0', c.currency ?? 'IRR')}</p>
+            <p className="font-display text-2xl text-ink">{c.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : due ? formatMoney(c.payment!.dueMinor, c.payment!.currency) : formatMoney(c.totalMinor ?? '0', c.currency ?? 'IRR')}</p>
             {due && c.payment!.title && <p className="text-sm text-ink-soft">{c.payment!.title}</p>}
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -222,7 +223,7 @@ export function CaseView({ code, token, paymentResult }: { code: string; token?:
                     {l(it.productName)}
                     {[it.variant, it.option].filter(Boolean).length ? ` (${[it.variant, it.option].filter(Boolean).join('، ')})` : ''} × {it.quantity}
                   </span>
-                  <span>{formatMoney(it.lineTotalMinor, c.currency ?? 'IRR')}</span>
+                  <span>{c.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(it.lineTotalMinor, c.currency ?? 'IRR')}</span>
                 </li>
               ))}
               {Number(c.discountMinor) > 0 && (
@@ -241,10 +242,10 @@ export function CaseView({ code, token, paymentResult }: { code: string; token?:
               )}
               <li className="flex justify-between font-medium">
                 <span>{t(L('Total', 'جمع'))}</span>
-                <span>{formatMoney(c.totalMinor ?? '0', c.currency ?? 'IRR')}</span>
+                <span>{c.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(c.totalMinor ?? '0', c.currency ?? 'IRR')}</span>
               </li>
               <li>
-                <Button
+                <Button disabled={c.pricingPending}
                   variant="outline"
                   size="sm"
                   onClick={() =>

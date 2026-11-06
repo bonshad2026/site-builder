@@ -182,6 +182,8 @@ export async function startRequestPayment(
 }
 
 interface OrderRow {
+  payment_method: string;
+  pricing_pending: boolean;
   id: string;
   number: string;
   status: string;
@@ -194,7 +196,7 @@ interface OrderRow {
 
 async function findOrderByNumber(db: pg.Pool, number: string): Promise<OrderRow> {
   const { rows } = await db.query<OrderRow>(
-    'SELECT id, number::text, status, payment_status, currency, total_minor::text, public_token_hash, customer FROM orders WHERE number = $1',
+    'SELECT id, number::text, status, payment_status, currency, total_minor::text, public_token_hash, customer, pricing_pending, payment_method FROM orders WHERE number = $1',
     [number],
   );
   if (!rows[0]) throw notFound('Order');
@@ -203,7 +205,7 @@ async function findOrderByNumber(db: pg.Pool, number: string): Promise<OrderRow>
 
 export async function findOrderForBuyer(db: pg.Pool | pg.PoolClient, number: string, token: string): Promise<OrderRow> {
   const { rows } = await db.query<OrderRow>(
-    'SELECT id, number::text, status, payment_status, currency, total_minor::text, public_token_hash, customer FROM orders WHERE number = $1',
+    'SELECT id, number::text, status, payment_status, currency, total_minor::text, public_token_hash, customer, pricing_pending, payment_method FROM orders WHERE number = $1',
     [number],
   );
   const order = rows[0];
@@ -223,6 +225,8 @@ export async function startPayment(
   const gateway = await pickGateway(ctx, site, input.provider);
 
   const order = verified ? await findOrderByNumber(site.db, input.number) : await findOrderForBuyer(site.db, input.number, input.token);
+  if (order.payment_method === 'cod') throw badRequest('This order uses offline payment');
+  if (order.pricing_pending) throw badRequest('This order awaits cafe confirmation and is not payable');
   if (order.status === 'cancelled') throw badRequest('This order was cancelled');
   if (['paid', 'test_paid', 'refunded'].includes(order.payment_status)) throw badRequest('This order is already paid');
 

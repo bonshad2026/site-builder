@@ -123,7 +123,7 @@ export function registerInteractionRoutes(r: ApiRouter, ctx: AppContext) {
       [req.customer!.id],
     );
     const orders = await db.query(
-      `SELECT number::text AS number, status, payment_status AS "paymentStatus", currency, total_minor::text AS "totalMinor", created_at AS "createdAt", updated_at AS "updatedAt"
+      `SELECT pricing_pending AS "pricingPending", number::text AS number, status, payment_status AS "paymentStatus", currency, total_minor::text AS "totalMinor", created_at AS "createdAt", updated_at AS "updatedAt"
          FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 200`,
       [req.customer!.id],
     );

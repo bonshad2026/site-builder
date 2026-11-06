@@ -44,6 +44,7 @@ function SiteFrame() {
   const { m } = usePreferences();
   const { pathname } = useLocation();
   const siteId = useSiteId();
+  const { data: settings } = useSiteSettings();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
@@ -54,12 +55,12 @@ function SiteFrame() {
       <ThemeEffect />
       <SiteExtras />
       <AnnouncementBar />
-      <div className="flex min-h-dvh flex-col overflow-x-clip" style={{ paddingTop: 'var(--bar-h, 0px)' }}>
+      <div className={settings?.header.mobileNavigation === 'bottom' ? 'flex min-h-dvh flex-col overflow-x-clip pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-0' : 'flex min-h-dvh flex-col overflow-x-clip'} style={{ paddingTop: 'var(--bar-h, 0px)' }}>
         <a href="#main" className="sr-only z-50 bg-ink px-4 py-2 text-bg focus:not-sr-only focus:fixed focus:start-4 focus:top-4">
           {m.nav.skip}
         </a>
         <Header />
-        <main id="main" tabIndex={-1} className="flex-1 outline-none">
+        <main data-app-navigation={settings?.header.mobileNavigation === 'bottom' ? 'true' : undefined} id="main" tabIndex={-1} className="flex-1 outline-none">
           <Outlet />
         </main>
         <Footer />

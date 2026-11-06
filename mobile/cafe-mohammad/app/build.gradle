@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'ir.cafemohammad.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'ir.cafemohammad.app'
+        minSdk 24
+        targetSdk 36
+        versionCode 4
+        versionName '0.4.0'
+    }
+    buildTypes { release { minifyEnabled false } }
+}

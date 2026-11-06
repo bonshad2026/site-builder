@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { cn } from '../../lib/cn';
 import { usePreferences } from '../../lib/preferences';
 import type { ProductDto } from '../../types/api';
 import { finalPrice, isSoldOut } from '../public-site/components/price';
 import { useProducts, useSiteSettings } from '../public-site/data';
-import { useCartOptional } from './cart';
+import { lineKey, useCartOptional } from './cart';
 
 /** Most units of one product a buyer may order: the product's, the shop's and the stock's limits. */
 export function useMaxQuantity() {
@@ -23,33 +22,37 @@ export function AddToCartButton({ product, label, className }: { product: Produc
   const { data: settings } = useSiteSettings();
   const cart = useCartOptional();
   const maxQty = useMaxQuantity();
-  const [added, setAdded] = useState(false);
-  if (!cart || !settings?.modules.orders || isSoldOut(product) || product.priceMinor === null) return null;
+  if (!cart || !settings?.modules.orders || isSoldOut(product) || (product.priceMinor === null && settings.shop.orderMode === 'checkout')) return null;
   const colors = product.colors ?? [];
+  const option = colors[0] ? l(colors[0].name) : '';
+  const key = lineKey({ productId: product.id, option });
+  const quantity = cart.lines.find(line => lineKey(line) === key)?.quantity ?? 0;
+  const maximum = maxQty(product);
   return (
     <span className="inline-flex flex-wrap items-center gap-3">
       <button
         type="button"
+        disabled={quantity >= maximum}
         onClick={() => {
           cart.add({
             productId: product.id,
             slug: product.slug,
             name: product.name,
-            priceMinor: finalPrice(product)!,
+            priceMinor: finalPrice(product) ?? '0',
             currency: product.currency,
             imageUrl: product.imageUrl,
-            option: colors[0] ? l(colors[0].name) : '',
-            max: maxQty(product),
+            option,
+            max: maximum,
           });
-          setAdded(true);
+
         }}
-        className={className}
+        className={cn(className, 'disabled:cursor-not-allowed disabled:opacity-50')}
       >
         {label || m.shop.addToCart}
       </button>
-      {added && (
+      {quantity > 0 && (
         <span role="status" className="text-sm">
-          {format(m.shop.added, { count: formatNumber(1) })}{' '}
+          {format(m.shop.added, { count: formatNumber(quantity) })}{' '}
           <Link to="/cart" className="underline underline-offset-4">
             {m.shop.viewCart}
           </Link>

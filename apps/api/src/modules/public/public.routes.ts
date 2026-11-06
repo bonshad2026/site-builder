@@ -12,7 +12,7 @@ import { productsTable, servicesTable } from '../catalog/catalog.js';
 import { withImageUrls } from '../assets/urls.js';
 import { registerPublicCollectionRoutes } from '../collections/collections.routes.js';
 import { availabilityOf, loadCollections, seatsTaken, type ItemRow } from '../collections/collections.service.js';
-import { createOrder, orderItems, type LowStock } from '../orders/orders.service.js';
+import { shopRules, createOrder, orderItems, type LowStock } from '../orders/orders.service.js';
 import { findOrderForBuyer, getPaymentSettings, startPayment, usableGateways } from '../payments/payments.service.js';
 import { verifiedCustomer } from '../customers/customers.service.js';
 import { accessValid, loadSettings, siteBaseUrl } from '../interactions/context.js';
@@ -148,7 +148,17 @@ export function publicRoutes(ctx: AppContext) {
     async ({ req, body }) => {
       // Products need the shop; content-table items only need orders.
       if (body.items.some((l) => l.productId) && !req.tenant!.modules?.products) throw badRequest('This site does not sell products');
-      if (body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
+      const rules = await shopRules(req.tenant!.db);
+      const customer = verifiedCustomer(req);
+      if (rules.orderMode === 'instagram') {
+        if (!customer) throw badRequest('Sign in before placing an order');
+        const profile = await req.tenant!.db.query('SELECT addresses FROM customers WHERE id = $1', [customer.id]);
+        const address = profile.rows[0]?.addresses?.find((a: {id:string}) => a.id === body.customer.address);
+        if (!address) throw badRequest('Choose an address from your profile');
+        body.customer = {...body.customer, name:customer.name, phone:customer.phone ?? '', email:customer.email ?? '', address:address.address};
+        body.paymentMethod = 'cod';
+      }
+      if (rules.orderMode !== 'instagram' && body.paymentMethod === 'cod' && !(await getPaymentSettings(req.tenant!.db)).allowCod) throw badRequest('Payment on delivery is not offered by this shop');
       const order = await createOrder(req.tenant!.db, body, verifiedCustomer(req)?.id ?? null);
       const settings = await loadSettings(req.tenant!.db);
       const base = await siteBaseUrl(ctx, req.tenant!);

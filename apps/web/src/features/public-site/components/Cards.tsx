@@ -37,9 +37,10 @@ export function ServiceCard({ service, index }: { service: ServiceDto; index: nu
   );
 }
 
-export function ProductCard({ product, options = {} }: { product: ProductDto; options?: ProductCardOptions }) {
+export function ProductCard({ product, options = {}, compact = false }: { product: ProductDto; options?: ProductCardOptions; compact?: boolean }) {
   const { l, m, formatMoney, format, formatNumber } = usePreferences();
   const categoryLabel = useCategoryLabel();
+  const { data: siteSettings } = useSiteSettings();
   const {
     showDiscount = true,
     showColors = true,
@@ -56,18 +57,18 @@ export function ProductCard({ product, options = {} }: { product: ProductDto; op
   const card = (
     <Link to={`/products/${product.slug}`} className="group block">
       {showImage && (
-        <div className="relative mb-5">
-          <Image src={product.imageUrl} alt={l(product.name)} className={`${RATIO[imageRatio]} [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.04] ${soldOut ? 'opacity-60' : ''}`} />
+        <div className={compact ? "relative mb-2 overflow-hidden rounded-xl" : "relative mb-5"}>
+          <Image src={product.imageUrl} alt={l(product.name)} className={`${compact ? RATIO.landscape : RATIO[imageRatio]} [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.04] ${soldOut ? 'opacity-60' : ''}`} />
           <div className="absolute inset-x-3 top-3 flex justify-between gap-2 text-xs">
             {discount > 0 && !soldOut ? <span className="bg-accent px-2 py-1 text-accent-ink">{format(m.shop.discountBadge, { percent: formatNumber(discount) })}</span> : <span />}
             {soldOut && <span className="bg-ink px-2 py-1 text-bg">{m.shop.soldOut}</span>}
           </div>
         </div>
       )}
-      <div className="flex items-start justify-between gap-4">
+      <div className={compact ? "flex flex-col gap-1" : "flex items-start justify-between gap-4"}>
         <div>
           {showCategory && product.category && <p className="text-xs tracking-wide text-ink-soft uppercase rtl:normal-case">{categoryLabel(product.category)}</p>}
-          <h3 className="mt-1.5 font-display text-2xl text-ink">{l(product.name)}</h3>
+          <h3 className={compact ? "mt-1 line-clamp-2 min-h-10 text-sm font-bold leading-5 text-ink" : "mt-1.5 font-display text-2xl text-ink"}>{l(product.name)}</h3>
           {colors.length > 0 && (
             <div className="mt-2 flex gap-1.5" aria-label={m.shop.color}>
               {colors.map((c) => (
@@ -78,8 +79,8 @@ export function ProductCard({ product, options = {} }: { product: ProductDto; op
           {showStock && !soldOut && product.stock !== null && <p className="mt-2 text-xs text-ink-soft">{format(m.shop.inStock, { count: formatNumber(product.stock) })}</p>}
           {!showImage && soldOut && <p className="mt-2 text-xs text-ink-soft">{m.shop.soldOut}</p>}
         </div>
-        {showPrice && (
-          <p className="shrink-0 pt-5 text-end text-sm text-ink-soft tabular-nums">
+        {showPrice && siteSettings?.shop.showPrices !== false && (
+          <p className={compact ? "text-sm text-ink-soft tabular-nums" : "shrink-0 pt-5 text-end text-sm text-ink-soft tabular-nums"}>
             {discount > 0 && <span className="block text-xs line-through opacity-70">{formatMoney(product.priceMinor, product.currency)}</span>}
             {formatMoney(discount > 0 ? finalPrice(product) : product.priceMinor, product.currency)}
           </p>
@@ -89,7 +90,7 @@ export function ProductCard({ product, options = {} }: { product: ProductDto; op
   );
   if (!showAddToCart) return card;
   return (
-    <div className="flex flex-col gap-4">
+    <div className={compact ? "flex h-full flex-col gap-3 [&>button]:mt-auto" : "flex flex-col gap-4"}>
       {card}
       <AddToCartButton product={product} className="self-start rounded-full bg-ink px-5 py-2 text-sm text-bg transition-colors hover:bg-accent hover:text-accent-ink" />
     </div>

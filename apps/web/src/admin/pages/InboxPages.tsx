@@ -12,6 +12,9 @@ import { Composer, L, StageChip, Timeline, useL, useStaff, type CaseEvent } from
 import { useT } from '../i18n';
 import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
 import { ExcelButton, excelDate, fetchAll, listTotal } from '../ExcelExport';
+import { WalkInOrder } from '../interactions/WalkInOrder';
+import { OrderQuickView } from '../interactions/OrderQuickView';
+import { useOrderLive } from '../interactions/useOrderLive';
 import { printInvoice } from '../../lib/invoice';
 
 interface Lead {
@@ -61,6 +64,9 @@ interface Order {
   unread: boolean;
   note: string | null;
   currency: string;
+  pricingPending?: boolean;
+  instagramState?: string | null;
+  hasGatewayPayment?: boolean;
   totalMinor: string;
   subtotalMinor?: string;
   shippingMinor?: string;
@@ -469,8 +475,9 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap gap-2">
               <Badge>{stageLabel(o.status)}</Badge>
-              <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>
-              {o.paymentMethod === 'cod' && <Badge tone="neutral">{tt.cod}</Badge>}
+              {o.pricingPending ? <Badge>{t(L('Price awaiting confirmation','قیمت در انتظار تأیید'))}</Badge> : <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>}
+              {o.instagramState && <Badge>{t(L('Instagram','اینستاگرام'))}: {({pending:t(L('Queued','در صف')),sending:t(L('Sending','در حال ارسال')),sent:t(L('Sent','ارسال شد')),failed:t(L('Failed','ناموفق')),unknown:t(L('Needs review','نیازمند بررسی'))} as Record<string,string>)[o.instagramState] || o.instagramState}</Badge>}
+              {!o.pricingPending && o.paymentMethod === 'cod' && <Badge tone="neutral">{tt.cod}</Badge>}
               <span className="text-ink-soft">{formatDate(o.createdAt)}</span>
             </div>
             {canWrite && next(o.status).length > 0 && (
@@ -540,6 +547,7 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
             </dl>
             <div>
               <Button
+                disabled={o.pricingPending}
                 size="sm"
                 variant="outline"
                 onClick={() =>
@@ -561,8 +569,8 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
                     {l(it.productName)}
                     {[(it as { variant?: string }).variant, it.option].filter(Boolean).length ? ` (${[(it as { variant?: string }).variant, it.option].filter(Boolean).join('، ')})` : ''} × {it.quantity}
                   </Td>
-                  <Td className="text-xs">{formatMoney(it.unitPriceMinor, o.currency)}</Td>
-                  <Td className="text-xs">{formatMoney(it.lineTotalMinor, o.currency)}</Td>
+                  <Td className="text-xs">{o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(it.unitPriceMinor, o.currency)}</Td>
+                  <Td className="text-xs">{o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(it.lineTotalMinor, o.currency)}</Td>
                 </tr>
               ))}
               {Number(o.discountMinor) > 0 && (
@@ -585,7 +593,7 @@ function OrderDetail({ siteId, id, onClose }: { siteId: string; id: string | nul
               <tr>
                 <Td className="font-medium">{tt.total}</Td>
                 <Td>{''}</Td>
-                <Td className="font-medium">{formatMoney(o.totalMinor, o.currency)}</Td>
+                <Td className="font-medium">{o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(o.totalMinor, o.currency)}</Td>
               </tr>
             </Table>
             {o.payments && o.payments.length > 0 && (
@@ -792,6 +800,17 @@ function RequestsInbox({ siteId }: { siteId: string }) {
 }
 
 function OrdersInbox({ siteId }: { siteId: string }) {
+  const [walkIn,setWalkIn]=useState(false);
+  const {data:walkInSettings}=useAdminSettings(siteId);
+  const connected=useOrderLive(siteId);
+  const qc=useQueryClient();
+  const {data:info}=useSiteInfo(siteId);
+  const update=useMutation({
+    mutationFn:({id,status,paymentStatus}:{id:string;status?:string;paymentStatus?:string})=>status
+      ? api.patch('/sites/'+siteId+'/orders/'+id,{status})
+      : api.patch('/sites/'+siteId+'/orders/'+id+'/payment-status',{paymentStatus}),
+    onSuccess:()=>qc.invalidateQueries({queryKey:['site',siteId,'orders']}),
+  });
   const tt = useT();
   const t = useL();
   const { formatDate, formatMoney } = usePreferences();
@@ -804,13 +823,14 @@ function OrdersInbox({ siteId }: { siteId: string }) {
     queryFn: () => apiRequest<Order[]>(`/sites/${siteId}/orders?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`),
     placeholderData: keepPreviousData,
   });
-  const { stages, label: stageLabel } = useOrderStages(siteId);
+  const { stages, label: stageLabel, next } = useOrderStages(siteId);
   const openItem = (id: string | null) => setParams(id ? { open: id } : {}, { replace: true });
   return (
     <>
       <PageTitle
         title={tt.orders}
-        actions={
+        actions={<>
+          {info?.permissions.includes('orders:write')&&walkInSettings?.modules.products&&<Button type="button" onClick={()=>setWalkIn(true)}>{t(L('Rapid walk-in order','ثبت سریع سفارش حضوری'))}</Button>}
           <ExcelButton
             name={tt.orders}
             count={listTotal(list.data)}
@@ -818,11 +838,11 @@ function OrdersInbox({ siteId }: { siteId: string }) {
               const list = await fetchAll<Order>(`/sites/${siteId}/orders${status ? `?status=${status}` : ''}`);
               return [
                 ['شماره / Number', 'تاریخ / Date', 'وضعیت / Status', 'پرداخت / Payment', 'روش / Method', 'مبلغ / Total', 'ارز / Currency', 'نام / Name', 'موبایل / Phone', 'ایمیل / Email', 'نشانی / Address', 'توضیح / Note'],
-                ...list.map((o) => [Number(o.number), excelDate(o.createdAt), stageLabel(o.status), o.paymentStatus, o.paymentMethod ?? '', Number(o.totalMinor), o.currency, o.customer.name, o.customer.phone, o.customer.email, o.customer.address ?? '', o.note ?? '']),
+                ...list.map((o) => [Number(o.number), excelDate(o.createdAt), stageLabel(o.status), o.paymentStatus, o.paymentMethod ?? '', o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : Number(o.totalMinor), o.currency, o.customer.name, o.customer.phone, o.customer.email, o.customer.address ?? '', o.note ?? '']),
               ];
             }}
           />
-        }
+        </>}
       />
       <div className="mb-4 max-w-xs">
         <SelectField
@@ -840,7 +860,9 @@ function OrdersInbox({ siteId }: { siteId: string }) {
       ) : (
         <>
           <ErrorNote error={list.error} />
-          <Table head={['#', tt.customer, tt.total, tt.status, tt.payment, tt.created]}>
+          <p role="status" className="mb-3 text-xs text-ink-soft">{connected ? t(L('Live updates connected','به‌روزرسانی زنده متصل است')) : t(L('Connecting live updates…','در حال اتصال به به‌روزرسانی زنده…'))}</p>
+          <ErrorNote error={update.error}/>
+          <Table head={['#', tt.customer, tt.total, tt.status, tt.payment, tt.created, t(L('Preview','پیش‌نمایش'))]}>
             {(list.data?.data ?? []).map((o) => (
               <tr key={o.id} className={cn('cursor-pointer hover:bg-surface-2', o.unread && 'font-medium')} onClick={() => openItem(o.id)}>
                 <Td>
@@ -850,14 +872,28 @@ function OrdersInbox({ siteId }: { siteId: string }) {
                   </button>
                 </Td>
                 <Td>{o.customer.name}</Td>
-                <Td className="text-xs">{formatMoney(o.totalMinor, o.currency)}</Td>
+                <Td className="text-xs">{o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(o.totalMinor, o.currency)}</Td>
                 <Td>
-                  <Badge>{stageLabel(o.status)}</Badge>
+                  {info?.permissions.includes('orders:write') ? <div onClick={e=>e.stopPropagation()}>
+                    <select aria-label={t(L('Order status','وضعیت سفارش'))+' #'+o.number} className="rounded border border-line bg-bg px-2 py-1 text-sm" value={o.status}
+                      disabled={update.isPending||next(o.status).length===0}
+                      onChange={e=>update.mutate({id:o.id,status:e.target.value})}>
+                      {[o.status,...next(o.status)].map(value=><option key={value} value={value}>{stageLabel(value)}</option>)}
+                    </select>
+                  </div>:<Badge>{stageLabel(o.status)}</Badge>}
                 </Td>
                 <Td>
-                  <Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>
+                  {info?.permissions.includes('payments:manage')&&o.paymentMethod==='cod'&&!o.hasGatewayPayment&&['unpaid','paid','refunded'].includes(o.paymentStatus)
+                    ? <div onClick={e=>e.stopPropagation()}><select aria-label={t(L('Manual payment status','وضعیت پرداخت دستی'))+' #'+o.number}
+                        title={t(L('Records offline payment status only; does not transfer money','فقط وضعیت پرداخت دستی را ثبت می‌کند؛ انتقال وجه انجام نمی‌شود'))}
+                        className="rounded border border-line bg-bg px-2 py-1 text-sm" value={o.paymentStatus} disabled={update.isPending}
+                        onChange={e=>update.mutate({id:o.id,paymentStatus:e.target.value})}>
+                        {['unpaid','paid',...(o.paymentStatus!=='unpaid'?['refunded']:[])].map(value=><option key={value} value={value}>{t(value==='paid'?L('Paid','پرداخت‌شده'):value==='refunded'?L('Refunded','مستردشده'):L('Unpaid','پرداخت‌نشده'))}</option>)}
+                      </select></div>
+                    :<Badge tone={paymentTone(o.paymentStatus)}>{o.paymentStatus}</Badge>}
                 </Td>
                 <Td className="text-xs text-ink-soft">{formatDate(o.createdAt)}</Td>
+                <Td><OrderQuickView siteId={siteId} id={o.id} number={o.number} onOpen={()=>openItem(o.id)}/></Td>
               </tr>
             ))}
           </Table>
@@ -865,6 +901,7 @@ function OrdersInbox({ siteId }: { siteId: string }) {
         </>
       )}
       <OrderDetail siteId={siteId} id={open} onClose={() => openItem(null)} />
+      <WalkInOrder siteId={siteId} open={walkIn} onClose={()=>setWalkIn(false)} />
     </>
   );
 }

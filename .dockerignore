@@ -9,3 +9,18 @@ var/*
 .claude
 **/*.log
 coverage
+
+# Client packages and local tools must not enter app build contexts.
+exports/
+backups/
+/*.tar.gz
+/var.rar
+deploy/matstack/bin/
+deploy/matstack/logs/
+mobile/**/build/
+mobile/**/.gradle/
+mobile/**/local.properties
+**/.env
+**/.env.*
+!**/.env.example
+**/.worker.env

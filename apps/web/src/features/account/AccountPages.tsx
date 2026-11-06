@@ -43,7 +43,7 @@ function AuthPanel({ next }: { next?: string }) {
   const submit = useMutation({
     mutationFn: () =>
       mode === 'signup'
-        ? api.post<Customer>('/customer/signup', { identifier, code, name, ...(password ? { password } : {}) })
+        ? api.post<Customer>('/customer/signup', { identifier, ...(accounts?.signupVerification !== false ? {code} : {}), name, ...(password ? { password } : {}) })
         : mode === 'reset'
           ? api.post<Customer>('/customer/reset', { identifier, code, password })
           : api.post<Customer>('/customer/login', withCode ? { identifier, code } : { identifier, password }),
@@ -60,7 +60,7 @@ function AuthPanel({ next }: { next?: string }) {
     sendCode.reset();
     submit.reset();
   };
-  const needsCode = mode !== 'login' || withCode;
+  const needsCode = mode === 'signup' ? accounts?.signupVerification !== false : mode === 'reset' || withCode;
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (needsCode && !codeSent) sendCode.mutate();
@@ -104,7 +104,7 @@ function AuthPanel({ next }: { next?: string }) {
             <TextInput id="acc-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FieldShell>
         )}
-        {mode === 'login' && !withCode && (
+        {((mode === 'login' && !withCode) || (mode === 'signup' && !needsCode)) && (
           <FieldShell id="acc-pass" label={t(L('Password', 'رمز عبور'))}>
             <TextInput id="acc-pass" type="password" dir="ltr" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </FieldShell>
@@ -178,7 +178,7 @@ function AuthPanel({ next }: { next?: string }) {
 
 interface CasesList {
   requests: { number: string; code: string; typeLabel: { en: string; fa: string }; stageLabel: string; stageColor: string; stageKind: string; amountDueMinor: string; currency: string; createdAt: string; updatedAt: string; lastReplyAt: string | null }[];
-  orders: { number: string; code: string; stageLabel: string; status: string; totalMinor: string; currency: string; paymentStatus: string; createdAt: string }[];
+  orders: { pricingPending?: boolean; number: string; code: string; stageLabel: string; status: string; totalMinor: string; currency: string; paymentStatus: string; createdAt: string }[];
 }
 
 function Profile({ customer }: { customer: Customer }) {
@@ -187,6 +187,7 @@ function Profile({ customer }: { customer: Customer }) {
   const refresh = useRefreshCustomer();
   const errLang = useSiteErrorLanguage();
   const { accounts } = useCustomer();
+  const [addresses, setAddresses] = useState(customer.addresses ?? []);
   const [name, setName] = useState(customer.name);
   const [other, setOther] = useState((accounts?.identifier === 'email' ? customer.phone : customer.email) ?? '');
   const [password, setPassword] = useState('');
@@ -194,7 +195,7 @@ function Profile({ customer }: { customer: Customer }) {
   const save = useMutation({
     mutationFn: () =>
       api.patch('/customer/me', {
-        name,
+        name, addresses,
         ...(accounts?.identifier === 'email' ? { phone: other } : { email: other }),
         ...(password ? { password, currentPassword: current } : {}),
       }),
@@ -212,6 +213,15 @@ function Profile({ customer }: { customer: Customer }) {
         save.mutate();
       }}
     >
+      <div className="sm:col-span-2 flex flex-col gap-4">
+        <h2 className="font-display text-xl">{t(L('Saved addresses', 'آدرس‌های من'))}</h2>
+        {addresses.map((a,i) => <div key={a.id} className="grid gap-3 sm:grid-cols-3">
+          <FieldShell id={'address-label-'+a.id} label={t(L('Label', 'عنوان آدرس'))}><TextInput id={'address-label-'+a.id} value={a.label} onChange={e=>setAddresses(addresses.map((v,n)=>n===i?{...v,label:e.target.value}:v))} /></FieldShell>
+          <FieldShell id={'address-value-'+a.id} label={t(L('Address', 'نشانی کامل'))}><TextInput id={'address-value-'+a.id} value={a.address} onChange={e=>setAddresses(addresses.map((v,n)=>n===i?{...v,address:e.target.value}:v))} /></FieldShell>
+          <Button type="button" variant="outline" onClick={()=>setAddresses(addresses.filter((_,n)=>n!==i))}>{t(L('Remove','حذف'))}</Button>
+        </div>)}
+        <Button type="button" variant="outline" disabled={addresses.length>=10} onClick={()=>setAddresses([...addresses,{id:crypto.randomUUID(),label:'',address:''}])}>{t(L('Add address','افزودن آدرس'))}</Button>
+      </div>
       <FieldShell id="p-name" label={t(L('Name', 'نام'))}>
         <TextInput id="p-name" value={name} onChange={(e) => setName(e.target.value)} />
       </FieldShell>
@@ -255,7 +265,8 @@ function Dashboard({ customer }: { customer: Customer }) {
   const options = useSystemPageOptions();
   const menu = options.accountMenu ?? 'tabs';
   const { locale } = usePreferences();
-  const [part, setPart] = useState<Part>(options.accountOpen ?? 'requests');
+  const [accountParams] = useSearchParams();
+  const [part, setPart] = useState<Part>(accountParams.get('part') === 'profile' ? 'profile' : options.accountOpen ?? 'requests');
   const cases = useQuery({ queryKey: ['public', api.site, 'customer', 'cases', locale], queryFn: () => api.get<CasesList>(`/customer/cases?locale=${locale}`), enabled: part !== 'profile' || menu === 'cards' || menu === 'sidebar' });
   const logout = useMutation({ mutationFn: () => api.post('/customer/logout'), onSuccess: refresh });
   const parts: { id: Part; label: { en: string; fa: string }; count?: number }[] = [
@@ -389,7 +400,7 @@ function OrderList({ orders }: { orders: CasesList['orders'] }) {
               {o.code}
             </span>
             <span className="flex-1 text-sm">{o.stageLabel}</span>
-            <span className="text-sm">{formatMoney(o.totalMinor, o.currency)}</span>
+            <span className="text-sm">{o.pricingPending ? t(L('Awaiting price','در انتظار قیمت')) : formatMoney(o.totalMinor, o.currency)}</span>
             <span className="text-xs text-ink-soft">{formatDate(o.createdAt)}</span>
           </Link>
         </li>
@@ -407,7 +418,7 @@ export function AccountPage() {
   if (!accounts) return <Container className="py-16">{null}</Container>;
   if (!enabled && !loading) return <Navigate to="/track" replace />;
   return (
-    <Container className="py-16 sm:py-24">
+    <Container className="public-account-spacing py-16 sm:py-24">
       {loading ? <p className="text-ink-soft">{t(L('Loading…', 'در حال بارگذاری…'))}</p> : customer ? <Dashboard customer={customer} /> : <AuthPanel next={params.get('next') ?? undefined} />}
     </Container>
   );
@@ -428,7 +439,7 @@ export function TrackPage() {
     onSuccess: (r) => navigate(`/track/${r.code}?t=${encodeURIComponent(r.token)}`),
   });
   return (
-    <Container className="py-16 sm:py-24">
+    <Container className="public-account-spacing py-16 sm:py-24">
       <div className="mx-auto max-w-md">
         <p className="eyebrow">{t(L('Tracking', 'پیگیری'))}</p>
         <h1 className="mt-3 font-display text-4xl text-ink">{t(L('Track your request or order', 'پیگیری درخواست یا سفارش'))}</h1>
@@ -477,7 +488,7 @@ export function CasePage() {
   const { customer } = useCustomer();
   const t = useText();
   return (
-    <Container className="py-16 sm:py-24">
+    <Container className="public-account-spacing py-16 sm:py-24">
       <CaseView code={code} token={params.get('t') ?? params.get('token') ?? undefined} paymentResult={params.get('payment')} />
       <p className="mt-12 text-sm">
         <Link to={customer ? '/account' : '/track'} className="text-ink-soft underline-offset-4 hover:underline">

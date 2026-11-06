@@ -38,7 +38,7 @@ export function SectionHeading({ eyebrow, title, intro, as: Tag = 'h2', align = 
 /** Page intro band used by every inner page. */
 export function PageHeader(props: Omit<HeadingProps, 'as'>) {
   return (
-    <div className="border-b border-line pt-36 pb-4 sm:pt-44">
+    <div className="public-page-heading border-b border-line pt-36 pb-4 sm:pt-44">
       <Container>
         <div className="reveal">
           <SectionHeading as="h1" {...props} />

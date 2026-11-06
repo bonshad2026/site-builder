@@ -12,6 +12,8 @@ Git, conventions and gotchas.
 | [features/site-setup.md](features/site-setup.md) | New sites, built-in pages, sample data, site kits |
 | [features/collections.md](features/collections.md) | Content tables, lists, box designer, item pages |
 | [features/interactions.md](features/interactions.md) | Request forms, workflows, customer accounts, tracking, inbox |
+| [features/mobile-storefront.md](features/mobile-storefront.md) | Reusable mobile navigation, category rows, cart and square icon cards |
+| [features/instagram-orders.md](features/instagram-orders.md) | Account-based orders, sender management, delivery worker and failure states |
 | [features/shop.md](features/shop.md) | Products, checkout, coupons, shipping, payments, reviews |
 | [features/starters.md](features/starters.md) | Starter packs, groups, previews, ready-made starters |
 | [HANDOFF.fa.md](HANDOFF.fa.md) | The owner's guide in Persian: setting up the studio on a new machine, daily tasks |

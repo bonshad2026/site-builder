@@ -10,6 +10,7 @@ import { L, useL } from './common';
 import { ExcelButton, excelDate, fetchAll, listTotal } from '../ExcelExport';
 
 interface Customer {
+  addresses?: {id:string;label:string;address:string}[];
   id: string;
   name: string;
   phone: string | null;
@@ -62,6 +63,7 @@ function CustomerDetail({ siteId, customer, onClose }: { siteId: string; custome
               <dd>{formatDate(customer.createdAt)}</dd>
             </div>
           </dl>
+          {customer.addresses?.length ? <section><h3 className="font-medium">{t(L('Saved addresses','آدرس‌های ذخیره‌شده'))}</h3>{customer.addresses.map(a=><p key={a.id}>{a.label}: {a.address}</p>)}</section> : null}
           <section>
             <h3 className="mb-2 text-xs font-medium text-ink-soft">{t(L('Requests', 'درخواست‌ها'))}</h3>
             {requests.isLoading ? (
