@@ -4,11 +4,17 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Committed handoff (2026-11-06)** — Product changes, local deployment sources and independent
+  feature/operator docs committed as 5c06c83 (Add mobile storefront and managed order workflows)
+  on feature/local-matstack. Owner requested commit and push of this branch only; no merge.
+  Earlier uncommitted labels below describe historical checkpoints. Services remain stopped.
+  Secrets, exports, backups, runtime files and generated tsbuildinfo were excluded.
+
 - **Current handoff — intentionally stopped (2026-11-06)**
   Owner asked to shut down until tomorrow. Cafe, Instagram worker, studio, test Postgres and
   Matstack agent are stopped; containers/volumes/data preserved. Do not start on your own.
   Resume checklist: [cafe operations](clients/cafe-mohammad/operations.md).
-  Branch feature/local-matstack; current work is uncommitted, no push/merge requested.
+  Branch feature/local-matstack; work is now committed (see handoff above); no merge requested.
   Installed package: exports/cafe-mohammad-20261106-0913; public domain remains configured,
   but is offline during shutdown. Owner panel when running: http://localhost:8727/admin.
   Latest APK: 0.4.0/version4; inset fix built, phone appearance awaits owner confirmation.
