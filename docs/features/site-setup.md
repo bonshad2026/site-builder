@@ -77,3 +77,5 @@ tables the site lacks first (`demoRunSchema.addTables` → `applyPack` without i
 Built-in entries and photos can be hidden per type (`bank_hidden`; "Bring back removed built-ins").
 `tenants.business_type` remembers each site's type. Photos are copied into the site (`photoStore`).
 The page shows counts per list (`GET /platform/bank/counts?type=`) and explains empty parts.
+
+Mobile navigation adds a default Home link only when the configured top-level menu has no / link (MobileMenu.tsx); an explicit Home link keeps its configured label and position.

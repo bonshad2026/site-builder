@@ -11,6 +11,7 @@ import { useNavItems } from './nav';
 export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { m, l } = usePreferences();
   const nav = useNavItems();
+  const items = nav.some((item) => item.to === '/') ? nav : [{ to: '/', label: m.nav.home, children: [] }, ...nav];
   const { data: settings } = useSiteSettings();
   const panel = useRef<HTMLDivElement>(null);
 
@@ -66,7 +67,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
       <nav aria-label={m.nav.primary} className="flex-1 overflow-y-auto px-5 pt-6 sm:px-8">
         <ul className="flex flex-col">
-          {[{ to: '/', label: m.nav.home, children: [] }, ...nav].map((item, i) => (
+          {items.map((item, i) => (
             <li key={i} className="reveal border-b border-line" style={{ animationDelay: `${i * 40}ms` }}>
               {!item.to ? (
                 <span className="block py-4 font-display text-3xl">{item.label}</span>

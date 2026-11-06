@@ -4,6 +4,11 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Mobile Home link (2026-11-06)** — `Fix duplicate Home link in mobile navigation`
+  (this commit): add the default Home only when the configured menu has no root link.
+  Typecheck passes; studio-web rebuilt; a 390px browser check shows exactly one Home.
+  Web tests: 39 pass / 4 fail; the same four failures reproduce with the original component.
+  Cafe content and deployment work remain separate, uncommitted changes.
 - Developer guide (`feature/dev-docs`, merged into `develop` 2026-11-03): the Persian developer guide in
   `docs/dev/` — 35 pages in 7 chapters (start, architecture, layers, features, recipes, operations,
   rules), every claim checked against the code, Mermaid diagrams parsed with mermaid 11, links checked.
