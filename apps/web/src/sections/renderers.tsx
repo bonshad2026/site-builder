@@ -556,12 +556,14 @@ function ContactFormSection({ props }: Props<'contact-form'>) {
   const requestType = types.find((t) => t.slug === params.get('type')) ?? types.find((t) => t.slug === props.requestType) ?? types.find((t) => t.slug === props.formType);
   return (
     <>
-      <div className="public-page-heading border-b border-line pt-36 pb-4 sm:pt-44">
-        <Container>
-          <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
-          <Buttons buttons={props.buttons} className="mb-8" />
-        </Container>
-      </div>
+      {(l(props.heading).trim() || l(props.eyebrow).trim() || l(props.intro).trim() || props.buttons.some((b) => l(b.label).trim() && b.href)) && (
+        <div className="public-page-heading border-b border-line pt-36 pb-4 sm:pt-44">
+          <Container>
+            <SectionHeading as="h1" eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />
+            <Buttons buttons={props.buttons} className="mb-8" />
+          </Container>
+        </div>
+      )}
       <Section className="pt-12 sm:pt-16">
         <Container className="grid gap-16 lg:grid-cols-12">
           <div className={props.showDetails ? 'lg:col-span-7' : 'lg:col-span-8'}>

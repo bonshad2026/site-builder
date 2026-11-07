@@ -174,7 +174,7 @@ function RequestForm({
   const cal = useSiteCalendar();
   const location = useLocation();
   const errorLang = useSiteErrorLanguage();
-  const { customer, enabled: accountsOn } = useCustomer();
+  const { customer, enabled: accountsOn, loading: customerLoading } = useCustomer();
   const layout = type?.layout;
   const payment = type?.payment;
   const steps = useMemo(() => formSteps(fields), [fields]);
@@ -216,6 +216,10 @@ function RequestForm({
       return next;
     });
   }, [customer, fields]);
+
+  if (type?.access === 'signed_in' && customerLoading && !preview) {
+    return <p role="status" className="text-sm text-ink-soft">{t(L('Checking your account…', 'در حال بررسی حساب شما…'))}</p>;
+  }
 
   if (type?.access === 'signed_in' && !customer && !preview) {
     return (

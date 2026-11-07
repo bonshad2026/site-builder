@@ -66,8 +66,11 @@ export function useCustomer() {
     queryFn: () => customerRequest<Customer | null>(site, '/customer/me'),
     enabled,
     staleTime: 60_000,
+    // Another tab may sign in or out while this tab retains its cached session.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
-  return { enabled, accounts: settings?.accounts, customer: me.data ?? null, loading: enabled && me.isLoading };
+  return { enabled, accounts: settings?.accounts, customer: me.data ?? null, loading: enabled && (me.isLoading || (!me.data && me.isFetching)) };
 }
 
 export function useRefreshCustomer() {

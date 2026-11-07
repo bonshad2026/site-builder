@@ -483,7 +483,7 @@ export function AccountPage() {
   if (!accounts) return <Container className="py-16">{null}</Container>;
   if (!enabled && !loading) return <Navigate to="/track" replace />;
   return (
-    <Container className="public-account-spacing py-16 sm:py-24">
+    <Container className="public-account-spacing pt-36 pb-16 sm:pt-44 sm:pb-24">
       {loading ? <p className="text-ink-soft">{t(L('Loading…', 'در حال بارگذاری…'))}</p> : customer ? <Dashboard customer={customer} /> : <AuthPanel next={params.get('next') ?? undefined} />}
     </Container>
   );
@@ -504,7 +504,7 @@ export function TrackPage() {
     onSuccess: (r) => navigate(`/track/${r.code}?t=${encodeURIComponent(r.token)}`),
   });
   return (
-    <Container className="public-account-spacing py-16 sm:py-24">
+    <Container className="public-account-spacing pt-36 pb-16 sm:pt-44 sm:pb-24">
       <div className="mx-auto max-w-md">
         <p className="eyebrow">{t(L('Tracking', 'پیگیری'))}</p>
         <h1 className="mt-3 font-display text-4xl text-ink">{t(L('Track your request or order', 'پیگیری درخواست یا سفارش'))}</h1>
@@ -553,7 +553,7 @@ export function CasePage() {
   const { customer } = useCustomer();
   const t = useText();
   return (
-    <Container className="public-account-spacing py-16 sm:py-24">
+    <Container className="public-account-spacing pt-36 pb-16 sm:pt-44 sm:pb-24">
       <CaseView code={code} token={params.get('t') ?? params.get('token') ?? undefined} paymentResult={params.get('payment')} />
       <p className="mt-12 text-sm">
         <Link to={customer ? '/account' : '/track'} className="text-ink-soft underline-offset-4 hover:underline">
