@@ -4,6 +4,61 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Owner-requested commit checkpoint (2026-11-08)** — Product fixes committed as `7708730`
+  on feature/local-matstack: account/tracking fixed-header clearance, customer session refresh
+  on mount/focus with regression coverage, protected-form session loading, empty form heading
+  suppression. Typecheck passed; latest web54 pass /4 baseline failures (58 total); interaction
+  API15/15 passed. Studio-web rebuilt and spacing visually inspected on preview. Earlier
+  uncommitted entries below are historical for the captured changes. Real signed-in request
+  submission still awaits owner confirmation; no real request or SMS sent by the agent.
+  Static request-training intro was updated in the studio DB; Git stores its operational record,
+  not the tenant page data. Local installation remains unchanged. Owner requested branch push
+  only; no merge. Next: confirm course request flow, then deploy local when ready.
+
+- **Remove empty request heading band (2026-11-08, uncommitted)** — ContactFormSection now
+  omits its heading band when localized heading/eyebrow/intro and labelled link buttons are
+  absent. Firefighter request-training already has a separate page-header: measured extra
+  empty band257px before, absent after; form section now starts at the main heading bottom
+  (417.25px at inspected desktop width). Studio-web rebuilt; browser screenshot verified,
+  typecheck and diff checks passed. No new tests for this low-impact rendering condition;
+  previous web54/58 baseline unchanged. Docs HTML regenerated. Local installation unchanged.
+  Screenshot: firefighter-form-spacing-fixed.png. Real signed-in request flow still awaits
+  owner confirmation of the preceding session refresh fix; this change only removes spacing.
+
+- **Customer session revalidation (2026-11-08, uncommitted)** — Owner reports dashboard on
+  preview /account but login gate on training form. Reproduced a cached anonymous result that
+  did not refresh on mount/focus after another tab signed in (regression failed before fix).
+  useCustomer now revalidates on mount/focus even for fresh cached results; protected request
+  forms wait for anonymous-session revalidation before showing login. Regression passes for
+  cross-tab login and logout; typecheck clean, full web54 pass / same4 baseline failures (58).
+  Studio-web rebuilt and preview loaded; test browser has no customer session, so owner must
+  reload and verify with their actual session before claiming the reported flow fixed. No real
+  request/SMS submitted and installed local site unchanged. Next: owner tests request-training;
+  investigate further if still blocked, then validate submission before local deployment.
+
+- **Training request investigation (2026-11-08, content change)** — The reported invitation to
+  sign in was static request-training page-header intro, not an authentication error. Replaced
+  only that intro via authenticated page API and published to studio preview; refused pending
+  drafts and backed up the prior document in ignored var/. Installed site unchanged. Script
+  completed the publish but its logout response parser failed on HTTP204; browser confirmed
+  the published text. Course technical-rescue CTA retains type=training and item=courses/technical-rescue
+  on the same preview host. Training is signed_in, no payment on submit. Existing interaction
+  tests 15/15 passed on test DB. Browser available to agent currently shows no customer session;
+  owner reports OTP login on preview. Awaiting whether /fa/account in owner's browser shows
+  dashboard or login before diagnosing session loss. No real request or SMS sent; full customer
+  submission has NOT been validated. Earlier account-spacing changes remain uncommitted.
+
+- **Account tabs clear desktop header (2026-11-07, uncommitted)** — Account, tracking and case
+  containers now use the inner-page heading clearance (pt-36 / sm:pt-44); existing mobile
+  bottom-navigation spacing override retained. Reproduced firefighter at 1440x900: tabs top96
+  overlapped fixed two-row header bottom116. After studio-web rebuild, tabs top176; both tabs
+  clicked successfully without submitting forms. Mobile390: header bottom68, tabs top144.
+  Typecheck and diff checks passed; docs HTML regenerated. CSS-only spacing change, no new tests;
+  latest suite baseline remains API134/134 and web53/57 with four documented failures.
+  Screenshot: firefighter-login-desktop-fixed.png in the chat visualization directory.
+  Next: owner reviews preview; collect further fixes before updating the installed local site.
+  Installed firefighter package remains unchanged; no merge, commit or push for this fix yet.
+
 - **Owner-requested commit checkpoint (2026-11-07)** — Committed as `d6e3fa0`: firefighter studio
   import, member/review compatibility, isolated tunnel and operational documentation on
   feature/local-matstack; no merge or client update application. Fresh typecheck passed; full

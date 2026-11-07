@@ -62,7 +62,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Before you say a change is done
 1. `npm run typecheck` (clean as of 2026-11-02).
-2. Tests (2026-11-07): full API run 134/134 pass; web 53 pass / 4 pre-existing failures (57 total). A new failure is yours to explain.
+2. Tests (2026-11-07): full API run 134/134 pass; web 54 pass / 4 pre-existing failures (58 total). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").

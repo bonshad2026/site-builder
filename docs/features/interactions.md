@@ -72,3 +72,20 @@ false requires a password and does not verify identifier ownership. Customer pro
 use existing customer APIs and permissions; they do not add a separate business/customer database.
 Staff visibility remains tenant-scoped. See instagram-orders.md for identity/address checks during
 submission. Changing this option is a per-site decision, not a product-wide disabling of OTP.
+
+## Public account page spacing
+Account, tracking and case pages reserve the same fixed-header clearance as inner page headings
+(9rem base, 11rem from sm). This keeps authentication tabs below two-row desktop headers.
+The existing mobile bottom-navigation override still uses 1.5rem beneath its in-flow header.
+
+## Customer session refresh
+The customer session query rechecks on mount and window focus even while its cached result is
+fresh. This allows a request tab with a cached signed-out result to recognize login in another
+tab (and recognize logout). Signed-in-only forms wait for session loading/revalidation before
+showing the login invitation. Regression: customer-session.test.tsx covers cached anonymous
+state after login and a session ending while a tab is in the background. Server authorization
+and tenant-local cookies remain authoritative; this does not share sessions across origins.
+
+Contact-form sections omit their heading band when the current locale has no heading, eyebrow,
+intro or labelled link button. A separate page-header can then sit directly above the form
+without a second empty fixed-header spacer.
