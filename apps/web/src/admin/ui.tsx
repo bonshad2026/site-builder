@@ -199,9 +199,9 @@ export function NumberField({ label, value, onChange, hint, min, className }: { 
   );
 }
 
-export function SelectField<T extends string>({ label, value, onChange, options, className }: { label: string; value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
+export function SelectField<T extends string>({ label, value, onChange, options, className, hint }: { label: string; value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string; hint?: string }) {
   return (
-    <Field label={label} className={className}>
+    <Field label={label} className={className} hint={hint}>
       {(id) => (
         <select id={id} value={value} onChange={(e) => onChange(e.target.value as T)} className={inputCls}>
           {options.map((o) => (

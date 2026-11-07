@@ -8,6 +8,7 @@ import { api, apiRequest } from '../../lib/api';
 import { usePreferences } from '../../lib/preferences';
 import type { OrderItemDto, OrderStatus, PaymentStatus } from '../../types/api';
 import { useAdminSettings, useSiteInfo } from '../AdminRoot';
+import { useAdminCollections, useAdminItems } from '../collections/api';
 import { Composer, L, StageChip, Timeline, useL, useStaff, type CaseEvent } from '../interactions/common';
 import { useT } from '../i18n';
 import { Badge, Checkbox, ErrorNote, Modal, PageTitle, Pagination, SelectField, Spinner, Table, Td, TextField, useToast } from '../ui';
@@ -33,6 +34,7 @@ interface Lead {
   unread: boolean;
   customerId: string | null;
   assigneeUserId: string | null;
+  assignedItemId: string | null;
   amountDueMinor: string;
   amountTitle: string;
   paidMinor: string;
@@ -263,6 +265,37 @@ function PaymentBox({ siteId, lead, canWrite }: { siteId: string; lead: LeadFull
   );
 }
 
+/**
+ * The item that handles the request (its trainer), for request types assigned from a table: the
+ * staff pick one; the customer sees it and, once the request is done, may rate it.
+ */
+function AssignItemField({ siteId, lead, canWrite }: { siteId: string; lead: { id: string; type: string; assignedItemId: string | null }; canWrite: boolean }) {
+  const t = useL();
+  const { l } = usePreferences();
+  const qc = useQueryClient();
+  const { data: settings } = useAdminSettings(siteId);
+  const { data: tables = [] } = useAdminCollections(siteId);
+  const table = tables.find((x) => x.slug === requestTypeConfig(settings, lead.type)?.assignTable);
+  const { data: items } = useAdminItems(siteId, table?.id ?? '');
+  const save = useMutation({
+    mutationFn: (assignedItemId: string | null) => api.patch(`/sites/${siteId}/leads/${lead.id}`, { assignedItemId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['site', siteId, 'leads'] }),
+  });
+  if (!table) return null;
+  const list = (items?.data ?? []).filter((i) => i.status === 'published' || i.id === lead.assignedItemId);
+  return (
+    <div className="flex max-w-xs flex-col gap-1">
+      <SelectField
+        label={l(table.itemName) || t(L('Handled by', 'انجام‌دهنده'))}
+        value={lead.assignedItemId ?? ''}
+        onChange={(v) => canWrite && save.mutate(v || null)}
+        options={[{ value: '', label: '—' }, ...list.map((i) => ({ value: i.id, label: l(i.title) || i.slug }))]}
+      />
+      <ErrorNote error={save.error} />
+    </div>
+  );
+}
+
 function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null; onClose: () => void }) {
   const t = useL();
   const tt = useT();
@@ -405,6 +438,7 @@ function LeadDetail({ siteId, id, onClose }: { siteId: string; id: string | null
               </section>
             )}
             <PaymentBox siteId={siteId} lead={d} canWrite={canWrite} />
+            <AssignItemField siteId={siteId} lead={d} canWrite={canWrite} />
             {canWrite && (
               <SelectField
                 label={t(L('Assigned to', 'مسئول پیگیری'))}

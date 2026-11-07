@@ -47,3 +47,8 @@ deploy/matstack/ holds a dedicated Windows agent setup, an ignored .env and bin 
 and start.ps1. It targets a separate local cafe install on 127.0.0.1:8725; it does not
 change Liara or publish the studio preview. See deploy/matstack/README.md. The isolated
 install and public tunnel were verified on 2026-11-06 (cafe site and public API: HTTP 200).
+
+## Bringing a delivered site back for design work
+See [studio-import.md](studio-import.md): isolated tenant provisioning, design-only data/files,
+namespace remapping, compatibility validation and preservation of delivery secrets. Current
+workflow is operator-assisted; the client admin remains content-only.

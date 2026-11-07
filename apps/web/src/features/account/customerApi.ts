@@ -10,6 +10,9 @@ export interface Customer {
   phone: string | null;
   email: string | null;
   hasPassword: boolean;
+  /** One of the site's account kinds ('' when it has none). */
+  kind: string;
+  organization: string;
 }
 
 /** The customer session's CSRF token: a readable cookie per site, echoed in a header. */
@@ -49,6 +52,7 @@ export function useCustomerApi() {
     get: <T>(path: string) => customerRequest<T>(site, path),
     post: <T>(path: string, body: unknown = {}) => customerRequest<T>(site, path, { method: 'POST', body }),
     patch: <T>(path: string, body: unknown) => customerRequest<T>(site, path, { method: 'PATCH', body }),
+    put: <T>(path: string, body: unknown) => customerRequest<T>(site, path, { method: 'PUT', body }),
   };
 }
 

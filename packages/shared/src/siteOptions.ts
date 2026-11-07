@@ -42,6 +42,8 @@ export const designSchema = z
       .default({}),
     /** Themes made for this site, alongside the built-in ivory, noir and sage. */
     themes: z.array(customThemeSchema).max(10).default([]),
+    /** Themes visitors may pick with the header's theme buttons (built-in or own ids); empty = all of them. */
+    visitorThemes: z.array(slug).max(13).default([]),
     /** An uploaded font file (woff2 / woff / ttf), used where a font is set to "custom" (e.g. a licensed Persian font). */
     customFont: z
       .object({ name: z.string().max(60).default(''), url: z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v)).default('') })
@@ -72,6 +74,11 @@ export const formFieldSchema = z.object({
   required: z.boolean().default(false),
   /** Choices for select, radio and checkboxes fields. */
   options: z.array(optionSchema).max(50).default([]),
+  /**
+   * Choices taken from a content table instead (its slug): the titles of its published items,
+   * filled in when the form is shown and when it is checked on the server.
+   */
+  optionsFrom: z.string().max(40).regex(/^([a-z0-9]+(-[a-z0-9]+)*)?$/).default(''),
   /** Shown only when another field has this answer (a choice's label in either language, or "✓" for a ticked box). */
   showIf: z.object({ field: slug, value: z.string().max(120) }).nullable().default(null),
   /** Width on wide screens: one column, the whole row, or automatic (long fields take the row). */

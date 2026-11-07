@@ -24,7 +24,8 @@ import {
   type Workflow,
   type WorkflowStage,
 } from '@site-builder/shared';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
+import { useAdminCollections } from '../collections/api';
 import { Button } from '../../components/ui/Button';
 import { cn } from '../../lib/cn';
 import { PreferencesProvider, usePreferences } from '../../lib/preferences';
@@ -119,6 +120,9 @@ function PriceField({ label, value, onChange, currency, hint }: { label: string;
 
 /* ---------- form builder ---------- */
 
+/** The site's content tables, for questions whose choices come from one and for assigning requests. */
+const TablesContext = createContext<{ slug: string; name: Lbl }[]>([]);
+
 function FieldEditor({ field, fields, onChange, currency, priced }: { field: FormField; fields: FormField[]; onChange: (f: FormField) => void; currency: string; priced: boolean }) {
   const t = useL();
   const { l } = usePreferences();
@@ -134,6 +138,7 @@ function FieldEditor({ field, fields, onChange, currency, priced }: { field: For
     file: [L('Fewest files', 'حداقل فایل'), L('Most files (up to 10)', 'حداکثر فایل (تا ۱۰)')],
   };
   const lim = limits[field.type];
+  const tables = useContext(TablesContext);
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
@@ -164,7 +169,16 @@ function FieldEditor({ field, fields, onChange, currency, priced }: { field: For
         />
       )}
 
-      {withChoices(field.type) && (
+      {withChoices(field.type) && tables.length > 0 && (
+        <SelectField
+          label={t(L('Choices come from', 'گزینه‌ها از کجا بیایند'))}
+          value={field.optionsFrom}
+          onChange={(optionsFrom) => set({ optionsFrom })}
+          options={[{ value: '', label: t(L('The list below', 'فهرست زیر')) }, ...tables.map((x) => ({ value: x.slug, label: `${t(L('Items of the table', 'آیتم‌های جدول'))}: ${l(x.name) || x.slug}` }))]}
+          hint={field.optionsFrom ? t(L('The titles of its published items, in their order; they update by themselves.', 'عنوان آیتم‌های منتشرشده‌ی آن، به همان ترتیب؛ خودبه‌خود به‌روز می‌شوند.')) : undefined}
+        />
+      )}
+      {withChoices(field.type) && !field.optionsFrom && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-xs font-medium text-ink-soft">{t(L('Choices', 'گزینه‌ها'))}</legend>
           {field.options.map((o, i) => (
@@ -719,7 +733,8 @@ function TypePreview({ siteId, draft, tab, siteName }: { siteId: string; draft: 
 
 function TypeEditor({ siteId, siteName, draft, setDraft, operator, taken }: { siteId: string; siteName: Lbl; draft: RequestTypeDraft; setDraft: (d: RequestTypeDraft) => void; operator: boolean; taken: string[] }) {
   const t = useL();
-  const { formatMoney } = usePreferences();
+  const { formatMoney, l } = usePreferences();
+  const tables = useAdminCollections(siteId);
   const [tab, setTab] = useState<'details' | 'form' | 'look' | 'workflow' | 'payment'>('details');
   const tabs = (
     [
@@ -767,6 +782,13 @@ function TypeEditor({ siteId, siteName, draft, setDraft, operator, taken }: { si
                       { value: 'signed_in', label: t(L('Only signed-in customers', 'فقط مشتریان واردشده')) },
                     ]}
                   />
+                  <SelectField
+                    label={t(L('Each request is handled by an item of', 'هر درخواست به یک آیتم از این جدول سپرده شود'))}
+                    value={draft.assignTable ?? ''}
+                    onChange={(assignTable) => setDraft({ ...draft, assignTable })}
+                    options={[{ value: '', label: t(L('Nobody (no assignment)', 'هیچ‌کدام')) }, ...(tables.data ?? []).map((x) => ({ value: x.slug, label: l(x.name) || x.slug }))]}
+                    hint={t(L('E.g. trainers: the staff pick the trainer in the inbox; with reviews on, the customer rates them when the request is done.', 'مثلاً مربی‌ها: کارکنان در صندوق درخواست‌ها مربی را انتخاب می‌کنند؛ اگر نظرها فعال باشد، مشتری پس از انجام درخواست به او امتیاز می‌دهد.'))}
+                  />
                 </div>
               )}
               <p className="text-xs text-ink-soft">
@@ -779,7 +801,11 @@ function TypeEditor({ siteId, siteName, draft, setDraft, operator, taken }: { si
               </p>
             </div>
           )}
-          {tab === 'form' && <FormBuilder value={draft.fields} onChange={(fields) => setDraft({ ...draft, fields })} currency={draft.payment.currency} priced={priced} />}
+          {tab === 'form' && (
+            <TablesContext.Provider value={tables.data ?? []}>
+              <FormBuilder value={draft.fields} onChange={(fields) => setDraft({ ...draft, fields })} currency={draft.payment.currency} priced={priced} />
+            </TablesContext.Provider>
+          )}
           {tab === 'look' && (
             <div className="flex flex-col gap-4">
               {operator && (

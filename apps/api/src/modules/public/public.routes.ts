@@ -18,6 +18,7 @@ import { verifiedCustomer } from '../customers/customers.service.js';
 import { accessValid, loadSettings, siteBaseUrl } from '../interactions/context.js';
 import { notifyStaff } from '../interactions/notify.js';
 import { registerInteractionRoutes } from '../interactions/public.routes.js';
+import { registerMemberRoutes } from '../collections/members.routes.js';
 import { createRequest } from '../interactions/requests.service.js';
 
 const slugParam = z.object({ slug: z.string().min(1).max(64) });
@@ -48,6 +49,7 @@ export function publicRoutes(ctx: AppContext) {
   });
 
   registerInteractionRoutes(r, ctx);
+  registerMemberRoutes(r, ctx);
 
   r.route({ method: 'get', path: '/pages', summary: 'Published pages (for navigation and sitemap)' }, async ({ req }) => {
     const { rows } = await req.tenant!.db.query(

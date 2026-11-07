@@ -6,7 +6,7 @@ import { requireModule, requirePermission } from '../../middleware/tenant.js';
 import { auditTenant } from '../audit/audit.js';
 import { loadSettings } from '../interactions/context.js';
 import { filesOf } from '../interactions/files.js';
-import { addStaffEvent, changeStage, eventsOf, getRequest, REQUEST_COLUMNS, requestPayment } from '../interactions/requests.service.js';
+import { addStaffEvent, assignItem, changeStage, eventsOf, getRequest, REQUEST_COLUMNS, requestPayment } from '../interactions/requests.service.js';
 
 /**
  * Owner/staff inbox for customer requests: each request follows its type's workflow, with a
@@ -120,6 +120,7 @@ export function leadsRoutes(ctx: AppContext) {
         await db.query('UPDATE leads SET assignee_user_id = $2, updated_at = now() WHERE id = $1', [params.id, body.assigneeUserId]);
         await db.query(`INSERT INTO case_events (lead_id, kind, data, actor_user_id) VALUES ($1, 'assigned', jsonb_build_object('to', $2::text), $3)`, [params.id, body.assigneeUserId, req.auth!.user.id]);
       }
+      if (body.assignedItemId !== undefined) await assignItem(db, params.id, body.assignedItemId, req.auth!.user.id);
       if (body.read !== undefined) await db.query('UPDATE leads SET unread = $2 WHERE id = $1', [params.id, !body.read]);
       await auditTenant(db, { actorUserId: req.auth!.user.id, action: 'request.updated', target: params.id, metadata: body });
       return { data: await getRequest(db, params.id) };

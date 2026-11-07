@@ -18,6 +18,7 @@ import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
 import { cn } from '../lib/cn';
 import { CollectionItemSection, CollectionListSection } from './collectionSections';
+import { ItemReviewsSection } from './ItemReviewsSection';
 import { usePreferences } from '../lib/preferences';
 import { MapSection, NewsletterSection, VideoSection } from './mediaSections';
 
@@ -666,6 +667,7 @@ export const sectionRenderers: Record<SectionType, AnyRenderer> = {
   cta: CtaSection,
   'collection-list': CollectionListSection,
   'collection-item': CollectionItemSection,
+  'item-reviews': ItemReviewsSection,
   'system-page': SystemPageSection,
   map: MapSection,
   video: VideoSection,

@@ -2,6 +2,7 @@
 -- packages built without it. Same steps as clearDemoData in the API.
 BEGIN;
 DELETE FROM payments WHERE demo OR order_id IN (SELECT id FROM orders WHERE demo) OR lead_id IN (SELECT id FROM leads WHERE demo);
+DELETE FROM item_reviews WHERE demo;
 DELETE FROM orders WHERE demo;
 DELETE FROM leads WHERE demo;
 DELETE FROM customers WHERE demo;

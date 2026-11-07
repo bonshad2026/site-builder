@@ -4,6 +4,71 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Owner-requested commit checkpoint (2026-11-07)** — Capturing the pending firefighter studio
+  import, member/review compatibility, isolated tunnel and operational documentation on
+  feature/local-matstack; no merge or client update application. Fresh typecheck passed; full
+  API 134/134 passed, web 53 passed / the same 4 documented failures (57 total, AbortSignal
+  mismatch and product result-count expectation). Script syntax and diff checks passed; studio,
+  firefighter preview and private admin returned HTTP 200. Previous rebuild/browser evidence
+  remains in the handoff; no new runtime code edits or repeated visual QA in this checkpoint.
+  Secrets, exports and generated tsbuildinfo excluded. Next: owner-directed firefighter edits.
+
+- **Next-chat handoff written (2026-11-07, uncommitted)** — Read
+  [handoffs/2026-11-07-local-sites.md](handoffs/2026-11-07-local-sites.md) for current branch,
+  staged/unstaged task-owned changes, two active tunnels, isolated installs/studio copy, restart
+  overrides, successful update artifact, tests and pending limitations. Runtime left running.
+
+- **Firefighter public tunnel active (2026-11-07, uncommitted)** — Separate Matstack agent/key
+  under deploy/matstack/firefighter/.env (ignored); domain tunnel_ikwlc5hk4ly.mattunnel.ir,
+  origin loopback8735. Private owner panel moved to localhost:8737/admin; public /admin/private
+  staff APIs blocked by dedicated Caddy config. Production/panel messaging, no dev OTP exposure.
+  Four source pages + versions remapped from local to public origin. Original API image/data
+  preserved; studio and cafe tunnel untouched. Public site/private panel 200, public admin404,
+  cafe public200. Agent launched hidden; parent PID in ignored firefighter/logs/launcher.pid.
+  Generic start.ps1 now accepts optional ConfigPath, retaining cafe defaults. Restart/install
+  config scripts and operational docs added; new design update archive is still not applied.
+
+- **Firefighter editable in studio + update built (2026-11-07, uncommitted)** — Imported independent
+  design copy from installed original: 40 pages, 27 assets, 4 collections, 22 content items;
+  zero customers/orders. New tenant created through provisionTenant, files remapped from original
+  storage namespace (different from cell id), design schemas validated before/after copying.
+  Studio pages: http://admin.localhost/admin/sites/firefighter/pages; preview:
+  http://firefighter.preview.localhost/fa. Actual installed source stays on localhost:8735.
+  CUA verified home opens with rendered design; temporary heading edit saved successfully then
+  original text restored/saved, never published. Screenshot firefighter-studio-builder.png.
+  Existing deploy service built firefighter-update-20261107-0943.tar.gz successfully in exports/;
+  not applied to the installed site. Original delivery secrets retained privately in control-data.
+  Both source and cafe returned 200 afterwards. No Liara code imported or deployment performed.
+  Required compatibility reused original faa5f39 implementation + follow-ups and visitor themes:
+  member profiles/files/reviews, list/rating blocks, item-reviews, table form choices, submenu20.
+  Moved members migration to new 015 with old-schema-safe guards; did not edit applied migrations.
+  Full API 133/133 before final idempotency adjustment; targeted members/old-delivery upgrade
+  11/11 after it (134 tests now). Full web 53 pass/4 baseline failures (57); typecheck and studio
+  builds clean. Import first attempt rolled back due pg_dump search_path; corrected public.*
+  statements, then restored. Initial assumed storage id was wrong; derived actual namespace.
+  Generic workflow documented in features/studio-import.md; helpers under tools/delivery/.
+  No automatic sync between studio and installed content. Review client edits before applying
+  a design update. Next: owner edits/publishes in builder and builds through /deploy/.
+
+- **Firefighter local package installed (2026-11-07, operational change)** — Copied owner archive
+  firefighter-20261104-0844.tar.gz into standard ignored exports/ and extracted beside cafe.
+  Original image sb-api-runtime:20261104-0844, separate project site-firefighter and own volumes.
+  Loopback site/admin on localhost:8735, unused HTTPS binding 8736; no tunnel. Development
+  console messaging only. Site/admin/settings API returned 200; cafe still 200 and untouched.
+  Installed client admin supports content editing; full structural builder needs isolated studio
+  import, not yet attempted. Next requested investigation: editability through studio admin.
+  Details: clients/firefighter/README.md. No product code changed or tests/rebuild needed.
+
+- **Resumed on owner request (2026-11-07, operational change)** — Studio, installed cafe,
+  Instagram worker and hidden Matstack launcher restarted from saved configuration. Cafe local,
+  owner panel, studio admin/deploy and public tunnel /fa all returned HTTP 200. No test message
+  or order sent; worker container running does not establish Instagram delivery readiness.
+  NVIDIA Broadcast owns host 8080; control resumed using ignored var/studio-resume.compose.yml
+  with ports !override to loopback 8081:8080. admin.localhost/deploy/ stays unchanged. On subsequent
+  studio compose up include this override while 8080 is occupied. Test Postgres remains stopped.
+  Earlier shutdown checkpoints below are historical. Product code remains at cd504bb;
+  this restart note is not committed. Open phone/template items remain unchanged.
+
 - **Committed handoff (2026-11-06)** — Product changes, local deployment sources and independent
   feature/operator docs committed as 5c06c83 (Add mobile storefront and managed order workflows)
   on feature/local-matstack. Owner requested commit and push of this branch only; no merge.
@@ -372,3 +437,10 @@ an automation; resume when owner asks. Current branch work remains uncommitted.
   for accounts/addresses, live Orders, inline edits, preview, walk-in POS and storefront options.
 - Linked new references in docs/README, guide index, AGENTS and developer guide. Client configuration
   remains under docs/clients. Documentation only; rebuilt developer HTML, no services restarted.
+
+### Export path alignment (2026-11-07)
+The resumed control service inherited an old host export mount under Documents/ChatGPT. After
+successful firefighter update build, copied its archive to repo exports/, aligned ignored
+EXPORT_DIR to this checkout and recreated only control with the 8081 port override. Old outputs
+were preserved at the previous location; no installed site or volume was moved. Package exists
+at exports/firefighter-update-20261107-0943.tar.gz (73,457,191 bytes); tar listing verified.

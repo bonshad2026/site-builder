@@ -105,3 +105,7 @@ erDiagram
 ## اگر بخواهید…
 - ستون یا جدول اضافه کنید → [migration جدید](../05-recipes/new-migration.md)
 - تنظیم جدیدی به سایت اضافه کنید (بدون migration) → [تنظیم جدید برای سایت](../05-recipes/new-site-setting.md)
+
+آخرین migration تننت اکنون 015_members_and_reviews.sql است: نوع حساب/سازمان، مالک آیتم،
+مالک فایل مشتری، تخصیص درخواست به آیتم و جدول نظرات آیتم. migration روی schema اعضای نصب‌های
+قدیمی که با نام 012_members_and_reviews.sql تحویل شده‌اند هم بدون ساخت تکراری کار می‌کند.

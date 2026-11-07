@@ -1,7 +1,9 @@
 # Cafe operations — current handoff
 
-Updated 2026-11-06. All project services and the Matstack agent were intentionally stopped at
-the owner's request. No containers, volumes or site data were removed. Restart only when asked.
+Updated 2026-11-07. Studio, cafe, worker and Matstack were resumed on owner request. Local and
+public HTTP checks passed. Test Postgres stays stopped. Prior shutdown preserved all data.
+Host port 8080 is occupied by NVIDIA Broadcast; control currently maps loopback 8081 to container
+8080 using ignored var/studio-resume.compose.yml. Use the override command below while occupied.
 
 ## Resume from repository root
 
@@ -10,7 +12,7 @@ do not rerun bootstrap/menu scripts or worker setup, which are not restart comma
 
 ```powershell
 # Optional studio, for operator design/content work.
-docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml -f var/studio-resume.compose.yml up -d
 
 # Installed cafe, including the private local owner panel.
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/matstack/start-local-site.ps1
@@ -32,7 +34,7 @@ No startup service or automatic next-day restart was configured.
 
 - Package: `exports/cafe-mohammad-20261106-0913/`; compose project `site-cafe-mohammad`.
 - Local cafe: http://127.0.0.1:8725/fa; private panel: http://localhost:8727/admin.
-- Public cafe: https://tunnel_5clqhcidslu.mattunnel.ir (offline while stopped).
+- Public cafe: https://tunnel_5clqhcidslu.mattunnel.ir (available after the current restart).
 - Owner login: `owner` / `123456` (local development account).
 - Studio: http://admin.localhost/admin, operator `admin` / `123456` (local only).
 - Latest debug APK: `/downloads/cafe-mohammad-0.4.0.apk` on cafe origin. It is already built;

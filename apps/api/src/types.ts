@@ -35,6 +35,8 @@ export interface CustomerSession {
   phone: string | null;
   email: string | null;
   hasPassword: boolean;
+  /** One of the site's account kinds ('' when it has none). */
+  kind: string;
   sessionId: string;
   csrfHash: string;
 }

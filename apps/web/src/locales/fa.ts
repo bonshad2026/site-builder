@@ -270,6 +270,8 @@ export const fa: Messages = {
   },
   collections: {
     seatsLeft: '{count} جای خالی',
+    reviewCount: '{count} نظر',
+    noReviews: 'هنوز نظری ثبت نشده',
     full: 'تکمیل ظرفیت',
     closed: 'مهلت ثبت‌نام تمام شد',
     deadline: 'مهلت ثبت‌نام تا {date}',

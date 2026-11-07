@@ -30,3 +30,14 @@ by the current item (`valueFrom: 'current'`).
 Items can be sold with seats (`capacityField`) and a deadline (`deadlineField`), checked on the server,
 or requested through a form (`?item=<table>/<slug>` on the request form; `requestType` on the table).
 Design updates replace table definitions and keep the client's items.
+
+## Member profiles, files and reviews
+Account kinds may point at a self-service table: customers maintain their own item (for example
+a trainer profile), upload owned image/PDF files and submit it as draft for staff approval.
+Staff can assign a request to an item; tables can require a completed request before a customer
+rates/comments. Hidden reviews do not contribute to public average/count. Card designer supports
+list and rating blocks; item-reviews is available as a page section. Request form choices can
+come from content tables. Code: members.routes.ts, MemberProfile.tsx, ItemReviewsSection.tsx.
+Existing cafe address/unverified-signup behavior is retained alongside account kinds.
+Tenant migration: 015_members_and_reviews.sql, compatible with original delivery migration 012.
+Coverage: members.test.ts (10 real API/database tests), delivery-compatibility.test.ts.

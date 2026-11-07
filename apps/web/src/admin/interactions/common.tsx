@@ -120,6 +120,10 @@ export function Timeline({ siteId, events, stageName, currency }: { siteId: stri
             <span className="text-danger">✗ {t(L('Payment failed', 'پرداخت ناموفق'))}: {money(e)}</span>
           );
         else if (e.kind === 'assigned') text = <>{t(L('Assigned to', 'ارجاع به'))} {who(String(e.data.to ?? '')) || '—'}</>;
+        else if (e.kind === 'assigned_item') {
+          const title = e.data.title as { en?: string; fa?: string } | null;
+          text = <>{t(L('Handled by', 'انجام‌دهنده'))}: {title ? title.fa || title.en : '—'}</>;
+        }
         return (
           <li key={e.id} className="flex flex-col items-center gap-1 text-center text-xs text-ink">
             <span className="rounded-full bg-surface-2 px-3 py-1">

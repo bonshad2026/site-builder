@@ -1,6 +1,8 @@
 import {
   AVAILABLE_FILTER,
   collectionCommerceSchema,
+  collectionReviewsSchema,
+  collectionSelfServiceSchema,
   LOCALIZED_FIELD_TYPES,
   parseFieldValue,
   PRODUCT_SOURCE,
@@ -19,9 +21,9 @@ import type { StorageAdapter } from '../../storage/storage.js';
 type Db = pg.Pool | pg.PoolClient;
 
 export const COLLECTION_COLUMNS = `id, slug, name, item_name AS "itemName", fields, detail_page AS "detailPage", image_field AS "imageField",
-  commerce, request_type AS "requestType", position`;
+  commerce, request_type AS "requestType", position, self_service AS "selfService", reviews`;
 
-export const ITEM_COLUMNS = `id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt"`;
+export const ITEM_COLUMNS = `id, collection_id AS "collectionId", slug, title, data, status, position, created_at AS "createdAt", updated_at AS "updatedAt", owner_customer_id AS "ownerCustomerId", demo`;
 
 export interface ItemRow {
   id: string;
@@ -33,10 +35,19 @@ export interface ItemRow {
   position: number;
   createdAt: Date;
   updatedAt: Date;
+  /** The customer who keeps this item (self-service tables). */
+  ownerCustomerId: string | null;
+  /** Sample item (removed with the sample data, left out of packages). */
+  demo: boolean;
 }
 
 function normalize(row: Collection): Collection {
-  return { ...row, commerce: collectionCommerceSchema.parse(row.commerce ?? {}) };
+  return {
+    ...row,
+    commerce: collectionCommerceSchema.parse(row.commerce ?? {}),
+    selfService: collectionSelfServiceSchema.parse(row.selfService ?? {}),
+    reviews: collectionReviewsSchema.parse(row.reviews ?? {}),
+  };
 }
 
 export async function loadCollections(db: Db): Promise<Collection[]> {
@@ -64,6 +75,7 @@ export function publicCollection(c: Collection): PublicCollection {
     imageField: c.imageField,
     requestType: c.requestType,
     commerce: { enabled: c.commerce.enabled, currency: c.commerce.currency, maxPerOrder: c.commerce.maxPerOrder },
+    reviews: { enabled: c.reviews.enabled },
   };
 }
 
@@ -389,6 +401,8 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
   if (!rows.length) return [];
   const imageFields = collection.fields.filter((f) => f.type === 'image' || f.type === 'gallery');
   const refFields = collection.fields.filter((f) => f.type === 'reference');
+  const fileFields = collection.fields.filter((f) => f.type === 'files');
+  const filesOf = (v: unknown) => (Array.isArray(v) ? v : []).filter((x): x is { id: string; title: string } => !!x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string');
   const strings = (v: unknown) => (Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string' && !!x);
 
   const assetIds = new Set<string>();
@@ -396,6 +410,7 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
   for (const r of rows) {
     for (const f of imageFields) strings(r.data[f.key]).forEach((id) => assetIds.add(id));
     for (const f of refFields) strings(r.data[f.key]).forEach((id) => refIds.add(id));
+    for (const f of fileFields) filesOf(r.data[f.key]).forEach((x) => assetIds.add(x.id));
   }
 
   // Referenced items, with their own main image.
@@ -421,12 +436,16 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
   }
 
   const urls = new Map<string, string>();
+  const fileInfo = new Map<string, { contentType: string; sizeBytes: number }>();
   if (assetIds.size) {
-    const { rows: assets } = await db.query<{ id: string; storage_key: string }>(
-      `SELECT id, storage_key FROM assets WHERE id = ANY($1::uuid[]) AND visibility = 'public' AND deleted_at IS NULL`,
+    const { rows: assets } = await db.query<{ id: string; storage_key: string; content_type: string; size_bytes: number }>(
+      `SELECT id, storage_key, content_type, size_bytes::int AS size_bytes FROM assets WHERE id = ANY($1::uuid[]) AND visibility = 'public' AND deleted_at IS NULL`,
       [[...assetIds]],
     );
-    for (const a of assets) urls.set(a.id, storage.publicUrl(a.storage_key));
+    for (const a of assets) {
+      urls.set(a.id, storage.publicUrl(a.storage_key));
+      fileInfo.set(a.id, { contentType: a.content_type, sizeBytes: a.size_bytes });
+    }
   }
   for (const [id, img] of refImage) {
     const ref = refs.get(id);
@@ -434,6 +453,7 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
   }
 
   const taken = tracksBooking(collection) ? await seatsTaken(db, collection, rows.map((r) => r.id)) : new Map<string, number>();
+  const ratings = collection.reviews.enabled ? await ratingsOf(db, rows.map((r) => r.id)) : null;
 
   return rows.map((r) => {
     const data: Record<string, unknown> = { ...r.data };
@@ -445,6 +465,9 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
     for (const f of refFields) {
       const list = strings(r.data[f.key]).flatMap((id) => (refs.has(id) ? [refs.get(id)!] : []));
       data[f.key] = f.multiple ? list : (list[0] ?? null);
+    }
+    for (const f of fileFields) {
+      data[f.key] = filesOf(r.data[f.key]).flatMap((x) => (urls.has(x.id) ? [{ id: x.id, title: x.title, url: urls.get(x.id)!, ...fileInfo.get(x.id)! }] : []));
     }
     // Main image: the table's chosen field, else its first image field.
     const mainField = collection.imageField || imageFields[0]?.key;
@@ -458,8 +481,22 @@ export async function toPublicItems(db: Db, storage: StorageAdapter, collection:
       data,
       imageUrl: first && typeof first === 'object' && 'url' in first ? (first as { url: string }).url : null,
       ...(tracksBooking(collection) ? { availability: availabilityOf(collection, r, taken.get(r.id) ?? 0) } : {}),
+      ...(ratings ? { rating: ratings.get(r.id) ?? { average: 0, count: 0 } } : {}),
     };
   });
+}
+
+/** Average rating (one decimal) and number of shown reviews per item. */
+export async function ratingsOf(db: Db, itemIds: string[]): Promise<Map<string, { average: number; count: number }>> {
+  const out = new Map<string, { average: number; count: number }>();
+  if (!itemIds.length) return out;
+  const { rows } = await db.query<{ id: string; average: string; count: number }>(
+    `SELECT item_id AS id, round(avg(rating), 1)::text AS average, count(*)::int AS count
+       FROM item_reviews WHERE item_id = ANY($1::uuid[]) AND status = 'published' GROUP BY item_id`,
+    [itemIds],
+  );
+  for (const r of rows) out.set(r.id, { average: Number(r.average), count: r.count });
+  return out;
 }
 
 /* ---------- the shop's products as a list source ---------- */

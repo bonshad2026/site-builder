@@ -40,6 +40,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, Lbl> = {
   email: L('Email', 'ایمیل'),
   phone: L('Phone', 'تلفن'),
   reference: L('Item of another table', 'آیتمی از جدول دیگر'),
+  files: L('Files with titles', 'فایل‌ها با عنوان'),
 };
 
 const blankTable = (): CollectionInput => collectionInputSchema.parse({ slug: 'new-table', name: { en: '', fa: '' }, itemName: { en: '', fa: '' } });
@@ -56,6 +57,8 @@ function TableEditor({ siteId, table, onClose }: { siteId: string; table: (Colle
   const [draft, setDraft] = useState<CollectionInput & { id?: string }>(table ?? blankTable());
   const set = <K extends keyof CollectionInput>(key: K, value: CollectionInput[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const setCommerce = (patch: Partial<CollectionInput['commerce']>) => setDraft((d) => ({ ...d, commerce: { ...d.commerce, ...patch } }));
+  const setSelf = (patch: Partial<CollectionInput['selfService']>) => setDraft((d) => ({ ...d, selfService: { ...d.selfService, ...patch } }));
+  const setReviews = (patch: Partial<CollectionInput['reviews']>) => setDraft((d) => ({ ...d, reviews: { ...d.reviews, ...patch } }));
   const isNew = !draft.id;
   /** Why a field's key cannot be saved (shown under the key), or undefined. */
   const keyError = (key: string, index: number) => {
@@ -193,6 +196,46 @@ function TableEditor({ siteId, table, onClose }: { siteId: string; table: (Colle
           </div>
           <Checkbox label={t(L('Requests also take a seat', 'درخواست‌ها هم ظرفیت را پر کنند'))} checked={draft.commerce.requestsTakeSeat} onChange={(requestsTakeSeat) => setCommerce({ requestsTakeSeat })} />
           <p className="text-xs text-ink-soft">{t(L('Seats are taken by orders that are not cancelled. When the seats run out or the deadline passes, the buttons are switched off.', 'ظرفیت با سفارش‌های لغونشده پر می‌شود. با پر شدن ظرفیت یا گذشتن مهلت، دکمه‌ها غیرفعال می‌شوند.'))}</p>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-3 rounded-md border border-line p-4">
+          <legend className="px-1 text-sm font-medium">{t(L('Members and reviews', 'اعضا و نظرها'))}</legend>
+          <Checkbox
+            label={t(L('Customers keep their own item here (e.g. a trainer’s profile)', 'مشتری‌ها آیتم خودشان را این‌جا دارند (مثلاً پنل معرفی مربی)'))}
+            checked={draft.selfService.enabled}
+            onChange={(enabled) => setSelf({ enabled })}
+          />
+          {draft.selfService.enabled && (
+            <>
+              <Checkbox label={t(L('A new item waits until you publish it', 'آیتم تازه تا تأیید شما منتشر نشود'))} checked={draft.selfService.approval} onChange={(approval) => setSelf({ approval })} />
+              <div className="flex flex-col gap-1">
+                <span className="text-sm">{t(L('Fields the customer fills (none ticked = all)', 'فیلدهایی که مشتری پر می‌کند (هیچ‌کدام = همه)'))}</span>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {draft.fields
+                    .filter((f) => f.key)
+                    .map((f) => (
+                      <Checkbox
+                        key={f.key}
+                        label={l(f.label) || f.key}
+                        checked={draft.selfService.fields.includes(f.key)}
+                        onChange={(on) => setSelf({ fields: on ? [...draft.selfService.fields, f.key] : draft.selfService.fields.filter((k) => k !== f.key) })}
+                      />
+                    ))}
+                </div>
+              </div>
+              <p className="text-xs text-ink-soft">
+                {t(L('Point an account kind to this table in Requests → Accounts; customers of that kind then fill their item in their account.', 'در درخواست‌ها ← حساب‌ها یک نوع حساب را به این جدول وصل کنید؛ مشتری‌های آن نوع، آیتم خودشان را در حساب کاربری پر می‌کنند.'))}
+              </p>
+            </>
+          )}
+          <Checkbox label={t(L('Customers can rate and comment on items', 'مشتری‌ها به آیتم‌ها امتیاز و نظر بدهند'))} checked={draft.reviews.enabled} onChange={(enabled) => setReviews({ enabled })} />
+          {draft.reviews.enabled && (
+            <Checkbox
+              label={t(L('Only after a request handled by the item is done (once per request)', 'فقط پس از انجام‌شدن درخواستی که این آیتم انجامش داده (یک بار برای هر درخواست)'))}
+              checked={draft.reviews.afterDoneRequest}
+              onChange={(afterDoneRequest) => setReviews({ afterDoneRequest })}
+            />
+          )}
         </fieldset>
 
         <ErrorNote error={save.error} />

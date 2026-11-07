@@ -1,6 +1,6 @@
-param([switch]$Check)
+param([switch]$Check, [string]$ConfigPath = '')
 $ErrorActionPreference = 'Stop'
-$configPath = Join-Path $PSScriptRoot '.env'
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot '.env' }
 if (!(Test-Path -LiteralPath $configPath)) { throw 'Create deploy/matstack/.env from .env.example first.' }
 $config = @{}
 foreach ($line in Get-Content -LiteralPath $configPath) {

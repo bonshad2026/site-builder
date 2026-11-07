@@ -683,6 +683,7 @@ export async function clearDemoData(db: pg.Pool): Promise<DemoCounts> {
     await client.query('BEGIN');
     const before = await demoCounts(client);
     await client.query(`DELETE FROM payments WHERE demo OR order_id IN (SELECT id FROM orders WHERE demo) OR lead_id IN (SELECT id FROM leads WHERE demo)`);
+    await client.query('DELETE FROM item_reviews WHERE demo');
     await client.query('DELETE FROM orders WHERE demo');
     await client.query('DELETE FROM leads WHERE demo');
     await client.query('DELETE FROM customers WHERE demo');
