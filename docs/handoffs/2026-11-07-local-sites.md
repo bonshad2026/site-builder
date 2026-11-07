@@ -12,6 +12,13 @@ older shutdown and initial-install entries in STATUS are historical.
 - Do not change Liara, merge branches, push, send test SMS/DM or create test orders unless requested.
 - Keep cafe and firefighter isolated. Do not overwrite client edits with bootstrap scripts.
 
+## Commit checkpoint (owner requested, 2026-11-07)
+- Pending work below was committed as d6e3fa0 on feature/local-matstack. Owner authorized
+  pushing this branch; no merge requested. The older uncommitted notes below are historical.
+- Fresh checks: typecheck passed, full API 134/134 passed; web 53 pass / same 4 baseline
+  failures (57 total). Studio admin, firefighter preview and private panel returned HTTP 200.
+- Continue with owner-directed firefighter editing; existing package remains unapplied.
+
 ## Git / work in progress
 - Checkout: E:/Projects/bonshad/site-builder, branch feature/local-matstack.
 - HEAD cd504bb; product commit 5c06c83. Both were pushed on 2026-11-06.

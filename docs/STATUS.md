@@ -4,7 +4,7 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
-- **Owner-requested commit checkpoint (2026-11-07)** — Capturing the pending firefighter studio
+- **Owner-requested commit checkpoint (2026-11-07)** — Committed as `d6e3fa0`: firefighter studio
   import, member/review compatibility, isolated tunnel and operational documentation on
   feature/local-matstack; no merge or client update application. Fresh typecheck passed; full
   API 134/134 passed, web 53 passed / the same 4 documented failures (57 total, AbortSignal
