@@ -1,7 +1,7 @@
 # Cafe Mohammad Android app
 
-Native Android WebView wrapper for https://tunnel_5clqhcidslu.mattunnel.ir/fa.
-Package `ir.cafemohammad.app`, version 0.1.0 (1), Android 7+ (API 24), target/compile SDK 36.
+Native Android WebView wrapper for https://cafemohammad.tibasoft.ir/fa.
+Package `ir.cafemohammad.app`, version 1.0.0 (5), Android 7+ (API 24), target/compile SDK 36.
 
 ## Build
 
@@ -30,7 +30,7 @@ key for future updates; do not use this development key for store delivery.
   content and third-party cookies are disabled; SSL failures are cancelled.
 - Cafe links stay inside the app. External web/mail links open suitable apps; phone links use
   the dialer. Only INTERNET permission is requested; no JavaScript/native bridge is exposed.
-- The app needs the local Docker site and Matstack agent to stay running; it is not offline hosting.
+- The app loads the production Liara domain; local Docker/Matstack is not required. It requires internet.
 
 ## Verification, 2026-11-06
 
@@ -56,3 +56,26 @@ owns edge-to-edge system insets and consumes them after applying root padding, p
 WebView from reserving the same safe area again. IME bottom inset is included on Android 11+.
 Gradle assembleDebug passed; download /downloads/cafe-mohammad-0.4.0.apk. No device was
 attached; the owner must confirm the actual phone appearance. System navigation space remains.
+
+## Signed production release (2026-11-08)
+
+First store release: ir.cafemohammad.app, versionName1.0.0, versionCode5, SDK24–36.
+Launch URL and internal navigation allowlist use https://cafemohammad.tibasoft.ir.
+Unofficial native Instagram handoff removed; ordinary share handling remains.
+
+Build: `powershell -NoProfile -ExecutionPolicy Bypass -File mobile/cafe-mohammad/build.ps1 -Release`.
+Output exports/cafe-mohammad-release.apk; versioned delivery exports/cafe-mohammad-1.0.0-release.apk.
+Signing identity lives in ignored var/android-signing/cafe-mohammad/: release.jks and signing.json.
+The script passes passwords via environment, restores prior variables, and refuses missing signing
+credentials. Never commit/upload these files to the app store; upload only the signed APK.
+Keep a separate private backup of both files; reuse this key for every future version. On another
+machine adjust signing.json.storeFile or pass -SigningConfig to a private configuration file.
+Old debug APKs use another certificate and cannot be upgraded in place by this production APK.
+Uninstalling a debug app removes its local WebView session; server-side records remain.
+Store approval and actual Android runtime appearance require separate checks.
+
+## Browser-like back — 1.0.1/code6
+Back walks the WebView history (site pages and in-app navigation). Only at the first page does it
+show a toast and exit on a second press within 2 seconds. Registered through OnBackInvokedDispatcher
+on Android 13+ (targetSdk 36 no longer calls onBackPressed there) and onBackPressed on older versions.
+Release build and signature verified; not yet tested on a device.

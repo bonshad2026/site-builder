@@ -1,0 +1,4 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="oval"><solid android:color="#24180F" /></shape></item>
+    <item android:gravity="center" android:width="84dp" android:height="84dp"><bitmap android:src="@drawable/cafe_logo" android:gravity="fill" /></item>
+</layer-list>

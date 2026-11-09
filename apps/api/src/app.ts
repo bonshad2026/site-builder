@@ -32,6 +32,7 @@ import { filesRoutes } from './storage/files.routes.js';
 import { paymentCatalogRoutes } from './modules/payments/catalog.js';
 import { paymentReturnRoutes, paymentSettingsRoutes, paymentsListRoutes } from './modules/payments/payments.routes.js';
 import { overviewRoutes } from './modules/site/overview.routes.js';
+import {mobileAppsRoutes} from './modules/mobile-apps/mobile-apps.routes.js';
 import './types.js';
 
 export function createApp(ctx: AppContext) {
@@ -80,6 +81,7 @@ export function createApp(ctx: AppContext) {
   site.use('/orders', ordersRoutes(ctx));
   site.use('/customers', customersRoutes());
   site.use('/assets', assetsRoutes(ctx));
+  site.use('/mobile-apps', mobileAppsRoutes(ctx));
   site.use('/members', membersRoutes(ctx));
   site.use('/shop', shopAdminRoutes());
   // The studio's starters: operators only.

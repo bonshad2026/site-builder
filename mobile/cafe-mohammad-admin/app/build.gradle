@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'ir.cafemohammad.admin'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'ir.cafemohammad.admin'
+        minSdk 24
+        targetSdk 36
+        versionCode 4
+        versionName '1.1.1'
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('CAFE_SIGNING_STORE')) {
+                storeFile file(System.getenv('CAFE_SIGNING_STORE'))
+                storePassword System.getenv('CAFE_SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('CAFE_SIGNING_ALIAS')
+                keyPassword System.getenv('CAFE_SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    tasks.configureEach { task ->
+        if (task.name == 'validateSigningRelease') {
+            task.doFirst {
+                if (!System.getenv('CAFE_SIGNING_STORE')) throw new GradleException('Release signing credentials are required; use build.ps1 -Release.')
+            }
+        }
+    }
+}

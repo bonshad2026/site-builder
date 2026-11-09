@@ -11,7 +11,7 @@ import android.webkit.*;
 import android.widget.*;
 
 public class MainActivity extends Activity {
-    private static final String HOST = "tunnel_5clqhcidslu.mattunnel.ir";
+    private static final String HOST = "cafemohammad.tibasoft.ir";
     private static final String SITE = "https://" + HOST + "/fa";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WebView web;
@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,this::handleBack);
         // Own system insets once; do not let both decor and WebView reserve them.
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         else getWindow().getDecorView().setSystemUiVisibility(
@@ -60,22 +61,7 @@ public class MainActivity extends Activity {
                 if ("sitebuilder-share".equals(url.getScheme())) {
                     Uri current = Uri.parse(view.getUrl() == null ? "" : view.getUrl());
                     String text = url.getQueryParameter("text");
-                    if (req.isForMainFrame() && "https".equals(current.getScheme()) && HOST.equals(current.getHost()) && ("order".equals(url.getHost()) || "instagram-order".equals(url.getHost())) && text != null && text.length() <= 16000) {
-                        if ("instagram-order".equals(url.getHost())) {
-                            String username = url.getQueryParameter("username");
-                            if (username == null || !username.matches("[A-Za-z0-9._]{1,30}")) return true;
-                            android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("سفارش کافه محمد", text));
-                            Toast.makeText(MainActivity.this, "متن سفارش کپی شد؛ در گفت‌وگو جای‌گذاری و ارسال کنید", Toast.LENGTH_LONG).show();
-                            Uri chat = Uri.parse("https://ig.me/m/" + Uri.encode(username));
-                            Intent instagram = new Intent(Intent.ACTION_VIEW, chat).setPackage("com.instagram.android");
-                            try { startActivity(instagram); }
-                            catch (android.content.ActivityNotFoundException missing) {
-                                try { startActivity(new Intent(Intent.ACTION_VIEW, chat)); }
-                                catch (android.content.ActivityNotFoundException noBrowser) { Toast.makeText(MainActivity.this, "متن کپی شد؛ اینستاگرام را باز کنید", Toast.LENGTH_LONG).show(); }
-                            }
-                            return true;
-                        }
+                    if (req.isForMainFrame() && "https".equals(current.getScheme()) && HOST.equals(current.getHost()) && "order".equals(url.getHost()) && text != null && text.length() <= 16000) {
                         Intent send = new Intent(Intent.ACTION_SEND);
                         send.setType("text/plain");
                         send.putExtra(Intent.EXTRA_SUBJECT, "ثبت سفارش کافه محمد");
@@ -130,7 +116,16 @@ public class MainActivity extends Activity {
         Button retry=new Button(this);retry.setText("تلاش مجدد");retry.setOnClickListener(v->load());error.addView(retry);root.addView(error,new FrameLayout.LayoutParams(-1,-1));
     }
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
-    @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
+    private long lastBackAt;
+    /** Back walks the site's history like a browser; at its first page a second press within 2 s exits. */
+    private void handleBack(){
+        if(web!=null&&web.canGoBack()){web.goBack();return;}
+        long now=SystemClock.elapsedRealtime();
+        if(now-lastBackAt<2000){finish();return;}
+        lastBackAt=now;
+        Toast.makeText(this,"برای خروج، دوباره دکمهٔ بازگشت را بزنید",Toast.LENGTH_SHORT).show();
+    }
+    @Override public void onBackPressed(){handleBack();}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(splash!=null)splash.stop();if(web!=null)web.destroy();super.onDestroy();}
     private class Splash extends View {
         private final Paint p=new Paint(3);
