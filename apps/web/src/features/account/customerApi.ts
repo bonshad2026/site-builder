@@ -70,7 +70,7 @@ export function useCustomer() {
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
   });
-  return { enabled, accounts: settings?.accounts, customer: me.data ?? null, loading: enabled && (me.isLoading || (!me.data && me.isFetching)) };
+  return { enabled, accounts: settings?.accounts, customer: me.data ?? null, loading: enabled && me.isLoading };
 }
 
 export function useRefreshCustomer() {

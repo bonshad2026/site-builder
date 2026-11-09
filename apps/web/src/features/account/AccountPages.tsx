@@ -25,7 +25,9 @@ function AuthPanel({ next }: { next?: string }) {
   const errLang = useSiteErrorLanguage();
   const { accounts } = useCustomer();
   const byPhone = accounts?.identifier !== 'email';
-  const passwords = accounts?.passwords !== false;
+  // Code-only sites: one form, a code to the phone or email; a new one gets its account here.
+  const codeOnly = !!accounts?.codeOnly;
+  const passwords = accounts?.passwords !== false && !codeOnly;
   const [params] = useSearchParams();
   const kinds = accounts?.kinds ?? [];
   // `?kind=trainer` (a "sign up as a trainer" link) opens sign-up with that kind chosen.
@@ -33,7 +35,7 @@ function AuthPanel({ next }: { next?: string }) {
   const [organization, setOrganization] = useState('');
   const chosenKind = kinds.find((k) => k.key === kind);
   const authStart = useSystemPageOptions().authStart;
-  const [mode, setMode] = useState<Mode>(kind ? 'signup' : (authStart ?? 'login'));
+  const [mode, setMode] = useState<Mode>(codeOnly ? 'login' : kind ? 'signup' : (authStart ?? 'login'));
   const [withCode, setWithCode] = useState(!passwords);
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
@@ -41,6 +43,7 @@ function AuthPanel({ next }: { next?: string }) {
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [needName, setNeedName] = useState(false);
 
   const sendCode = useMutation({
     mutationFn: () => api.post<{ sent: boolean; devCode?: string }>('/customer/code', { identifier, purpose: mode }),
@@ -57,6 +60,14 @@ function AuthPanel({ next }: { next?: string }) {
         : mode === 'reset'
           ? api.post<Customer>('/customer/reset', { identifier, code, password })
           : api.post<Customer>('/customer/login', withCode ? { identifier, code } : { identifier, password }),
+    onSuccess: async (customer) => {
+      if (codeOnly && !customer.name) return setNeedName(true);
+      await refresh();
+      if (next) navigate(next);
+    },
+  });
+  const saveName = useMutation({
+    mutationFn: () => api.patch<Customer>('/customer/me', { name }),
     onSuccess: async () => {
       await refresh();
       if (next) navigate(next);
@@ -78,8 +89,35 @@ function AuthPanel({ next }: { next?: string }) {
   };
   const idLabel = byPhone ? t(L('Mobile number', 'شماره موبایل')) : t(L('Email', 'ایمیل'));
 
+  if (needName)
+    return (
+      <div className="mx-auto w-full max-w-md">
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveName.mutate();
+          }}
+          className="flex flex-col gap-6"
+        >
+          <FieldShell id="acc-name" label={t(L('Your name', 'نام شما'))}>
+            <TextInput id="acc-name" autoComplete="name" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+          </FieldShell>
+          {saveName.error && (
+            <p role="alert" className="text-sm text-danger">
+              {errorLine(saveName.error, errLang)}
+            </p>
+          )}
+          <Button type="submit" disabled={saveName.isPending || name.trim().length < 2}>
+            {t(L('Continue', 'ادامه'))}
+          </Button>
+        </form>
+      </div>
+    );
+
   return (
     <div className="mx-auto w-full max-w-md">
+      {!codeOnly && (
       <div role="tablist" className="mb-8 flex gap-6 border-b border-line">
         {(
           [
@@ -92,6 +130,7 @@ function AuthPanel({ next }: { next?: string }) {
           </button>
         ))}
       </div>
+      )}
       <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
         {mode === 'reset' && <p className="text-sm text-ink-soft">{t(L('We will send you a code to set a new password.', 'یک کد برای تعیین رمز جدید برایتان ارسال می‌کنیم.'))}</p>}
         <FieldShell id="acc-id" label={idLabel}>
@@ -277,7 +316,7 @@ function Profile({ customer }: { customer: Customer }) {
       <FieldShell id="p-other" label={accounts?.identifier === 'email' ? t(L('Mobile number', 'شماره موبایل')) : t(L('Email (optional)', 'ایمیل (اختیاری)'))}>
         <TextInput id="p-other" dir="ltr" value={other} onChange={(e) => setOther(e.target.value)} />
       </FieldShell>
-      {accounts?.passwords !== false && (
+      {accounts?.passwords !== false && !accounts?.codeOnly && (
         <>
           <FieldShell id="p-pass" label={customer.hasPassword ? t(L('New password', 'رمز جدید')) : t(L('Set a password', 'تعیین رمز عبور'))} hint={t(L('optional', 'اختیاری'))}>
             <TextInput id="p-pass" type="password" dir="ltr" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />

@@ -92,6 +92,7 @@ export function registerInteractionRoutes(r: ApiRouter, ctx: AppContext) {
     const settings = await accounts(req);
     const customer = await login(req.tenant!.db, settings.accounts, body);
     await startCustomerSession(ctx, req.tenant!.db, req.tenant!.slug, customer.id, res);
+    if (customer.created) await notifyStaff(ctx, req.tenant!, settings, 'New customer account', `${customer.phone ?? customer.email} signed up.`);
     return { data: await getCustomer(req.tenant!.db, customer.id) };
   });
 

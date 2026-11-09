@@ -117,7 +117,10 @@ export async function sendCode(ctx: AppContext, db: pg.Pool, settings: AccountsS
   const identifier = identifierOf(settings, rawIdentifier);
   const existing = await findByIdentifier(db, settings, identifier);
   if (purpose === 'signup' && existing) throw conflict('An account with this phone or email already exists. Sign in instead.');
-  if (purpose !== 'signup' && !existing) throw new AppError(404, 'account_not_found', 'No account was found with this phone or email');
+  // Code-only sites sign up a new phone or email with its first sign-in code.
+  const autoSignup = settings.codeOnly && purpose === 'login';
+  if (purpose === 'reset' && settings.codeOnly) throw badRequest('Passwords are not used on this site');
+  if (purpose !== 'signup' && !existing && !autoSignup) throw new AppError(404, 'account_not_found', 'No account was found with this phone or email');
   const { rows } = await db.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM customer_codes WHERE identifier = $1 AND created_at > now() - make_interval(mins => $2)`,
     [identifier, CODE_WINDOW_MINUTES],
@@ -159,14 +162,14 @@ async function consumeCode(db: pg.Pool, identifier: string, purpose: string, cod
 
 export async function signup(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code?: string; name: string; password?: string; kind?: string; organization?: string }) {
   const identifier = identifierOf(settings, input.identifier);
-  if (input.password && !settings.passwords) throw badRequest('Passwords are not used on this site');
+  if (input.password && (!settings.passwords || settings.codeOnly)) throw badRequest('Passwords are not used on this site');
   // A site with kinds of account needs one of them; the organisation's name when that kind asks for it.
   const kind = settings.kinds.length ? settings.kinds.find((k) => k.key === input.kind) : undefined;
   if (settings.kinds.length && !kind) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'kind', message: 'Choose a kind of account', code: 'too_small' }]);
   const organization = kind?.organization ? (input.organization ?? '').trim() : '';
   if (kind?.organization && organization.length < 2) throw new AppError(400, 'validation_failed', 'Invalid request body', [{ path: 'organization', message: 'Required', code: 'too_small' }]);
   if (settings.signupVerification) await consumeCode(db, identifier, 'signup', input.code ?? '');
-  else if (!settings.passwords || !input.password) throw badRequest('A password is required for signup without verification');
+  else if (!settings.passwords || settings.codeOnly || !input.password) throw badRequest('A password is required for signup without verification');
   const passwordHash = input.password ? await hashPassword(input.password) : null;
   try {
     const { rows } = await db.query<CustomerRow>(
@@ -182,14 +185,16 @@ export async function signup(db: pg.Pool, settings: AccountsSettings, input: { i
   }
 }
 
-export async function login(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; password?: string; code?: string }) {
+/** Signs in; on code-only sites a verified code for an unknown phone or email creates the account (`created`). */
+export async function login(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; password?: string; code?: string }): Promise<CustomerRow & { status: string; created?: boolean }> {
   const identifier = identifierOf(settings, input.identifier);
   const customer = await findByIdentifier(db, settings, identifier);
   if (input.code) {
-    if (!customer) throw new AppError(400, 'invalid_code', 'The code is wrong or has expired. Ask for a new one.');
+    if (!customer && !settings.codeOnly) throw new AppError(400, 'invalid_code', 'The code is wrong or has expired. Ask for a new one.');
     await consumeCode(db, identifier, 'login', input.code);
+    if (!customer) return { ...(await createVerified(db, settings, identifier)), status: 'active', created: true };
   } else {
-    if (!settings.passwords) throw badRequest('Sign in with a code');
+    if (!settings.passwords || settings.codeOnly) throw badRequest('Sign in with a code');
     if (customer?.locked_until && customer.locked_until > new Date()) throw new AppError(429, 'account_locked', 'Too many failed attempts. Try again later or sign in with a code.');
     const ok = await verifyPassword(customer?.password_hash ?? null, input.password ?? '');
     if (!customer || !ok) {
@@ -210,7 +215,24 @@ export async function login(db: pg.Pool, settings: AccountsSettings, input: { id
   return customer;
 }
 
+/** A verified account without a name yet (the customer adds it after signing in) and no password. */
+async function createVerified(db: pg.Pool, settings: AccountsSettings, identifier: string) {
+  const kind = settings.kinds.find((k) => !k.organization) ?? settings.kinds[0];
+  try {
+    const { rows } = await db.query<CustomerRow>(
+      `INSERT INTO customers AS c (${column(settings)}, name, kind, verified_at, last_login_at) VALUES ($1, '', $2, now(), now()) RETURNING ${COLUMNS}`,
+      [identifier, kind?.key ?? ''],
+    );
+    await linkCases(db, rows[0].id, settings, identifier);
+    return rows[0];
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') throw new AppError(400, 'invalid_code', 'The code is wrong or has expired. Ask for a new one.');
+    throw err;
+  }
+}
+
 export async function resetPassword(db: pg.Pool, settings: AccountsSettings, input: { identifier: string; code: string; password: string }) {
+  if (settings.codeOnly) throw badRequest('Passwords are not used on this site');
   const identifier = identifierOf(settings, input.identifier);
   const customer = await findByIdentifier(db, settings, identifier);
   if (!customer) throw new AppError(400, 'invalid_code', 'The code is wrong or has expired. Ask for a new one.');
@@ -274,7 +296,7 @@ export async function updateProfile(
   if (input.email !== undefined && settings.identifier === 'phone') add('email', input.email ? normalizeIdentifier(input.email, 'email') : null);
   if (input.phone !== undefined && settings.identifier === 'email') add('phone', input.phone ? normalizeIdentifier(input.phone, 'phone') : null);
   if (input.password) {
-    if (!settings.passwords) throw badRequest('Passwords are not used on this site');
+    if (!settings.passwords || settings.codeOnly) throw badRequest('Passwords are not used on this site');
     if (customer.hasPassword) {
       const { rows } = await db.query<{ password_hash: string }>('SELECT password_hash FROM customers WHERE id = $1', [customer.id]);
       if (!(await verifyPassword(rows[0]?.password_hash ?? null, input.currentPassword ?? ''))) throw new AppError(400, 'invalid_credentials', 'The current password is wrong');

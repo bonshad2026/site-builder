@@ -377,6 +377,8 @@ export const accountsSchema = z
     /** Accounts may set a password; signing in with a one-time code always works. */
     passwords: z.boolean().default(true),
     signupVerification: z.boolean().default(true),
+    /** Sign in only with a one-time code; an unknown phone or email gets an account on its first sign-in. */
+    codeOnly: z.boolean().default(false),
     /**
      * Kinds of account a visitor picks when signing up (person, organisation, trainer…); none =
      * one kind. `organization` asks for the organisation's name; `profileTable` gives accounts of

@@ -201,6 +201,25 @@ describe('customer accounts', () => {
     await owner.patch(`${base}/customers/${list.body.data[0].id}`, { status: 'blocked' });
     expect((await fresh.get(`${pub}/customer/me`)).body.data).toBeNull();
   });
+  it('code-only sites sign a new number up with its first code and refuse passwords', async () => {
+    const settings = (await owner.get(`${base}/settings`)).body.data;
+    expect((await owner.put(`${base}/settings`, { ...settings, accounts: { ...settings.accounts, codeOnly: true } })).status).toBe(200);
+    const newcomer = request.agent(app);
+    const fresh = '09127778899';
+    expect((await newcomer.post(`${pub}/customer/code`).send({ identifier: fresh, purpose: 'login' })).status).toBe(200);
+    const login = await newcomer.post(`${pub}/customer/login`).send({ identifier: fresh, code: sms.outbox.at(-1)!.code });
+    expect(login.status, JSON.stringify(login.body)).toBe(200);
+    expect(login.body.data).toMatchObject({ phone: fresh, name: '', verified: true, hasPassword: false });
+    const csrfNew = decodeURIComponent(/sb_cc_[^=]+=([^;]+)/.exec(String(login.headers['set-cookie']))![1]);
+    expect((await newcomer.patch(`${pub}/customer/me`).set('X-Customer-CSRF', csrfNew).send({ name: 'Sara' })).body.data.name).toBe('Sara');
+    // The same number signs in to the same account next time.
+    const again = request.agent(app);
+    await again.post(`${pub}/customer/code`).send({ identifier: fresh, purpose: 'login' });
+    expect((await again.post(`${pub}/customer/login`).send({ identifier: fresh, code: sms.outbox.at(-1)!.code })).body.data.name).toBe('Sara');
+    expect((await request(app).post(`${pub}/customer/login`).send({ identifier: '09127778899', password: 'anything-123' })).status).toBe(400);
+    expect((await request(app).post(`${pub}/customer/code`).send({ identifier: fresh, purpose: 'reset' })).status).toBe(400);
+    expect((await owner.put(`${base}/settings`, { ...settings, accounts: { ...settings.accounts, codeOnly: false } })).status).toBe(200);
+  });
 });
 
 describe('fully editable forms', () => {

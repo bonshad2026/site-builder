@@ -22,6 +22,8 @@ it('rechecks a cached signed-out session on mount and when returning after login
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: customer }) })));
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { result } = renderHook(() => useCustomer(), { wrapper });
+  // Background revalidation must not unmount/remount the authentication form.
+  expect(result.current.loading).toBe(false);
   await waitFor(() => expect(result.current.customer?.id).toBe('customer-1'));
   act(() => focusManager.setFocused(false));
   customer = null;

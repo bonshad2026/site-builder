@@ -38,8 +38,9 @@ export function AccountsTab({ siteId, s, set, part }: { siteId: string; s: SiteS
                     { value: 'email', label: t(L('Email (code by email)', 'ایمیل (کد با ایمیل)')) },
                   ]}
                 />
-                <Checkbox label={t(L('Verify signup with a code','تأیید ثبت‌نام با کد'))} checked={a.signupVerification} onChange={signupVerification=>set('accounts',{...a,signupVerification})} />
-                <Checkbox label={t(L('Allow passwords', 'امکان رمز عبور'))} checked={a.passwords} onChange={(passwords) => set('accounts', { ...a, passwords })} hint={t(L('Signing in with a one-time code always works.', 'ورود با کد یک‌بارمصرف همیشه فعال است.'))} />
+                {!a.codeOnly && <Checkbox label={t(L('Verify signup with a code','تأیید ثبت‌نام با کد'))} checked={a.signupVerification} onChange={signupVerification=>set('accounts',{...a,signupVerification})} />}
+                <Checkbox label={t(L('Sign in only with a code', 'ورود فقط با کد'))} checked={a.codeOnly} onChange={(codeOnly) => set('accounts', { ...a, codeOnly })} hint={t(L('A new number or email gets an account with its first code.', 'شماره یا ایمیل جدید با اولین کد، حساب می‌گیرد.'))} />
+                {!a.codeOnly && <Checkbox label={t(L('Allow passwords', 'امکان رمز عبور'))} checked={a.passwords} onChange={(passwords) => set('accounts', { ...a, passwords })} hint={t(L('Signing in with a one-time code always works.', 'ورود با کد یک‌بارمصرف همیشه فعال است.'))} />}
               </div>
             )}
             {a.enabled && (
