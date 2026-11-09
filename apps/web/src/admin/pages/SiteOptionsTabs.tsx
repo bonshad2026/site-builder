@@ -752,6 +752,11 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
   const upPop = (patch: Partial<typeof pop>) => set('popup', { ...pop, ...patch });
   return (
     <>
+      <Card title={T('Domain ownership verification', 'تأیید مالکیت دامنه (اینماد)')}>
+        <TextField label={T('Enamad verification code', 'کد تأیید اینماد')} dir="ltr" value={meta.enamadCode} onChange={(enamadCode) => upMeta({ enamadCode })} />
+        <p className="mt-3 text-sm text-ink-soft">{T('Enter the numeric code and save. The empty verification file becomes available immediately at /CODE.txt on your site domain. Clear and save to disable it. No deployment is required on installations that support live verification.', 'کد عددی را وارد کنید و تنظیمات را ذخیره کنید. فایل خالی همان لحظه در مسیر /کد.txt روی دامنهٔ سایت در دسترس قرار می‌گیرد. برای غیرفعال‌کردن، کد را پاک و ذخیره کنید. در نصب‌های دارای این قابلیت به استقرار مجدد نیاز نیست.')}</p>
+        {meta.enamadCode && <p className="mt-2 text-sm" dir="ltr">/{meta.enamadCode}.txt</p>}
+      </Card>
       {operator && (
         <Card title={T('Icon, share image and page code', 'آیکون، تصویر اشتراک‌گذاری و کد صفحه')}>
           <div className="flex flex-col gap-4">
@@ -775,6 +780,7 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
               value={meta.bodyCode}
               onChange={(bodyCode) => upMeta({ bodyCode })}
             />
+            <TextField label={T('Panel notification code (authorized staff after sign-in)', 'کد اعلان پنل (پس از ورود افراد مجاز سفارش‌ها)')} dir="ltr" multiline rows={5} value={meta.adminHeadCode} onChange={(adminHeadCode) => upMeta({ adminHeadCode })} />
             <p className="text-xs text-ink-soft">
               {T('Runs on every page of the site. Only paste code from services you trust.', 'روی همه‌ی صفحه‌های سایت اجرا می‌شود. فقط کد سرویس‌های مطمئن را قرار دهید.')}
             </p>

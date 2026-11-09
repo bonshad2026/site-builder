@@ -415,11 +415,15 @@ const urlOrPath = z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|
 /** Browser icon, default share image, and the operator's own code (analytics, trust badges, chat). */
 export const pageMetaSchema = z
   .object({
+    /** Empty disables the live root ownership file; no arbitrary paths or content. */
+    enamadCode: z.string().trim().regex(/^(?:[0-9]{1,30})?$/).default(''),
     faviconUrl: urlOrPath,
     /** Shown when a page is shared and has no image of its own. */
     shareImageUrl: urlOrPath,
     /** HTML put in <head> on every page (meta tags, analytics). */
     headCode: z.string().max(20_000).default(''),
+    /** Operator code loaded only inside an authenticated order-management panel. */
+    adminHeadCode: z.string().max(20_000).default(''),
     /** HTML put at the end of <body> (chat widgets, badges). */
     bodyCode: z.string().max(20_000).default(''),
   })

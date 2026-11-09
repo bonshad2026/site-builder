@@ -127,6 +127,13 @@ for (const route of routes) {
   }
 }
 
+// A single-language site may render /fa only. Its root remains the SPA fallback used by
+// admin and unknown paths; ownership/SDK head code must also exist in that initial HTML.
+if (!settings.locales.includes('en') && settings.meta?.headCode?.trim()) {
+  const fallback = template.replace('</head>', `    <!--sb-head-->${settings.meta.headCode}<!--/sb-head-->\n  </head>`);
+  await writeFile(path.join(dist, 'index.html'), fallback);
+}
+
 await writeFile(path.join(dist, 'sitemap.xml'), await get('/sitemap.xml'));
 await writeFile(path.join(dist, 'robots.txt'), `User-agent: *\nDisallow: /admin\nDisallow: /checkout\nDisallow: /cart\nSitemap: ${ORIGIN}/sitemap.xml\n`);
 console.log(`[prerender] wrote ${count} pages, sitemap.xml and robots.txt for ${SITE}`);

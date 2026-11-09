@@ -45,7 +45,20 @@ export function publicRoutes(ctx: AppContext) {
     if (!rows[0]?.settings) return { data: null };
     // Workflows (internal stage names, message texts) and staff addresses stay private.
     const { notifications: _n, ...settings } = withSettingDefaults(rows[0].settings);
-    return { data: { ...settings, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
+    const { adminHeadCode: _adminCode, ...publicMeta } = settings.meta;
+    return { data: { ...settings, meta: publicMeta, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
+  });
+
+  r.route({
+    method: 'get', path: '/verification-files/:filename', summary: 'Live domain ownership file',
+    params: z.object({ filename: z.string().regex(/^[0-9]{1,30}\.txt$/) }),
+  }, async ({ req, res, params }) => {
+    // Never cache misses or successes: clearing/changing the setting takes effect immediately.
+    res.set('Cache-Control', 'no-store');
+    const { rows } = await req.tenant!.db.query('SELECT settings FROM site_settings WHERE id=1');
+    const code = rows[0]?.settings?.meta?.enamadCode;
+    if (!code || params.filename !== code + '.txt') throw notFound('Verification file');
+    res.type('text/plain').status(200).send('');
   });
 
   registerInteractionRoutes(r, ctx);

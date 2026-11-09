@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { AdminPanelCode } from './AdminPanelCode';
 import { HOST_SITE_ID } from '../features/public-site/data';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router';
 import type { SiteSettings } from '@site-builder/shared';
@@ -333,6 +334,7 @@ function SiteNav({ siteId }: { siteId: string }) {
           { to: `${base}/transactions`, label: L('Transactions', 'تراکنش‌ها'), show: can('payments:manage') && (shop || mod('leads')) },
           { to: `${base}/messaging`, label: t.su.messaging, show: operator },
           { to: `${base}/members`, label: t.members, show: owner },
+          { to: `${base}/mobile-apps`, label: L('Mobile applications', 'اپلیکیشن‌های موبایل'), show: owner },
         ]}
       />
     </nav>
@@ -404,6 +406,7 @@ function AdminLayout({ me }: { me: Me }) {
 
   return (
     <div className="flex min-h-dvh bg-bg text-ink">
+      <AdminPanelCode me={me} siteId={siteId ?? HOST_SITE_ID ?? undefined} />
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 overflow-y-auto overscroll-contain border-e border-line bg-surface lg:block">{sidebar}</aside>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
