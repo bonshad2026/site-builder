@@ -8,3 +8,7 @@ The definitions of content tables (their fields and settings) are replaced; a ta
 - **Windows:** double-click `update.cmd`
 
 The installed site is found automatically. At the end the address and ports are shown.
+
+
+The website and client admin share the installed origin: use /admin on that same domain and
+port. Client web uses same-origin API requests. No separate admin listener is required.

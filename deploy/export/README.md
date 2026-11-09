@@ -43,3 +43,11 @@ a lost server.
 Set in the installer, or later in the admin panel (Platform → Messaging) when the installer was
 told to (`EMAIL_PROVIDER=panel`, `SMS_PROVIDER=panel`). Settings saved in the panel win over the
 installer's.
+
+
+## Site and admin address
+The same domain and port serve both the website and the client's authenticated admin:
+open <site-address>/admin to sign in. No second admin port is required, including behind a
+tunnel or reverse proxy. The browser calls /api on its current origin. Set SITE_URL to the
+public address used by visitors; CORS_ORIGINS can list additional allowed origins if needed.
+The client admin edits content; the studio's full structural builder is not shipped.

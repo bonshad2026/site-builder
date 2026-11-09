@@ -1,6 +1,11 @@
 # DOMAIN=example.com gets an automatic HTTPS certificate; DOMAIN=:80 serves plain HTTP (testing).
 {$DOMAIN} {
+    # Keep APK rejection before all proxy/static handlers.
+    route {
 	encode gzip
+    # APKs are available only through the authenticated owner download endpoint.
+    @publicApk path_regexp publicApk (?i)\.apk$
+    respond @publicApk 404
 	handle /api/* {
 		reverse_proxy api:4000
 	}
@@ -8,6 +13,11 @@
 		reverse_proxy api:4000
 	}
 	# The sitemap is made live by the API, so products and pages added on this server are in it.
+	@verification path_regexp verification ^/[0-9]{1,30}\.txt$
+	handle @verification {
+	    rewrite * /api/v1/public/sites/{$CELL_SLUG}/verification-files{path}
+	    reverse_proxy api:4000
+	}
 	handle /sitemap.xml {
 		rewrite * /api/v1/public/sites/{$CELL_SLUG}/sitemap.xml
 		reverse_proxy api:4000
@@ -17,4 +27,5 @@
 		try_files {path} {path}/index.html /index.html
 		file_server
 	}
+    }
 }

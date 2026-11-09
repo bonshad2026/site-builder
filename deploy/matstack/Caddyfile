@@ -1,15 +1,21 @@
 :80 {
+    # Keep APK rejection before all proxy/static handlers.
+    route {
     encode gzip
-    @private path /admin /admin/* /api/v1/auth/* /api/v1/platform/* /api/v1/sites/*
-    handle @private {
-        respond "Not found" 404
-    }
+    # APKs are available only through the authenticated owner download endpoint.
+    @publicApk path_regexp publicApk (?i)\.apk$
+    respond @publicApk 404
     handle /api/* {
         reverse_proxy api:4000 {
             header_up X-Forwarded-Proto https
         }
     }
     handle /files/* {
+        reverse_proxy api:4000
+    }
+    @verification path_regexp verification ^/[0-9]{1,30}\.txt$
+    handle @verification {
+        rewrite * /api/v1/public/sites/{$CELL_SLUG}/verification-files{path}
         reverse_proxy api:4000
     }
     handle /sitemap.xml {
@@ -21,22 +27,5 @@
         try_files {path} {path}/index.html /index.html
         file_server
     }
-}
-
-# Owner panel is exposed only through the loopback-only :8727 mapping.
-:81 {
-    encode gzip
-    handle /api/* {
-        reverse_proxy api:4000 {
-            header_up X-Forwarded-Proto https
-        }
-    }
-    handle /files/* {
-        reverse_proxy api:4000
-    }
-    handle {
-        root * /srv/site
-        try_files {path} {path}/index.html /index.html
-        file_server
     }
 }

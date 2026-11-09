@@ -48,7 +48,7 @@ CMD ["sh", "/app/deploy/cell/api-start.sh"]
 FROM source AS web-static
 ARG VITE_SITE_ID=atelier-navar
 # VITE_ADMIN_SCOPE=client: the client's admin only; builder, pages and platform code are left out.
-ARG VITE_API_URL=http://sb-site-url.invalid
+ARG VITE_API_URL=same-origin
 ENV VITE_API_URL=$VITE_API_URL VITE_SITE_ID=$VITE_SITE_ID SITE_URL=http://sb-site-url.invalid VITE_ADMIN_SCOPE=client
 RUN npm run build -w apps/web && find apps/web/dist -name '*.map' -delete
 

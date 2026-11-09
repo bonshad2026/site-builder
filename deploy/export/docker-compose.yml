@@ -51,7 +51,7 @@ services:
       STORAGE_LOCAL_DIR: /data/uploads
       PUBLIC_API_URL: ${SITE_URL}
       WEB_APP_URL: ${SITE_URL}
-      CORS_ORIGINS: ${SITE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:-${SITE_URL}}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
       SMTP_URL: ${SMTP_URL:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
