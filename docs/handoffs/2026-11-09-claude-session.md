@@ -69,10 +69,20 @@ Codex thread 01a1b795 (2026-11-07…09) on Cafe Mohammad; its local transcript i
 9. **Admin needed two sign-ins — fixed**: LoginPage now `refetchQueries({queryKey:['me'], type:'all'})`
    before navigating (cached "signed out" was read by RequireAuth). Test `admin-login-once.test.tsx`.
 
-## Open / next
-- Owner wants to **revise the working process** so work is standardised (next conversation topic):
-  e.g. scripted deploy instead of ad-hoc `var/*.mjs`, a release checklist, versioned client packages,
-  fixing the 4 baseline web tests, merging this long-lived branch.
+## Next step (owner decision): review the working process, both parts
+Start the next conversation by reviewing these two areas with the owner and proposing a plan for
+each before changing anything:
+1. **Standard publishing** — today every deploy was hand-run through ad-hoc `var/*.mjs` scripts
+   (one silent bad build from Git Bash path conversion). Review: one scripted deploy command per
+   client with built-in checks (prerender ran, downloads copied, release READY, smoke URLs), a
+   release checklist, and versioned client packages/config instead of ignored `exports/` and `var/` only.
+2. **Branch and test process** — `feature/local-matstack` is long-lived and unmerged; 4 web tests have
+   failed for a long time, so "tests green" cannot be relied on. Review: fixing or retiring those
+   tests, a regular merge path to `develop`/`main` with CI, and how Codex and Claude hand work over
+   (STATUS/handoff conventions).
+
+## Open
+
 - Owner to test on phone: SMS code login (new + existing number), back button, admin app order alerts.
 - Old APK links (1.0.0, admin 1.0.1, 1.1.0) are still public; remove if owner asks.
 - Pre-existing oddities noticed, not changed: `/fa` title is "10769625 — کافه محمد" (Enamad code in the
