@@ -106,7 +106,9 @@ export function LoginPage() {
   const [codeSent, setCodeSent] = useState(false);
 
   const done = async () => {
-    await qc.invalidateQueries({ queryKey: ['me'] });
+    // The guard may have cached "signed out" and is not mounted here, so an invalidation alone
+    // would not refetch: it would read that stale answer and send the user back to sign in.
+    await qc.refetchQueries({ queryKey: ['me'], type: 'all' });
     navigate(safeNext(params.get('next')), { replace: true });
   };
   const login = useMutation({ mutationFn: () => api.post('/auth/login', { email, password }), onSuccess: done });

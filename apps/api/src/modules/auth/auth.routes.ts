@@ -62,6 +62,27 @@ export function authRoutes(ctx: AppContext) {
     },
   );
 
+  r.route(
+    {
+      method: 'patch',
+      path: '/me/sign-in',
+      summary: 'Change your own sign-in name (email or username) and / or password; signs out other sessions',
+      auth: true,
+      middleware: [requireAuth, limiter],
+      body: z
+        .object({
+          currentPassword: z.string().min(1).max(200),
+          email: z.string().trim().toLowerCase().min(3).max(254).regex(/^[a-z0-9._@+-]+$/, 'Letters, digits and . _ @ + - only').optional(),
+          password: passwordSchema.optional(),
+        })
+        .refine((v) => v.email || v.password, 'Nothing to change'),
+    },
+    async ({ req, body }) => {
+      const user = await auth.changeSignIn(ctx, req.auth!.user.id, req.auth!.sessionId, body, req.ip);
+      return { data: { user } };
+    },
+  );
+
   r.route({ method: 'post', path: '/logout', summary: 'Sign out and revoke this session', auth: true, middleware: [requireAuth] }, async ({ req, res }) => {
     await auth.endSession(ctx, req.auth!.sessionId, res);
   });

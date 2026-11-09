@@ -566,6 +566,8 @@ function AccountView() {
     <>
       <PageTitle title={t.account} />
       <div className="grid max-w-3xl gap-6">
+        <SignInCard current={u.email ?? ''} />
+        {u.isPlatformAdmin && <ClearBusinessDataCard sites={me.sites.map((s) => s.siteId)} />}
         <Card title={t.email}>
           <p dir="ltr" className="text-ink">
             {u.email ?? '—'}
@@ -605,6 +607,75 @@ function AccountView() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** The user's own sign-in name and password; the current password is always required. */
+function SignInCard({ current }: { current: string }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [email, setEmail] = useState(current);
+  const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const save = useMutation({
+    mutationFn: () => api.patch('/auth/me/sign-in', { currentPassword, ...(email.trim() && email.trim().toLowerCase() !== current ? { email } : {}), ...(password ? { password } : {}) }),
+    onSuccess: () => {
+      setPassword('');
+      setCurrentPassword('');
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+  return (
+    <Card title={t.signInDetails}>
+      <form
+        className="grid gap-3 sm:grid-cols-3 sm:items-end"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <TextField label={t.signInName} dir="ltr" value={email} onChange={setEmail} />
+        <TextField label={t.newPasswordOptional} type="password" dir="ltr" value={password} onChange={setPassword} />
+        <TextField label={t.currentPassword} type="password" dir="ltr" value={currentPassword} onChange={setCurrentPassword} />
+        <div className="sm:col-span-3">
+          <Button type="submit" size="sm" disabled={!currentPassword || save.isPending}>
+            {t.saveSignIn}
+          </Button>
+        </div>
+      </form>
+      {save.isSuccess && <p className="mt-2 text-sm text-ink-soft">{t.signInSaved}</p>}
+      <ErrorNote error={save.error} />
+    </Card>
+  );
+}
+
+/** Operator only: empties a site's customers and orders, e.g. before handing it to the client. */
+function ClearBusinessDataCard({ sites }: { sites: string[] }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [site, setSite] = useState(sites[0] ?? '');
+  const [confirm, setConfirm] = useState('');
+  const clear = useMutation({
+    mutationFn: () => api.post<{ orders: number; customers: number }>(`/sites/${site}/business-data/clear`, { confirm }),
+    onSuccess: () => {
+      setConfirm('');
+      qc.invalidateQueries();
+    },
+  });
+  if (!sites.length) return null;
+  return (
+    <Card title={t.clearBusinessData}>
+      <p className="text-sm text-ink-soft">{t.clearBusinessDataHint}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        {sites.length > 1 ? <SelectField label="Site" value={site} onChange={setSite} options={sites.map((s) => ({ value: s, label: s }))} /> : <p dir="ltr" className="text-ink">{site}</p>}
+        <TextField label={t.typeSiteId} dir="ltr" value={confirm} onChange={setConfirm} />
+        <Button size="sm" variant="outline" disabled={confirm !== site || clear.isPending} onClick={() => clear.mutate()}>
+          {t.clearBusinessData}
+        </Button>
+      </div>
+      {clear.data && <p className="mt-2 text-sm text-ink-soft">{t.clearBusinessDataDone}: {clear.data.customers} / {clear.data.orders}</p>}
+      <ErrorNote error={clear.error} />
+    </Card>
   );
 }
 

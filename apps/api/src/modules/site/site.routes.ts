@@ -1,6 +1,8 @@
 import { siteSettingsSchema, withSettingDefaults, type SiteSettings } from '@site-builder/shared';
-import { notFound } from '../../common/errors.js';
+import { z } from 'zod';
+import { badRequest, notFound } from '../../common/errors.js';
 import { ApiRouter } from '../../common/http.js';
+import { requirePlatformAdmin } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/tenant.js';
 import { auditTenant } from '../audit/audit.js';
 
@@ -53,10 +55,10 @@ export function siteRoutes(clientLocked = false) {
         // Clients edit their name, tagline, logo, contact details, social links, product categories,
         // request type names and customer texts, form choices, footer, shop rules and who is notified;
         // the rest (forms, workflows, accounts, the site's built-in texts) is the operator's.
-        // The announcement bar and popup are content too; page code (meta) stays the operator's.
+        // Owners can change a numeric ownership code, but arbitrary page code stays operator-only.
         const { name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, formOptions, footer, shop, exportOptions, notifications, announcement, popup } = body;
         const requestTypes = clientRequestTypes(current.rows[0].settings.requestTypes, body.requestTypes);
-        body = { ...current.rows[0].settings, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, footer, shop, exportOptions, notifications, announcement, popup };
+        body = { ...current.rows[0].settings, meta: { ...current.rows[0].settings.meta, enamadCode: body.meta.enamadCode }, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, footer, shop, exportOptions, notifications, announcement, popup };
       }
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO site_settings (id, settings, updated_by, updated_at) VALUES (1, $1, $2, now())
@@ -66,6 +68,38 @@ export function siteRoutes(clientLocked = false) {
       );
       await auditTenant(req.tenant!.db, { actorUserId: req.auth!.user.id, action: 'site.settings_updated' });
       return { data: rows[0].settings };
+    },
+  );
+
+  r.route(
+    {
+      method: 'post',
+      path: '/business-data/clear',
+      summary: 'Delete every customer account and order (operator only; requests, catalog and design stay)',
+      middleware: [requirePlatformAdmin],
+      body: z.object({ confirm: z.string() }),
+    },
+    async ({ req, body }) => {
+      const t = req.tenant!;
+      if (body.confirm !== t.slug) throw badRequest('Type the site id to confirm');
+      const client = await t.db.connect();
+      try {
+        await client.query('BEGIN');
+        // Order payments block deleting their orders; request payments stay with their requests.
+        await client.query('DELETE FROM payments WHERE order_id IS NOT NULL');
+        const orders = await client.query('DELETE FROM orders');
+        const customers = await client.query('DELETE FROM customers');
+        await client.query('DELETE FROM customer_codes');
+        await client.query('ALTER SEQUENCE order_number_seq RESTART WITH 1001');
+        await auditTenant(client, { actorUserId: req.auth!.user.id, action: 'business_data.cleared', metadata: { orders: orders.rowCount, customers: customers.rowCount } });
+        await client.query('COMMIT');
+        return { data: { orders: orders.rowCount ?? 0, customers: customers.rowCount ?? 0 } };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     },
   );
 

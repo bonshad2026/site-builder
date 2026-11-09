@@ -113,6 +113,26 @@ export async function loginWithPassword(ctx: AppContext, email: string, password
   return toSessionUser(user);
 }
 
+/** The signed-in user's own sign-in name and password, after checking the current password. */
+export async function changeSignIn(ctx: AppContext, userId: string, sessionId: string, input: { currentPassword: string; email?: string; password?: string }, ip?: string): Promise<SessionUser> {
+  const { rows } = await ctx.control.query<{ password_hash: string | null }>('SELECT password_hash FROM users WHERE id = $1', [userId]);
+  if (!(await verifyPassword(rows[0]?.password_hash ?? null, input.currentPassword))) throw new AppError(400, 'invalid_credentials', 'The current password is wrong');
+  try {
+    const { rows: updated } = await ctx.control.query(
+      `UPDATE users SET email = COALESCE($2, email), password_hash = COALESCE($3, password_hash),
+         email_verified_at = CASE WHEN $2::text IS NOT NULL AND $2 <> email THEN NULL ELSE email_verified_at END, updated_at = now()
+       WHERE id = $1 RETURNING ${USER_COLUMNS}`,
+      [userId, input.email ?? null, input.password ? await hashPassword(input.password) : null],
+    );
+    await ctx.control.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL', [userId, sessionId]);
+    await auditPlatform(ctx.control, { actorUserId: userId, action: 'auth.sign_in_changed', metadata: { name: !!input.email, password: !!input.password }, ip });
+    return toSessionUser(updated[0]);
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') throw conflict('This sign-in name is already used');
+    throw err;
+  }
+}
+
 /* ---------- email verification & password reset ---------- */
 
 async function issueToken(ctx: AppContext, userId: string, purpose: 'email_verify' | 'password_reset', ttlMinutes: number) {
