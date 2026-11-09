@@ -339,7 +339,8 @@ export function Modal({ open, onClose, title, children, wide, fullScreen = false
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     // The first form field, not the close button in the header.
-    const first = ref.current?.querySelector<HTMLElement>('input, textarea, select') ?? ref.current?.querySelector<HTMLElement>('button');
+    const focusInput = !fullScreen || !window.matchMedia('(max-width: 639px)').matches;
+    const first = (focusInput ? ref.current?.querySelector<HTMLElement>('input, textarea, select') : null) ?? ref.current?.querySelector<HTMLElement>('button');
     first?.focus();
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
@@ -353,7 +354,7 @@ export function Modal({ open, onClose, title, children, wide, fullScreen = false
     <div className={cn("fixed inset-0 z-50 flex items-start justify-center bg-black/40",fullScreen?"overflow-hidden p-2 sm:p-3":"overflow-y-auto p-4 sm:p-10")} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cn('w-full bg-bg p-6 shadow-xl', fullScreen ? 'flex h-full max-w-none flex-col overflow-hidden p-3! sm:p-4!' : wide === 'xl' ? 'max-w-7xl' : wide ? 'max-w-4xl' : 'max-w-lg')}>
         <div className={cn("flex shrink-0 items-center justify-between gap-4",fullScreen?"mb-2":"mb-5")}>
-          <h2 className="font-display text-2xl text-ink">{title}</h2>
+          <h2 className={cn("font-display text-ink", fullScreen ? "text-lg sm:text-2xl" : "text-2xl")}>{title}</h2>
           <IconButton label={t.close} onClick={onClose}>
             ✕
           </IconButton>

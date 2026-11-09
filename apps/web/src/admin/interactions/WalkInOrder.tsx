@@ -68,15 +68,18 @@ export function WalkInOrder({siteId,open,onClose}:{siteId:string;open:boolean;on
   const categoryKeys=[...new Set([...knownCategories.map(c=>c.slug),...all.map(p=>p.category||'')])].filter(Boolean);
   const categoryLabel=(key:string)=>{const found=knownCategories.find(c=>c.slug===key);return found?l(found.label):key;};
   const visible=all.filter(p=>(!category||p.category===category)&&(!search||l(p.name).toLocaleLowerCase().includes(search.toLocaleLowerCase())));
-  // Use the available area, rather than a fixed column count, to keep the menu in one view.
+  const compact=space.width<600;
+  // Mobile tiles dedicate their entire area to the image/name and one-tap addition.
   const count=Math.max(1,visible.length);
   let columns=1,best=-1;
-  for(let c=1;c<=Math.min(count,Math.max(1,Math.floor(space.width/100)));c++){
+  for(let c=1;c<=Math.min(count,Math.max(1,Math.floor(space.width/(compact?76:100))));c++){
     const rows=Math.ceil(count/c),w=(space.width-(c-1)*6)/c,h=(space.height-(rows-1)*6)/rows;
-    const score=Math.min(w/150,h/170);
+    const score=Math.min(w/(compact?88:150),h/(compact?64:170));
     if(score>best){best=score;columns=c;}
   }
   const rows=Math.ceil(count/columns),cellHeight=(space.height-(rows-1)*6)/rows;
+  const minTileHeight=compact?(visible.some(p=>p.variants?.length||p.colors?.length)?92:44):0;
+  const compactFont=Math.max(10,Math.min(13,cellHeight*.2));
   const controlHeight=Math.max(22,Math.min(44,cellHeight*.28));
   const fontSize=Math.max(10,Math.min(14,cellHeight*.12));
   const quantityClass="w-full min-w-0 rounded-md! px-0! py-0! text-2xl! font-black! leading-none";
@@ -99,16 +102,30 @@ export function WalkInOrder({siteId,open,onClose}:{siteId:string;open:boolean;on
         </div>
         <ErrorNote error={submit.error}/>
       </section>
-      <div className="flex shrink-0 flex-wrap gap-2" aria-label={t(L('Product categories','دسته‌بندی محصولات'))}>
-        <Button type="button" size="sm" variant={category?'outline':'primary'} onClick={()=>setCategory('')}>{t(L('All','همه'))}</Button>
-        {categoryKeys.map(key=><Button key={key} type="button" size="sm" variant={category===key?'primary':'outline'} onClick={()=>setCategory(key)}>{categoryLabel(key)}</Button>)}
+      <div className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:gap-2" aria-label={t(L('Product categories','دسته‌بندی محصولات'))}>
+        <Button type="button" size="sm" variant={category?'outline':'primary'} className="shrink-0 whitespace-nowrap" onClick={()=>setCategory('')}>{t(L('All','همه'))}</Button>
+        {categoryKeys.map(key=><Button key={key} type="button" size="sm" variant={category===key?'primary':'outline'} className="shrink-0 whitespace-nowrap" onClick={()=>setCategory(key)}>{categoryLabel(key)}</Button>)}
       </div>
-      <div className="flex shrink-0 gap-3"><TextInput aria-label={t(L('Search menu','جست‌وجوی منو'))} placeholder={t(L('Search menu…','جست‌وجوی منو…'))} value={search} onChange={e=>setSearch(e.target.value)}/><TextInput aria-label={t(L('Order note (optional)','توضیح سفارش (اختیاری)'))} placeholder={t(L('Table / note (optional)','میز / توضیح (اختیاری)'))} maxLength={1000} value={note} onChange={e=>setNote(e.target.value)} disabled={submit.isPending}/></div>
-      <div ref={gridRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="flex shrink-0 gap-3"><TextInput className="h-9! px-2! py-1! text-xs! sm:h-auto! sm:px-4! sm:py-3! sm:text-sm!" aria-label={t(L('Search menu','جست‌وجوی منو'))} placeholder={t(L('Search menu…','جست‌وجوی منو…'))} value={search} onChange={e=>setSearch(e.target.value)}/><TextInput className="h-9! px-2! py-1! text-xs! sm:h-auto! sm:px-4! sm:py-3! sm:text-sm!" aria-label={t(L('Order note (optional)','توضیح سفارش (اختیاری)'))} placeholder={t(L('Table / note (optional)','میز / توضیح (اختیاری)'))} maxLength={1000} value={note} onChange={e=>setNote(e.target.value)} disabled={submit.isPending}/></div>
+      <div ref={gridRef} className="relative min-h-0 flex-1 overflow-auto" data-walk-in-menu>
         {products.isLoading?<Spinner/>:<><ErrorNote error={products.error}/>
           {all.some(p=>p.priceMinor===null)&&<p className="absolute inset-x-0 top-0 z-10 bg-bg text-xs text-ink-soft">{t(L('Unpriced products must be priced in Products before adding.','آیتم‌های بدون قیمت را ابتدا در بخش محصولات قیمت‌گذاری کنید.'))}</p>}
-          <div className="grid h-full gap-1.5" style={{gridTemplateColumns:`repeat(${columns}, minmax(0, 1fr))`,gridTemplateRows:`repeat(${rows}, minmax(0, 1fr))`}}>{visible.map(p=>{
+          <div className="grid h-full gap-1.5" style={{gridTemplateColumns:`repeat(${columns}, minmax(0, 1fr))`,gridTemplateRows:`repeat(${rows}, minmax(${minTileHeight}px, 1fr))`}}>{visible.map(p=>{
             const c=choiceFor(p),key=lineKey({productId:p.id,...c}),count=lines.find(a=>lineKey(a)===key)?.quantity||0,price=priceFor(p,c);
+            if(compact)return <article key={p.id} data-mobile-menu-tile className="relative min-h-0 min-w-0 overflow-hidden rounded-lg border border-line bg-[#24180f]">
+              <button type="button" className="absolute inset-0 block h-full w-full text-left focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white disabled:opacity-60" aria-label={t(L('Add one','افزودن'))+' '+l(p.name)} disabled={submit.isPending||!canAdd(p,c)} onClick={()=>add(p,c)}>
+                {p.imageUrl&&<img src={menuImage(p.imageUrl)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover"/>}
+                <span className="absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-white" style={{backgroundColor:'rgba(20,14,9,0.94)'}}>
+                  <span className="block line-clamp-2 font-bold leading-tight" style={{fontSize:compactFont}}>{l(p.name)}</span>
+                  <span className="block truncate leading-tight text-white" style={{fontSize:Math.max(9,compactFont-2)}}>{price===null?t(L('Price not set','بدون قیمت')):formatMoney(price,p.currency)}</span>
+                </span>
+                {count>0&&<bdi aria-label={t(L('Quantity','تعداد'))} className="absolute end-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f49a19] px-1 text-xs font-black text-black">{count}</bdi>}
+              </button>
+              {!!(p.variants?.length||p.colors?.length)&&<div className="absolute inset-x-1 top-1 z-10 flex flex-col gap-0.5 pe-5">
+                {!!p.variants?.length&&<Select className="h-6! px-0.5! py-0! text-[10px]!" aria-label={t(L('Variant','مدل'))+' '+l(p.name)} value={c.variant} onChange={e=>setChoices({...choices,[p.id]:{...c,variant:e.target.value}})}>{p.variants.map((v,i)=><option key={i} value={l(v.name)}>{l(v.name)}</option>)}</Select>}
+                {!!p.colors?.length&&<Select className="h-6! px-0.5! py-0! text-[10px]!" aria-label={t(L('Option','گزینه'))+' '+l(p.name)} value={c.option} onChange={e=>setChoices({...choices,[p.id]:{...c,option:e.target.value}})}>{p.colors.map((v,i)=><option key={i} value={l(v.name)}>{l(v.name)}</option>)}</Select>}
+              </div>}
+            </article>;
             return <article key={p.id} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface">
               {p.imageUrl?<img src={menuImage(p.imageUrl)} alt="" loading="lazy" className="min-h-0 w-full flex-1 object-cover"/>:<div className="flex min-h-0 flex-1 items-center justify-center bg-bg text-xl">☕</div>}
               <div className="shrink-0 space-y-0.5 p-1"><h3 className="truncate font-semibold" title={l(p.name)} style={{fontSize}}>{l(p.name)}</h3>

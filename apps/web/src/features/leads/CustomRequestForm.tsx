@@ -14,7 +14,7 @@ import {
 } from '@site-builder/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, Select, TextArea, TextInput } from '../../components/ui/Field';
 import { ApiError, API_URL } from '../../lib/api';
@@ -124,14 +124,17 @@ type FormProps = Parameters<typeof RequestForm>[0];
  */
 export function CustomRequestForm(props: FormProps) {
   const site = useSiteId();
+  const [params] = useSearchParams();
+  const { l } = usePreferences();
+  const [collection, itemSlug] = (params.get('item') ?? '').split('/');
   const tables = [...new Set(props.fields.filter((f) => f.optionsFrom).map((f) => f.optionsFrom))];
   const options = useQuery({
     queryKey: ['public', site, 'form-options', tables],
     queryFn: async () => {
-      const out: Record<string, { en: string; fa: string }[]> = {};
+      const out: Record<string, { slug: string; title: { en: string; fa: string } }[]> = {};
       for (const slug of tables) {
-        const items = await customerRequest<{ title: { en: string; fa: string } }[]>(site, `/collections/${slug}/items?pageSize=60`).catch(() => []);
-        out[slug] = items.slice(0, 50).map((i) => i.title);
+        const items = await customerRequest<{ slug: string; title: { en: string; fa: string } }[]>(site, `/collections/${slug}/items?pageSize=60`).catch(() => []);
+        out[slug] = items.slice(0, 50);
       }
       return out;
     },
@@ -139,12 +142,22 @@ export function CustomRequestForm(props: FormProps) {
     staleTime: 60_000,
   });
   const fields = useMemo(
-    () => (tables.length && options.data ? props.fields.map((f) => (f.optionsFrom ? { ...f, options: (options.data[f.optionsFrom] ?? []).map((x) => ({ en: x.en, fa: x.fa, price: 0 })) } : f)) : props.fields),
+    () => (tables.length && options.data ? props.fields.map((f) => (f.optionsFrom ? { ...f, options: (options.data[f.optionsFrom] ?? []).map((x) => ({ ...x.title, price: 0 })) } : f)) : props.fields),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.fields, options.data],
   );
   if (tables.length && options.isLoading) return <div role="status" aria-label="Loading" className="min-h-40" />;
-  return <RequestForm {...props} fields={fields} />;
+  // Request links carry a stable item slug; choices submit the localized table title.
+  const selected = options.data?.[collection]?.find((item) => item.slug === itemSlug);
+  const prefilledAnswers: Answers = {};
+  if (selected) {
+    for (const field of fields) {
+      if (field.optionsFrom === collection && (field.type === 'select' || field.type === 'radio')) {
+        prefilledAnswers[field.id] = l(selected.title);
+      }
+    }
+  }
+  return <RequestForm {...props} key={params.get('item') ?? ''} fields={fields} prefilledAnswers={prefilledAnswers} />;
 }
 
 /**
@@ -159,6 +172,7 @@ function RequestForm({
   fields,
   requestLabel,
   submitLabel,
+  prefilledAnswers = {},
   preview = false,
 }: {
   requestType: string;
@@ -166,6 +180,7 @@ function RequestForm({
   fields: FormField[];
   requestLabel?: string;
   submitLabel?: string;
+  prefilledAnswers?: Answers;
   /** Admin preview: answers, conditions, steps and checks work, but nothing is sent. */
   preview?: boolean;
 }) {
@@ -182,7 +197,7 @@ function RequestForm({
   // A link can prefill any question by its key: /contact?type=visit&rooms=2&lunch=1.
   const [answers, setAnswers] = useState<Answers>(() => {
     const params = new URLSearchParams(location.search);
-    const out: Answers = {};
+    const out: Answers = { ...prefilledAnswers };
     for (const f of fields) {
       const v = params.get(f.id);
       if (v === null || !isQuestion(f) || f.type === 'file') continue;
