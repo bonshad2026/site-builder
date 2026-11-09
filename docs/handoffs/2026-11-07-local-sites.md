@@ -3,6 +3,11 @@
 Read AGENTS.md, then this file and docs/STATUS.md. This is the latest operational handoff;
 older shutdown and initial-install entries in STATUS are historical.
 
+## One-origin access supersedes old private-panel notes (2026-11-08)
+Owner explicitly approved public /admin on both Matstack domains. Site and client admin now
+share cafe8725 / firefighter8735. Old8727/8737/private-only notes below are historical.
+Read current docs/STATUS.md and deploy/matstack READMEs before restarting.
+
 ## Owner preferences and scope
 - Reply in Persian; code/comments/commit messages in English. Follow current repository rules.
 - After relevant technical checks pass, owner usually does visual acceptance. Do not repeat broad

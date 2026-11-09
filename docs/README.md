@@ -32,3 +32,5 @@ true (tenant isolation, payments, security measures), but check the code before 
 | [security.md](security.md) | Measures still in place; newer features (customers, files, cells) not covered |
 | [operations.md](operations.md) | Root `docker-compose.yml` setup; the studio is now `deploy/docker-compose.yml` |
 | [stage-1-report.md](stage-1-report.md), [backend-report.md](backend-report.md), [final-report.md](final-report.md) | Stage reports |
+
+- [Liara single-site delivery](features/liara-delivery.md): runtime context, managed DB/disk, existing-site updates and deployment evidence.

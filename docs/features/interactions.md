@@ -81,7 +81,7 @@ The existing mobile bottom-navigation override still uses 1.5rem beneath its in-
 ## Customer session refresh
 The customer session query rechecks on mount and window focus even while its cached result is
 fresh. This allows a request tab with a cached signed-out result to recognize login in another
-tab (and recognize logout). Signed-in-only forms wait for session loading/revalidation before
+tab (and recognize logout). Signed-in-only forms wait for initial session loading before
 showing the login invitation. Regression: customer-session.test.tsx covers cached anonymous
 state after login and a session ending while a tab is in the background. Server authorization
 and tenant-local cookies remain authoritative; this does not share sessions across origins.
@@ -89,3 +89,17 @@ and tenant-local cookies remain authoritative; this does not share sessions acro
 Contact-form sections omit their heading band when the current locale has no heading, eyebrow,
 intro or labelled link button. A separate page-header can then sit directly above the form
 without a second empty fixed-header spacer.
+
+Background session refresh must not set the shared loading flag: AuthPanel itself uses the
+query, so replacing it with a loading screen on each refresh would remount it and refetch again.
+
+
+## Request links and initial table choices
+A request link with ?item=<table>/<item-slug> preselects matching single-choice questions
+(select/radio) whose editable optionsFrom points to that table. The item's slug is resolved
+against loaded published choices; the localized title remains the existing submitted value.
+Explicit question URL parameters win. This is initial state only: later choice refreshes keep
+manual edits. Changing the linked item starts a new form. Unrelated/unknown item links do not
+fill a choice. Tests: request-item-prefill.test.tsx (two focused tests).
+Firefighter training now starts with the course group, followed by organization fields; consent
+stays last. This is persisted in editable requestTypes fields in studio and installed site.

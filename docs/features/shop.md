@@ -168,3 +168,14 @@ AddToCartButton reads the matching product/first-colour/no-variant cart line qua
 showing a hard-coded one after clicks. All duplicate cards stay in sync; clear/remove hides the
 status. Add is disabled at the existing product/shop/stock cap. A real CartProvider regression
 test covers repeated clicks (1/2/3), cap and clear; no order API changes.
+
+## Mobile rapid order tiles (2026-11-09)
+Below600px menu area width, each photo tile is a single native button: repeated taps add one
+selected line, quantity badge reflects the receipt; decrement stays only in the horizontal
+receipt above. White two-line name/price sits on a94% opaque dark label independent of image.
+Category chips are one horizontal row and search/note compact. Area-driven grid allows narrower
+mobile columns; minimum44px rows prevent unreadable collapse, with vertical scroll only if
+content cannot fit. Variant/option selects remain independent sibling controls; such cards
+reserve92px minimum. Desktop retains the existing +/- presentation. Fullscreen mobile dialogs
+focus a button instead of an input to avoid opening the keyboard over the menu. No pricing,
+stock, receipt persistence or order submission behaviour changed.

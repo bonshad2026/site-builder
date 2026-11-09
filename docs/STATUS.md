@@ -4,6 +4,353 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Admin sign-in needed twice — fixed (2026-11-09, uncommitted)** — Opening /admin cached "signed
+  out" for ['me']; after login, invalidateQueries did not refetch the unmounted guard's query, so
+  RequireAuth read the stale null and bounced back to login once. LoginPage now awaits
+  refetchQueries({ queryKey: ['me'], type: 'all' }). New web test admin-login-once (failed before,
+  passes after); web typecheck clean. Cafe web rebuilt (sb-cafe-web-login-once, API unchanged);
+  Liara release 6af21b2aea7187740b886b06 READY; live auth chunk contains the fix. Previous static
+  copy: site-before-login-once/.
+- **Account tools, data reset, download pages (2026-11-09, uncommitted)** — Generic features:
+  PATCH /api/v1/auth/me/sign-in (own sign-in name and/or password; current password required; other
+  sessions revoked) and operator-only POST /sites/:id/business-data/clear (confirm = site id; deletes
+  order payments, orders, customers, customer codes; order numbers restart at 1001; requests,
+  catalog, design kept). Both on the admin Account page. Tests: clear-and-sign-in 2/2, typecheck
+  clean. tools/cafe-mohammad/download-pages.mjs writes /downloads/app/ and /downloads/admin/
+  (icon, og:title/og:image, download button) into the Liara package. Liara release
+  6af216d1445214674ef2603e READY (images sb-api-runtime:20261109-account-tools,
+  sb-cafe-web-account-tools; previous site in site-before-account-tools/, API archive
+  var/app-before-account-tools.tar.gz). Cafe cleared on owner request without backup: 25 orders,
+  3 customers; products 24 kept. Admin (operator) sign-in changed via var/apply-cafe-credentials.mjs
+  (account, Liara CELL_OPERATOR_* env, local exports/cafe-mohammad-20261106-0913/.env); verified
+  after restart, 2 users (no bootstrap duplicate). Owner changed the same way afterwards; both
+  sign-ins verified after the Liara restart (owner keeps its cafe-mohammad owner role). The
+  credentials file was deleted.
+- **Browser-like back in both cafe apps (2026-11-09, uncommitted)** — Back now goes
+  back in the site's history; at the first page a toast asks for a second press within 2 s to exit.
+  Uses OnBackInvokedDispatcher on Android 13+ (targetSdk 36 skips onBackPressed) plus onBackPressed.
+  Signed releases with the existing certificate: exports/cafe-mohammad-1.0.1-release.apk (code 6)
+  and exports/cafe-mohammad-admin-1.1.1-release.apk (code 4). Owner approved public links: both
+  added to site/downloads and the package Caddyfile allowlist (older links kept); Liara release
+  6af21191b772621c0b40074d READY; both live downloads return 200 and match local bytes (first
+  request during rollover returned 404, retry 200). Not on Cafe Bazaar; not tested on a device.
+
+- **Production OTP template (2026-11-09)** — Owner asked to use Kavenegar template
+  verifycodecafemohammad instead of verifycode on the Liara cafe. Saved via operator
+  /api/v1/platform/messaging (API key kept). Template existence/approval in Kavenegar and a
+  real SMS were not checked.
+- **Code-only customer sign-in (2026-11-09, uncommitted, not deployed)** — Generic accounts setting
+  `accounts.codeOnly` (Settings > Customer accounts > "Sign in only with a code"). Login code is sent
+  for unknown numbers too; a verified code for a new number creates a verified, password-less account
+  with an empty name, and the sign-in form then asks for the name. Password login/reset/profile
+  password are refused while on. No migration (reuses purpose 'login'). Typecheck clean; API
+  interactions 16/16 (new test), members 10/10, web customer-session 1/1.
+  Deployed to cafe on Liara (owner approved): images sb-api-runtime:20261109-code-login and
+  sb-cafe-web-code-login, release 6af20f6a5251d043abc7075a READY (an earlier release with an
+  unprerendered site, caused by Git Bash path conversion in docker run, was canceled before
+  serving; use MSYS_NO_PATHCONV=1). Previous static copy: site-before-code-login/, previous API
+  archive var/app-before-code-login.tar.gz. Cafe accounts.codeOnly=true saved via operator API.
+  Live: public settings show codeOnly, password login returns 400, /fa/account shows only the
+  phone + send-code form, APK downloads still 200. No real SMS sent; studio/local installs
+  not rebuilt. Production SMS: Kavenegar enabled, template verifycode, key set.
+- **Cafe admin APK 1.1.0 published (2026-11-09, uncommitted)** — Owner approved publishing the
+  native order-monitor admin app (foreground service on existing orders/live SSE, see
+  mobile/cafe-mohammad-admin/README.md). Copied exports/cafe-mohammad-admin-1.1.0-release.apk into
+  the Liara package site/downloads and added its exact path to the public APK allowlist in the
+  package Caddyfile; 1.0.0 customer and 1.0.1 admin links kept. Liara release
+  6af209800015fa2e781f5377 created from the same app/site/data otherwise. Live
+  https://cafemohammad.tibasoft.ir/downloads/cafe-mohammad-admin-1.1.0-release.apk returns 200,
+  application/vnd.android.package-archive, SHA256 2b4ca1ff…a3161fe97 matching the signed build;
+  /fa 200. The admin Web Push release above was already applied (Codex thread, 2026-11-09).
+  On-device install, background survival, Doze and real-order notifications are NOT tested yet.
+  Owner-only mobile_apps entry in the panel still lists the previous admin version.
+- **Admin-only Web Push initialization (2026-11-09, uncommitted)** — Owner requested SDK
+  relocation off public pages. Added operator-only meta.adminHeadCode, excluded from public
+  settings JSON and prerendered HTML. Authenticated AdminLayout mounts AdminPanelCode only
+  for site operator/owner/orders:read staff; private site settings fetch supplies the script.
+  Public pages, sign-in, unrelated members and non-order staff do not initialize it. Script
+  nodes removed on unmount. Global Kavenegar SDK removed from studio/cloud meta.headCode;
+  logo CSS/enamad preserved. Original root worker stays unchanged. Two web tests and one
+  real-PG API test pass (scope, cleanup, public omission, locked-owner preservation); typecheck
+  clean and API/client/studio builds passed. Studio private admin code configured and browser
+  probe: SDK requests0 on /fa and /fa/admin/login,1 after authorized login; no new request on
+  public navigation. SDK request intercepted with inert probe body, no subscription/permission.
+
+  Liara release6af2009fea7187740b7f545d BUILDING; API image
+  sb-api-runtime:20261109-admin-push, client sb-cafe-web-admin-push. New static output already
+  strips global SDK; existing public APK copies/context exceptions retained. One curl reset,
+  retry with Expect header suppressed succeeded. After READY run
+  node var/scope-cafe-push-to-admin.mjs --production (save private code using upgraded API),
+  then node var/check-admin-push-scope.mjs --production. Must verify root/public raw HTML is
+  SDK-free and worker unchanged. Previous provider connection check may not detect SDK behind
+  authentication; do not restore public code without owner request. Prior provider subscriptions
+  are not automatically revoked; order-to-push audience binding/delivery remains separate work.
+  Cloud business data/design SQL retained, no migration. No commit/push requested.
+
+- **Mobile rapid orders + Kavenegar Web Push setup (2026-11-09, uncommitted)** — User asked
+  mobile POS tiles to fit one screen, tap-to-add, receipt-only decrement, readable text on photos.
+  WalkInOrder now has a compact branch below600px area width: whole-card button, full-photo
+  background, two-line white label on94% opaque dark strip, quantity badge, horizontal category
+  chips and compact inputs. Existing option/variant controls remain sibling selects. Grid
+  minimum44px (92px with selects) avoids unusable collapse; larger menus may scroll. Desktop
+  +/- unchanged. Fullscreen mobile modal no longer focuses search/opens keyboard automatically.
+  Typecheck and studio/client builds clean. Studio has unpriced catalog, so checked layout only
+  there (did not change prices). Production release6af1fb765251d043abc0aa96 READY; actual OWNER
+  browser verified24 cards visible at390x844 and360x640 with no vertical overflow, including
+  filled receipt (grid534/330px); two taps=>2, receipt minus=>1=>0, no card minus. No order saved.
+  Screenshots var/pos-live-390-filled.png and pos-live-360-filled.png inspected. Some production
+  photo requests were still loading in early captures (not missing-file errors); text stays
+  readable over image/fallback. Studio/provider tests did not submit orders or send messages.
+
+  Owner additionally supplied Kavenegar setup instructions. Original worker HTTP200 fetched
+  from console.kavenegar.com/client/api/push-sdk-download; exact unchanged bytes at
+  apps/web/public/kvn-push-sw.js and cafe output root, SHA256
+  3df9c9ac3c0d3498e5fb7beaa10a421f4cdf94ba83d8ca9f5b14317952baacd9. It imports
+  https://cdn.kavenegar.com/sdk/sw.js. Public cafe appId4c03cb27-ab5e-45b8-a0db-e85c19611335
+  script appended to studio/cloud meta.headCode preserving round-logo CSS/enamad code.
+  First release worker200/exact bytes and /fa initial head script present, but root SPA fallback
+  lacked head code because locales were fa-only. Fixed generic prerender fallback initial
+  head injection for non-English sites, regenerated root HTML. Final release
+  6af1fd3bbcce2494ca60dc6c READY; root initial HTML contains the exact SDK src inside head;
+  worker HTTP200/text/javascript and exact original bytes confirmed after final deployment.
+  One curl upload reset; retry succeeded. Setup ready for owner connection check.
+  User will click provider connection check; agent must not click it or grant notifications.
+  Order-to-push integration is NOT implemented by this SDK setup; WebView behavior unverified.
+  Existing public APK links/context Caddy exceptions preserved. API image/data/design SQL not
+  regenerated; cloud business data authoritative. No commit/push requested.
+
+- **Mobile APK delivery and temporary public cafe downloads (2026-11-09, uncommitted)** —
+  Added generic per-tenant mobile_apps table (migration016), shared slot/version validation,
+  operator-only publishing/replacement/withdrawal and owner-only downloads. Dedicated private
+  objects are not asset-library records and expose no signed URLs. Owner download checks
+  session/actual owner every request; platform admin manages publication but cannot download
+  through owner route. Guest401/staff403/other-site404 tested. UI site /mobile-apps has two
+  cards, versions/sizes/hashes; operator uploads, owner downloads. Three focused real-PG tests
+  pass; initial byte assertion failed due Supertest binary parser, corrected parser and passed.
+  Typecheck and runtime/client builds passed. Studio rebuilt and actual signed APKs published
+  through its operator UI. Private cafe release6af1f48ef031b4d787a2f291 READY; both signed APKs
+  published through production operator UI. Actual owner downloads match local SHA256; guest
+  requests401/no-store. Initial static-rejection directive ordering returned HTML200 instead
+  of404; no old APKs were in that fresh static build. Wrapped full Caddy handling in ordered
+  route; local representative probe then200 normal page and404 any unallowlisted APK path.
+
+  Owner then explicitly requested PUBLIC download for both apps temporarily. Cafe context now
+  allowlists two exact static paths, with signed files and no-store/attachment headers:
+  /downloads/cafe-mohammad-1.0.0-release.apk and /downloads/cafe-mohammad-admin-1.0.1-release.apk.
+  Product API stays owner-only; this public exception is cafe-specific. Local full config probe
+  verified both public file hashes and normal page200/otherAPK404. Two Node multipart uploads
+  failed ECONNRESET; curl.exe HTTP1.1 multipart succeeded. New public release6af1f633b772621c0b371dbf
+  READY; both public links verified without cookies:200 and exact signed APK hashes matched
+  (customer657830 bytes, management710330 bytes). Legacy0.4 APK404; Persian admin login200;
+  private owner API still guest401 and owner file hashes match. Public requirement completed.
+  Prior6af1f59fea7187740b7b89e2 CANCELED by newer release. Never treat SPA HTML200 as APK proof. Curl helper var/liara-cafe-curl-upload.mjs removes
+  temporary auth header after upload; no secrets printed. Data/design snapshot unchanged;
+  private uploaded releases persist in managed DB/uploads. No commit/push requested.
+
+- **Admin APK Persian launch (2026-11-09, uncommitted)** — Owner requested /fa/admin.
+  Management app now starts there and allows both localized and legacy admin navigation inside
+  WebView. Version1.0.1/code2; assembleRelease succeeded and signature verified with existing
+  key. Output exports/cafe-mohammad-admin-1.0.1-release.apk. Real production browser probe
+  reached /fa/admin/login?next=%2Fadmin, html lang=fa, Persian login labels. No website
+  redeployment needed; route already supported. Android on-device check remains pending.
+
+- **Cafe management Android app (2026-11-09, uncommitted)** — New independent project
+  mobile/cafe-mohammad-admin; package ir.cafemohammad.admin, label مدیریت کافه محمد,
+  version1.0.0/code1, minSDK24/target36. Opens https://cafemohammad.tibasoft.ir/admin;
+  keeps same-origin /admin navigation in WebView; other web/phone/mail links external.
+  No embedded credentials, no native order/share bridge. Separate package/data from customer
+  app, so both can be installed. Dark espresso/amber icon generated from existing cafe logo
+  with imagegen; ADMIN lettering differentiates it. Generated512 icon exported separately.
+  Signed with the existing cafe production certificate; key/config never copied into app.
+  assembleRelease+release lint succeeded; apksigner v2 RSA3072 verifies, zipalign passed,
+  manifest INTERNET-only and no debuggable flag. Output exports/cafe-mohammad-admin-1.0.0-release.apk
+  (710434 bytes), SHA256b0b92267ee01d8d286ae88f2b83b4708d496331349452108e1e7abed1e84625b.
+  No connected Android device: launch/login/UI behavior on-device awaits owner installation.
+  Existing client app/server unchanged. No commit/push requested.
+
+- **Live Enamad ownership verification (2026-11-09, uncommitted)** — Generic Site Builder
+  feature, not a cafe-only file. Settings / Page code, icon, bar & popup now exposes a numeric
+  meta.enamadCode to site owners and operators. Existing site:write/CSRF and locked-client
+  restrictions preserved: owners change only the safe code, not arbitrary head/body HTML.
+  Public verification-files endpoint serves empty text/plain200 for the saved CODE.txt only;
+  no-store, tenant isolation, immediate change/removal. Caddy export/Liara/Matstack and studio
+  nginx preview routing map root numeric .txt to the live endpoint before static/SPA fallback.
+  Blank disables; legacy installs need one code+proxy upgrade; future deliveries include it.
+
+  Typecheck clean; two new real-Postgres API tests passed (locked owner permissions, isolation,
+  validation, auth, live replacement/deletion). Full suites not rerun. Studio API/web rebuilt
+  and edge restarted; nginx/Caddy config checks passed. Actual studio browser save/change/clear
+  returned200/404 through preview host. Liara cafe release6af19a5ef031b4d7877f2a44 READY;
+  actual OWNER browser save/change/clear returned200/404 through production root with the same
+  release throughout. Final code10769625 saved; https://cafemohammad.tibasoft.ir/10769625.txt
+  returns200, zero bytes, no-store. No Enamad approval action performed by agent. Screenshot
+  var/enamad-production.png inspected: owner sees code card and cannot see operator HTML fields.
+  Earlier static-only release6af198f4bcce2494ca38b79b is superseded. No static ownership file
+  in the new site build; clearing the code really disables the root URL. Cloud design SQL
+  fingerprint unchanged; data import/design snapshot not regenerated. Prior static web copy
+  preserved under exports/cafe-mohammad-liara-20261108/site-before-live-verification/.
+
+  Docs: guide/domain-verification.md, features/studio-and-delivery.md, developer delivery page
+  and generated HTML; AGENTS updated. No commit/push requested. Next: owner clicks Enamad
+  upload verification; other existing client installs need the one-time upgrade when required.
+
+- **Cafe Bazaar listing assets (2026-11-08, uncommitted)** — Prepared ignored
+  exports/cafe-mohammad-bazaar-assets.zip: existing logo resized to512/1024 PNG and five
+  1080x1920 JPGs (home/menu/gallery/reservation/contact), each below1MB. Real production
+  pages captured with mobile Chromium/Edge matching WebView content; visually inspected
+  contact sheet. Not Android-device screenshots; no fabricated UI, user data or submissions.
+  Original small raster logo limits sharpness. Current Bazaar dashboard constraints remain
+  authoritative; official documentation page only returned a loading shell.
+
+- **Cafe Android signed release (2026-11-08, uncommitted)** — Owner confirmed first store
+  publication and authorized a new dedicated key. App now launches production
+  https://cafemohammad.tibasoft.ir/fa; removed unofficial native Instagram handoff.
+  ir.cafemohammad.app version1.0.0/code5, minSDK24/target36. Gradle assembleRelease and
+  release lint completed; apksigner verifies RSA3072/v2 signature; zipalign passes; manifest
+  has INTERNET only and no debuggable flag. APK657830 bytes: exports/cafe-mohammad-1.0.0-release.apk
+  SHA256631f6cb56a6a12e5c619de3a0cf58975c9e673395533bc4a5c07a5be1cef5a56.
+  Dedicated private key/config in ignored var/android-signing/cafe-mohammad; separate local
+  backup backups/android-signing/cafe-mohammad-release-key-20261108.zip (contains credentials;
+  never upload to store/commit). Reuse key for all updates; build.ps1 -Release reads config
+  via environment and restores variables. Certificate SHA256
+  c80dd8d3e0330739c3f7751a43761c8015d172441e15427b1309550fe71ea94c.
+  No connected Android device: installation/UI unverified; store upload/review remains with
+  owner. Old debug installs require uninstall due to different signing certificate.
+  Updated mobile README/developer delivery guide and regenerated docs HTML. No commit/push.
+
+- **Cafe LIVE on Liara (2026-11-08, uncommitted)** — Corrected domain
+  https://cafemohammad.tibasoft.ir/fa and /admin; app cafemohammad, network sites,
+  PG sb-demo-db with isolated sb_control_cafe_mohammad/sb_t_cafe_mohammad, disk uploads1GB.
+  Release6af0a5c7daeb4c8f04057fda READY; HTTPS ACTIVE; site/admin/settings/products200
+  and operator API login succeeded. All24 published product IDs/prices/currencies match the
+  installed local cafe. Initial full import completed transactionally; published design applied
+  once with private pre-update snapshot. Output exports/cafe-mohammad-liara-20261108/.
+  First release6af0a49f5251d043ab4e70b0 misleadingly READY while runtime failed: appended
+  Instagram reset used an unqualified table after pg_dump cleared search_path. Corrected to
+  public.instagram_connection, re-uploaded and checked actual HTTP/auth/catalog behavior.
+  No new application-code changes or broad tests; no real SMS/order/DM submitted.
+
+  Owner cancelled unofficial Instagram until official API integration: local worker stopped
+  (verified exited); studio/local/cloud orderMode=checkout, shareTarget=chooser, empty
+  Instagram recipient; sender disconnected and saved session cleared. Historical orders/outbox
+  retained; do not restart relay. No cloud worker provisioned. Next: owner checks live cafe;
+  future official API work is separate. Changes uncommitted; no push requested.
+
+- **Firefighter LIVE on Liara (2026-11-08, uncommitted)** — https://fire.tibasoft.ir/fa and
+  https://fire.tibasoft.ir/admin. App firefighter, network sites, PG sb-demo-db, disk uploads0.5GB.
+  Domain DNS and certificate ACTIVE. Release6af06b840a7287f92f8515c5 READY; site/admin/public API200,
+  real operator API login + authenticated me200, logout completed. Browser home and admin login
+  rendered on final HTTPS domain; screenshot firefighter-liara-live.png / firefighter-liara-admin.png
+  in chat visualization directory. Training group course-first confirmed through production settings.
+  SMS enabled/key-present/template verifycode confirmed; no actual SMS/order/request submitted.
+
+  Existing cloud DB was authoritative: full local initial import skipped (remote had existing
+  content, including trainer profiles). Strictly verified historical010 CRLF equivalence aligned
+  only its ledger checksum; pending012 Instagram/013/014/015 applied. Published pages/design
+  updated with explicit named-column SQL while retaining cloud business data. Source/runtime:
+  deploy/liara/; output context exports/firefighter-liara-20261108/. Runtime logs confirm private
+  pre-update tenant snapshot saved in uploads/.deployment-backups/, existing data retained and
+  design revision applied. Provider-level DB backup CLI failed; JSON snapshot is NOT a full
+  provider backup and restore has not been tested. Initial dataset excludes sessions/codes.
+  APPLY_DESIGN_UPDATE=true applies each packaged design fingerprint only once; restarts preserve
+  later client edits. Do not full-import local test accounts over existing production customers.
+
+  One earlier remote release failed010; two subsequent CLI source uploads failed. Native multipart
+  upload to official API succeeded; final release created from its sourceID. Temporary local probe
+  containers, both volumes and network were removed; local installs/tunnels were not changed.
+  Current runtime supports read-only root, preserves encryption identity and takes DB credentials
+  only from Liara env (ignored deploy/.env held prior access). No keys printed/committed. Fresh
+  typecheck clean; narrow representative import/upgrade probe passed, full suites not repeated.
+  Documentation: features/liara-delivery.md, deploy/liara/README.md, client/dev guides.
+  Next: owner uses production customer flow; future code/design delivery must preserve cloud edits.
+  All current deployment/form/local follow-ups remain uncommitted after2c5fdfa; no push requested.
+
+- **Liara preparation history (2026-11-08, superseded by live record above)** — Target app firefighter
+  (6af060101f8d6a5fb398552b), network sites, PostgreSQL sb-demo-db, uploads0.5GB; domain
+  fire.tibasoft.ir DNS verified and HTTPS ACTIVE. Saved access/DB settings in ignored deploy/.env;
+  never print them. New templates under deploy/liara/ and feature liara-delivery.md (manual flow,
+  not yet a deploy dashboard integration). Build-output context exports/firefighter-liara-20261108/.
+  Source snapshot from installed local site:40 pages,22 items,1 customer; full initial snapshot
+  excludes sessions/codes and uses --column-inserts to survive differing column order.
+
+  Representative read-only-root app + separate probe PostgreSQL tests caught/fixed initial-state
+  detection and --inserts physical-column mismatch; full import then worked. Existing-DB probe
+  verified exact010 CRLF/LF ledger alignment, named-column design update, unchanged customer hash
+  and combined Caddy/API200. Temporary resources sb-firefighter-liara-probe-* still need cleanup
+  after deployment. Local installed sites/tunnels remain unchanged by the Liara work.
+
+  First remote release6af0670e3540e1fba8cd0d7d UNHEALTHY: existing cloud tenant's010 checksum.
+  Despite app.isDeployed=false initially, cloud DB already had a tenant; do NOT full-import over it.
+  Current runtime verifies only known010 equivalence and retains cloud business data; explicit
+  APPLY_DESIGN_UPDATE=true applies one fingerprinted design revision and merges files. It writes
+  private tenant JSON data snapshot in uploads/.deployment-backups/ before design update.
+  Provider PostgreSQL backup CLI failed (not claimed successful). Two CLI update uploads failed;
+  direct official multipart upload with Node fetch succeeded (sourceID in ignored var file).
+  Latest release6af06b840a7287f92f8515c5 is BUILDING, NOT YET VERIFIED LIVE. Poll via
+  node var/liara-release-status.mjs; CLI wrapper node var/liara-run.mjs logs --app firefighter --last-lines.
+  Typecheck clean. No real SMS/order/request probe. Runtime source/docs uncommitted.
+
+- **Course prefill and one-origin delivery (2026-11-08, uncommitted)** — CustomRequestForm
+  resolves ?item=table/slug against loaded optionsFrom choices and prefills matching select/radio
+  fields with the localized title. Explicit field query wins, manual changes survive refetch,
+  unrelated items stay empty; linked-item changes remount the form. Two focused web tests pass;
+  typecheck clean; client builds succeeded. Last full web54/58 with four baseline failures;
+  now60 tests including2 new focused passes, full60 not rerun. No API behavior added.
+  Training field order changed via authenticated settings API in studio and installed firefighter:
+  course group first, organization second, consent last; prior settings backed up under var/.
+  No real training request/SMS submitted; actual submission not claimed tested.
+
+  Owner explicitly requested public /admin for both sites and confirmed exposure after automatic
+  approval review initially rejected proxy changes. Removed Matstack's private-route blocks and
+  dedicated81 listener; retired admin.compose.yml/8727/8737. Local start scripts now use primary
+  compose and set public plus same-port loopback CORS; exported compose supports CORS_ORIGINS
+  override with SITE_URL default. API authentication/roles/clientLocked remain unchanged.
+  Client default same-origin build and standard export Caddy serve site and /admin together.
+  Config backups: backups/<install-name>-before-one-origin-<timestamp>/ (ignored).
+  Installed client web rebuilt for both sites (firefighter62/cafe33 prerendered pages), copied
+  without source maps, API/proxy recreated with original images/data and same existing tunnels.
+  Studio-web rebuilt for preview. Primary local ports: firefighter8735, cafe8725; optional unused
+  HTTPS mappings8736/8726 retained, no separate admin listener. Browser showed both public login
+  forms; actual API password login + authenticated me + logout succeeded on both public origins.
+  Screenshot: firefighter-public-admin.png, cafe-public-admin.png in chat visualization directory.
+  Fresh update package built: exports/firefighter-update-20261108-1040.tar.gz (not separately
+  applied: equivalent web/settings changes were already installed without replacing business data).
+  Updated deployment/client/feature/developer guides and HTML. Next: owner checks course form
+  with their customer account; use public /admin or same-port local /admin. Commit/push not requested.
+
+- **Services resumed on owner request (2026-11-08)** — Existing studio/cafe/firefighter
+  containers already running after host restart; started Instagram worker and test Postgres.
+  No Matstack agent was active; launched two dedicated hidden agents with saved configs/logs.
+  Both public /fa URLs returned200, firefighter private8737/admin200, studio200 using loopback
+  plus Host admin.localhost (PowerShell OS DNS did not resolve admin.localhost). No rebuild,
+  data edits or real test SMS/request. Other projects left untouched; previous work uncommitted.
+
+- **Private admin API origin corrected (2026-11-08, uncommitted)** — Owner reported server
+  unreachable at localhost8737/admin. HTML200 was insufficient: compiled client API origin was
+  the public tunnel, whose staff APIs intentionally404. Rebuilt client web with same-origin,
+  installed into local and refreshed firefighter-update-20261107-2055 archive; Dockerfile
+  web-static default corrected for future packages. Actual browser now reaches admin login
+  form instead of network-error screen; no login attempted. Build/type compilation passed;
+  no broad validation repeated per owner request. DB/API/data unchanged by this follow-up.
+  Screenshot: firefighter-private-admin-fixed.png. Docs HTML regenerated. Work uncommitted.
+
+- **Firefighter local update deployed (2026-11-08, owner requested)** — Built/applied
+  exports/firefighter-update-20261107-2055.tar.gz; API sb-api-runtime:20261107-2055. Backup
+  backups/firefighter-before-update-20261108-002524/ includes DB/uploads/env/site and original
+  update archive before final web fix. First start blocked by010 checksum; restored old API,
+  proved exact CRLF/LF equivalence, clone-tested pending migrations, then aligned only that
+  ledger checksum and successfully upgraded. SQL migration files unchanged. Details/hashes and
+  rollback note: clients/firefighter/README.md. Business fingerprints matched, pages40/items22,
+  no customers/leads/orders. Private8737 panel kept; local/public site200 and public/admin404;
+  cafe public200. Studio SMS copied privately/re-encrypted for local server; no live SMS sent.
+  Deployment browser exposed repeated AuthPanel loading caused by isFetching in shared loading:
+  reverted loading to initial isLoading only; focus/mount revalidation retained. Focused regression
+  extended/passed. Final client build/prerender62 pages installed and archive refreshed; studio
+  web rebuilt to match. Actual browser shows stable login/signup tabs. Screenshot in chat output:
+  firefighter-local-deployed-login.png. No real request submission tested. Owner requested no
+  excessive validation; stopped after necessary deployment checks. This follow-up code/docs are
+  uncommitted after prior checkpoint2c5fdfa. Next: owner uses installed site and reports findings.
+
 - **Owner-requested commit checkpoint (2026-11-08)** — Product fixes committed as `7708730`
   on feature/local-matstack: account/tracking fixed-header clearance, customer session refresh
   on mount/focus with regression coverage, protected-form session loading, empty form heading

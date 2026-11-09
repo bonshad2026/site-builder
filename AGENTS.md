@@ -31,6 +31,13 @@ installable package.
 - **Client delivery** (`deploy/export/`): Postgres + built API image + Caddy serving the prerendered
   site on the client's server. Clients edit content only; structure is operator-only (`clientLocked`
   when `CELL_SLUG` is set; `VITE_ADMIN_SCOPE=client` strips builder code from the web bundle).
+- Client site and authenticated `/admin` share one origin/port; client web uses same-origin API.
+  Matstack now follows this for cafe (8725) and firefighter (8735); separate admin ports are retired.
+- Owners can set a live Enamad ownership code in Settings / Page code, icon, bar & popup.
+  Current delivery proxies serve /CODE.txt from the tenant API without redeployment; old installs
+  need a one-time upgrade. Arbitrary head/body HTML remains operator-only.
+- Mobile APK delivery: operator uploads two private app slots under site /mobile-apps; only
+  the actual owner can download. Not stored as ordinary public/signed-link assets.
 - The root `docker-compose.yml` and the old single-stack docs are **legacy**.
 
 More: [studio and delivery](docs/features/studio-and-delivery.md).
@@ -62,7 +69,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Before you say a change is done
 1. `npm run typecheck` (clean as of 2026-11-02).
-2. Tests (2026-11-07): full API run 134/134 pass; web 54 pass / 4 pre-existing failures (58 total). A new failure is yours to explain.
+2. Tests (2026-11-07): full API run 134/134 pass; last full web run 54 pass / 4 pre-existing failures (58 total), plus 2 new focused form tests pass (60 total; full 60 not rerun). A new failure is yours to explain.
 3. Add or extend an API test in `apps/api/test/` for new API behaviour (they run against real Postgres).
 4. Rebuild the studio containers and check the change in the browser at http://admin.localhost.
 5. Update this file or the feature doc if you changed how something works (see "Keeping this guide").
@@ -86,7 +93,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
   `bank.ts` (site kits / content bank), `starters.ts` (starter packs), `constants.ts`.
 - `apps/api` — Express 5 + pg. Control DB `sb_control` plus **one database per site** (tenant).
   Migrations: `src/database/control-plane/migrations` (latest `006_kit_tables.sql`) and
-  `src/database/tenant/migrations` (latest `015_members_and_reviews.sql`); numbered, never edit an applied one.
+  `src/database/tenant/migrations` (latest `016_mobile_apps.sql`); numbered, never edit an applied one.
   Modules in `src/modules/<name>/` (`*.routes.ts` + `*.service.ts`). Routes use `ApiRouter`
   (`src/common/http.ts`) with zod `body` / `query` / `params`. Site routes are `/api/v1/sites/:siteId/…`
   where **`:siteId` is the site's slug**. CLI: `src/cli.ts`.
@@ -119,6 +126,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 |---|---|
 | Current state, open items, next steps | [STATUS.md](docs/STATUS.md) |
 | Studio, deploy service, client packages, backups | [studio-and-delivery.md](docs/features/studio-and-delivery.md) |
+| Single-site Liara app, persistent uploads and existing-DB updates | [liara-delivery.md](docs/features/liara-delivery.md) |
 | New sites: setup, empty/default sites, built-in pages, sample data, site kits | [site-setup.md](docs/features/site-setup.md) |
 | Content tables, box designer, filters, item pages | [collections.md](docs/features/collections.md) |
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |

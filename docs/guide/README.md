@@ -19,3 +19,7 @@
 | روشن کردن درگاه پرداخت | [payment-gateways.md](payment-gateways.md) |
 
 </div>
+
+- [تأیید زندهٔ مالکیت دامنه برای اینماد](domain-verification.md)
+
+- [دریافت و تحویل خصوصی اپلیکیشن‌های موبایل](mobile-apps.md)
