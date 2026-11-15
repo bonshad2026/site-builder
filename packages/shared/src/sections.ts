@@ -232,7 +232,7 @@ export const sectionDefinitions = {
     filterable: z.boolean().default(false),
     imageSize,
     items: z
-      .array(z.object({ imageUrl: imageUrlSchema, title: loc(120), caption: loc(400), category: loc(60), meta: z.string().max(60).default(''), href: hrefSchema }))
+      .array(z.object({ imageUrl: imageUrlSchema, title: loc(120), caption: loc(400), category: loc(60), meta: z.string().max(60).default(''), href: hrefSchema, /** Aparat / YouTube / Vimeo link or a video file; plays in a viewer over the page. */ videoUrl: imageUrlSchema }))
       .max(40)
       .default([]),
     buttons,
@@ -240,7 +240,7 @@ export const sectionDefinitions = {
   testimonials: z.object({
     ...eyebrowHeading,
     layout: z.enum(['slider', 'grid']).default('slider'),
-    items: z.array(z.object({ quote: loc(800), name: loc(80), role: loc(120) })).max(20).default([]),
+    items: z.array(z.object({ quote: loc(800), name: loc(80), role: loc(120), /** 0 = no stars. */ rating: z.number().int().min(0).max(5).default(0), photoUrl: imageUrlSchema })).max(20).default([]),
     buttons,
   }),
   faq: z.object({

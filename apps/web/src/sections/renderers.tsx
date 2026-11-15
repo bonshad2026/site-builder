@@ -17,6 +17,7 @@ import { ProductRail } from '../features/public-site/components/ProductRail';
 import { isSoldOut } from '../features/public-site/components/price';
 import { useProducts, useServices, useSiteSettings } from '../features/public-site/data';
 import { cn } from '../lib/cn';
+import { Stars } from '../features/collections/CardView';
 import { CollectionItemSection, CollectionListSection } from './collectionSections';
 import { ItemReviewsSection } from './ItemReviewsSection';
 import { usePreferences } from '../lib/preferences';
@@ -422,10 +423,16 @@ function TestimonialsSection({ props }: Props<'testimonials'>) {
           <div className="grid gap-6 md:grid-cols-2">
             {props.items.map((t, i) => (
               <figure key={i} className="flex h-full flex-col justify-between border border-line bg-surface p-8 sm:p-10">
-                <blockquote className="font-display text-2xl leading-snug text-ink">“{l(t.quote)}”</blockquote>
-                <figcaption className="mt-10 text-sm">
-                  <span className="block font-medium text-ink">{l(t.name)}</span>
-                  <span className="text-ink-soft">{l(t.role)}</span>
+                <div>
+                  {t.rating > 0 && <Stars value={t.rating} className="mb-4 text-lg" />}
+                  <blockquote className="font-display text-2xl leading-snug text-ink">“{l(t.quote)}”</blockquote>
+                </div>
+                <figcaption className="mt-10 flex items-center gap-3 text-sm">
+                  {t.photoUrl && <img src={t.photoUrl} alt="" className="h-12 w-12 rounded-full object-cover" />}
+                  <span>
+                    <span className="block font-medium text-ink">{l(t.name)}</span>
+                    <span className="text-ink-soft">{l(t.role)}</span>
+                  </span>
                 </figcaption>
               </figure>
             ))}
@@ -443,9 +450,14 @@ function TestimonialsSection({ props }: Props<'testimonials'>) {
       <Container className="max-w-5xl text-center">
         {l(props.eyebrow) && <p className="eyebrow mb-10">{l(props.eyebrow)}</p>}
         <figure key={index} className="reveal" aria-live="polite">
+          {t.rating > 0 && <Stars value={t.rating} className="mb-6 text-2xl" />}
           <blockquote className="font-display text-3xl leading-snug text-ink sm:text-5xl">“{l(t.quote)}”</blockquote>
-          <figcaption className="mt-10 text-sm text-ink-soft">
-            <span className="font-medium text-ink">{l(t.name)}</span> — {l(t.role)}
+          <figcaption className="mt-10 flex items-center justify-center gap-3 text-sm text-ink-soft">
+            {t.photoUrl && <img src={t.photoUrl} alt="" className="h-12 w-12 rounded-full object-cover" />}
+            <span>
+              <span className="font-medium text-ink">{l(t.name)}</span>
+              {l(t.role) && <> — {l(t.role)}</>}
+            </span>
           </figcaption>
         </figure>
         {props.items.length > 1 && (

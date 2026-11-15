@@ -1,6 +1,8 @@
 import type { ImageSize, ProductCardSettings } from '@site-builder/shared';
 import { SmartLink } from '../../../components/ui/SmartLink';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { videoEmbed } from '../../../sections/mediaSections';
 import { AddToCartButton } from '../../cart/AddToCart';
 import { Arrow } from '../../../components/ui/Button';
 import { Image } from '../../../components/ui/Image';
@@ -103,17 +105,66 @@ export interface GalleryItem {
   caption: Localized;
   category: Localized;
   meta: string;
+  videoUrl?: string;
+}
+
+/** A photo at full size or a video, over the page; closes on Escape or a click outside. */
+function MediaViewer({ imageUrl, videoUrl, title, onClose }: { imageUrl: string; videoUrl: string; title: string; onClose: () => void }) {
+  const { m } = usePreferences();
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [onClose]);
+  const embed = videoUrl ? videoEmbed(videoUrl, true) : null;
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={onClose}>
+      <button type="button" aria-label={m.nav.close} onClick={onClose} className="absolute end-4 top-4 rounded-full bg-white/15 px-3 py-1 text-2xl text-white hover:bg-white/25">
+        ×
+      </button>
+      <div className="w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+        {videoUrl ? (
+          <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
+            {embed ? (
+              <iframe title={title || 'video'} src={embed} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen className="h-full w-full" />
+            ) : (
+              <video src={videoUrl} poster={imageUrl || undefined} controls autoPlay playsInline className="h-full w-full object-contain" />
+            )}
+          </div>
+        ) : (
+          <img src={imageUrl} alt={title} className="mx-auto max-h-[85vh] w-auto rounded-lg object-contain" />
+        )}
+        {title && <p className="mt-3 text-center text-white">{title}</p>}
+      </div>
+    </div>
+  );
 }
 
 export function GalleryCard({ item, aspect = 'aspect-[4/3]', size }: { item: GalleryItem & { href?: string }; aspect?: string; size?: ImageSize }) {
   const { l } = usePreferences();
+  const [open, setOpen] = useState(false);
   const sub = [l(item.category), item.meta].filter(Boolean).join(' · ');
   const title = <h3 className="mt-5 font-display text-2xl text-ink sm:text-3xl">{l(item.title)}</h3>;
+  // A video always opens the viewer; a photo does when the item does not link anywhere.
+  const viewable = !!item.videoUrl || (!item.href && !!item.imageUrl);
+  const picture = <Image src={item.imageUrl} alt={l(item.title)} size={size} className={`${aspect} [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.03]`} />;
   return (
     <article className="group">
-      <div className="overflow-hidden">
-        <Image src={item.imageUrl} alt={l(item.title)} size={size} className={`${aspect} [&_img]:transition-transform [&_img]:duration-1000 group-hover:[&_img]:scale-[1.03]`} />
+      <div className="relative overflow-hidden">
+        {viewable ? (
+          <button type="button" onClick={() => setOpen(true)} aria-label={l(item.title) || 'media'} className="block w-full cursor-zoom-in">
+            {picture}
+            {item.videoUrl && (
+              <span aria-hidden className="absolute inset-0 flex items-center justify-center">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 text-3xl text-white transition group-hover:scale-110">▶</span>
+              </span>
+            )}
+          </button>
+        ) : (
+          picture
+        )}
       </div>
+      {open && <MediaViewer imageUrl={item.imageUrl} videoUrl={item.videoUrl ?? ''} title={l(item.title)} onClose={() => setOpen(false)} />}
       {item.href ? (
         <SmartLink href={item.href} className="block hover:text-accent">
           {title}

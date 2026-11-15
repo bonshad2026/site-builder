@@ -190,7 +190,7 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
   },
   gallery: {
     label: L('Gallery / portfolio', 'گالری / نمونه‌کار'),
-    description: L('Images with titles; optional category filter', 'تصاویر با عنوان؛ فیلتر دسته اختیاری'),
+    description: L('Photos and videos with titles; optional category filter', 'عکس و فیلم با عنوان؛ فیلتر دسته اختیاری'),
     fields: [
       eyebrow,
       heading,
@@ -207,6 +207,7 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
           { key: 'category', kind: 'loc', label: L('Category', 'دسته') },
           { key: 'meta', kind: 'text', label: L('Detail (e.g. year)', 'جزئیات (مثلاً سال)') },
           { key: 'href', kind: 'href', label: L('Link (optional)', 'لینک (اختیاری)') },
+          { key: 'videoUrl', kind: 'text', label: L('Video (Aparat / YouTube link or file address, optional)', 'فیلم (لینک آپارات / یوتیوب یا آدرس فایل، اختیاری)') },
         ],
       },
       buttons,
@@ -227,6 +228,8 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
           { key: 'quote', kind: 'loc', label: L('Quote', 'متن'), multiline: true },
           { key: 'name', kind: 'loc', label: L('Name', 'نام') },
           { key: 'role', kind: 'loc', label: L('Role / project', 'سمت / پروژه') },
+          { key: 'rating', kind: 'number', label: L('Stars (0 = none)', 'ستاره (۰ = بدون ستاره)'), min: 0, max: 5 },
+          { key: 'photoUrl', kind: 'image', label: L('Photo (optional)', 'عکس (اختیاری)') },
         ],
       },
       buttons,
