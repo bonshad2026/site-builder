@@ -4,6 +4,14 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **FireFighter site → «آتشیار» (2026-11-15, studio content only)** — Renamed the site and its pages; mascot is
+  a salamander firefighter made with GapGPT `gpt-image-2` (`tools/firefighter-site/atashyar-mascot.png`,
+  `make-mascot.mjs`); its face crop is the favicon and the assistant picture, and the assistant
+  speaks as that character. Also in the studio: hero photo `live-fire-training`, warm red/yellow
+  themes (site accent removed), certificate line, «مراحل سفارش مربی» on trainers / request pages,
+  `resume` field + «سوابق کاری» on trainer pages, news-feed on `/news-iran`, sticky buttons, large
+  gold stars. None of this is in a package yet: send it with a design update (and set
+  `GAPGPT_API_KEY` on the client / Liara server).
 - **General site features (2026-11-15, `feature/general-site-features`, from `feature/local-matstack`)** —
   From the FireFighter client's requests, the general ones: sticky buttons, rating star style,
   gallery videos / photo viewer, testimonial stars and photos, a `news-feed` section (RSS or
