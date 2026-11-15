@@ -364,9 +364,9 @@ function BlockView({ block, item, collection, inert, selected, onSelect }: ViewP
 export function Stars({ value, className }: { value: number; className?: string }) {
   const full = Math.round(value);
   return (
-    <span dir="ltr" aria-hidden className={cn('inline-flex text-amber-500', className)}>
+    <span dir="ltr" aria-hidden className={cn('inline-flex', className)} style={{ color: 'var(--star-color, #f59e0b)' }}>
       {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < full ? '' : 'opacity-25'}>
+        <span key={i} className={i < full ? '' : 'opacity-25'} style={{ fontSize: 'calc(1em * var(--star-scale, 1))' }}>
           ★
         </span>
       ))}

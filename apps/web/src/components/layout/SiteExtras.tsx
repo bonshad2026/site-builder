@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { useSiteId, useSiteSettings } from '../../features/public-site/data';
+import { cn } from '../../lib/cn';
 import { usePreferences } from '../../lib/preferences';
 import { ButtonLink } from '../ui/Button';
 import { SmartLink } from '../ui/SmartLink';
@@ -59,7 +60,83 @@ export function SiteExtras() {
     }
     link.href = meta.faviconUrl;
   }, [meta?.faviconUrl]);
-  return <Popup />;
+  return (
+    <>
+      <Popup />
+      <StickyActions />
+    </>
+  );
+}
+
+/**
+ * Buttons that stay on screen while the visitor scrolls. A bottom bar sits above the mobile
+ * bottom navigation; the page gets room for it through --sticky-h (see SiteLayout).
+ */
+function StickyActions() {
+  const { l } = usePreferences();
+  const { pathname } = useLocation();
+  const { data: settings } = useSiteSettings();
+  const s = settings?.stickyActions;
+  const shownButtons = (s?.buttons ?? []).filter((b) => l(b.label) && b.href);
+  const here = s?.pages === 'all' || pathname === '/';
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    if (!s?.afterScroll) return;
+    const check = () => setScrolled(window.scrollY > window.innerHeight * 0.6);
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, [s?.afterScroll]);
+  const shown = !!s?.enabled && here && shownButtons.length > 0 && (!s.afterScroll || scrolled);
+  const ref = useRef<HTMLDivElement>(null);
+  const side = s?.position === 'side';
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = ref.current;
+    if (!shown || !el) {
+      root.style.setProperty('--sticky-h', '0px');
+      return;
+    }
+    // A side column needs no room at the bottom on wide screens; it is a bottom bar on phones.
+    const sync = () => root.style.setProperty('--sticky-h', side && window.innerWidth >= 1024 ? '0px' : `${el.offsetHeight}px`);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener('resize', sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', sync);
+      root.style.setProperty('--sticky-h', '0px');
+    };
+  }, [shown, side]);
+  if (!shown) return null;
+  const bottomNav = settings?.header.mobileNavigation === 'bottom';
+  return (
+    <div
+      ref={ref}
+      data-sticky-actions=""
+      className={cn(
+        'fixed inset-x-0 z-40 flex gap-2 border-t border-line bg-surface/95 p-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur',
+        bottomNav ? 'bottom-[calc(76px+env(safe-area-inset-bottom))] lg:bottom-0' : 'bottom-0 pb-[calc(0.5rem+env(safe-area-inset-bottom))]',
+        side && 'lg:inset-x-auto lg:end-4 lg:bottom-auto lg:top-1/2 lg:w-56 lg:-translate-y-1/2 lg:flex-col lg:rounded-lg lg:border lg:p-3 lg:shadow-lg',
+        !side && 'lg:justify-center',
+      )}
+    >
+      {shownButtons.map((b, i) => (
+        <SmartLink
+          key={i}
+          href={b.href}
+          newTab={b.newTab}
+          className={cn(
+            'flex flex-1 items-center justify-center rounded-md px-4 py-3 text-center text-sm font-medium transition lg:flex-none lg:px-6',
+            b.style === 'primary' ? 'bg-accent text-accent-ink hover:opacity-90' : 'border border-line bg-bg text-ink hover:border-ink',
+          )}
+        >
+          {l(b.label)}
+        </SmartLink>
+      ))}
+    </div>
+  );
 }
 
 /** The strip above the header; visitors may close it (until its text changes). */

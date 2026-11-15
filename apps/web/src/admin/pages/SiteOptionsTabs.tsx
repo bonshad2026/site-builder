@@ -85,8 +85,36 @@ export function DesignTab({ s, set, siteId }: TabProps) {
   const fonts = s.design.fonts;
   const setFonts = (patch: Partial<typeof fonts>) => set('design', { ...s.design, fonts: { ...fonts, ...patch } });
   const labels = colorLabel(t);
+  const stars = s.design.stars;
+  const setStars = (patch: Partial<typeof stars>) => set('design', { ...s.design, stars: { ...stars, ...patch } });
   return (
     <>
+      <Card title={T('Rating stars', 'ستاره‌های امتیاز')}>
+        <div className="flex flex-wrap items-end gap-6">
+          <SelectField
+            label={T('Size', 'اندازه')}
+            value={stars.size}
+            onChange={(size) => setStars({ size })}
+            options={[
+              { value: 'normal', label: T('Normal', 'معمولی') },
+              { value: 'large', label: T('Large', 'بزرگ') },
+              { value: 'xlarge', label: T('Extra large', 'خیلی بزرگ') },
+            ]}
+          />
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            {T('Colour', 'رنگ')}
+            <input type="color" value={stars.color || '#f59e0b'} onChange={(e) => setStars({ color: e.target.value })} className="h-8 w-12 rounded border border-line" />
+          </label>
+          {stars.color && (
+            <button type="button" className="pb-2 text-sm text-ink-soft underline" onClick={() => setStars({ color: '' })}>
+              {T('Default colour', 'رنگ پیش‌فرض')}
+            </button>
+          )}
+          <span className="pb-2 text-2xl" style={{ color: stars.color || '#f59e0b', fontSize: `calc(1.5rem * ${{ normal: 1, large: 1.35, xlarge: 1.7 }[stars.size]})` }}>
+            ★★★★★
+          </span>
+        </div>
+      </Card>
       <Card title={t.fonts}>
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectField label={t.fontEnDisplay} value={fonts.enDisplay} onChange={(enDisplay) => setFonts({ enDisplay })} options={EN_FONTS.map((f) => ({ value: f, label: f }))} />
@@ -750,6 +778,8 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
   const upMeta = (patch: Partial<typeof meta>) => set('meta', { ...meta, ...patch });
   const upBar = (patch: Partial<typeof bar>) => set('announcement', { ...bar, ...patch });
   const upPop = (patch: Partial<typeof pop>) => set('popup', { ...pop, ...patch });
+  const stick = s.stickyActions;
+  const upStick = (patch: Partial<typeof stick>) => set('stickyActions', { ...stick, ...patch });
   return (
     <>
       <Card title={T('Domain ownership verification', 'تأیید مالکیت دامنه (اینماد)')}>
@@ -802,6 +832,19 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
               <input type="color" value={bar.textColor || '#ffffff'} onChange={(e) => upBar({ textColor: e.target.value })} className="h-8 w-12 rounded border border-line" />
             </label>
             <Checkbox label={T('Visitors can close it', 'بازدیدکننده بتواند ببندد')} checked={bar.dismissible} onChange={(dismissible) => upBar({ dismissible })} />
+          </div>
+        </div>
+      </Card>
+      <Card title={T('Sticky buttons', 'دکمه‌های ثابت')}>
+        <div className="flex flex-col gap-4">
+          <Checkbox label={T('Keep up to 3 buttons on screen while visitors scroll', 'نمایش حداکثر ۳ دکمه که هنگام اسکرول همیشه روی صفحه بمانند')} checked={stick.enabled} onChange={(enabled) => upStick({ enabled })} />
+          <ButtonsEditor siteId={siteId} label={T('Buttons', 'دکمه‌ها')} value={stick.buttons} onChange={(buttons) => upStick({ buttons: buttons.slice(0, 3).map((b) => ({ ...b, action: 'link' as const })) })} />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <SelectField label={T('Place', 'جای نمایش')} value={stick.position} onChange={(position) => upStick({ position })} options={[{ value: 'bottom', label: T('Bar at the bottom', 'نوار پایین صفحه') }, { value: 'side', label: T('Side column (bottom on phones)', 'ستون کنار صفحه (پایین در موبایل)') }]} />
+            <SelectField label={T('Pages', 'صفحه‌ها')} value={stick.pages} onChange={(pages) => upStick({ pages })} options={[{ value: 'all', label: T('Every page', 'همه‌ی صفحه‌ها') }, { value: 'home', label: T('Home page', 'صفحه‌ی اصلی') }]} />
+            <div className="flex items-end pb-2">
+              <Checkbox label={T('Show after scrolling down', 'نمایش پس از اسکرول به پایین')} checked={stick.afterScroll} onChange={(afterScroll) => upStick({ afterScroll })} />
+            </div>
           </div>
         </div>
       </Card>

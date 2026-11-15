@@ -64,6 +64,8 @@ function SiteFrame() {
           <Outlet />
         </main>
         <Footer />
+        {/* Room for the sticky buttons, so they never cover the end of the page. */}
+        <div aria-hidden style={{ height: 'var(--sticky-h, 0px)' }} />
       </div>
     </CartProvider>
   );

@@ -84,6 +84,16 @@ export function useSiteDesign(settings: SiteSettings | undefined) {
     upsert('site-themes', () => document.createElement('style'), (el) => (el.textContent = css));
   }, [css]);
 
+  // Rating stars read these (see Stars in CardView and ProductReviews).
+  const stars = design?.stars;
+  useEffect(() => {
+    const root = document.documentElement;
+    const scale = { normal: '1', large: '1.35', xlarge: '1.7' }[stars?.size ?? 'normal'];
+    root.style.setProperty('--star-scale', scale);
+    if (stars?.color) root.style.setProperty('--star-color', stars.color);
+    else root.style.removeProperty('--star-color');
+  }, [stars?.size, stars?.color]);
+
   useEffect(() => {
     const root = document.documentElement;
     if (!fonts) return;

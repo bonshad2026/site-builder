@@ -15,7 +15,7 @@ interface Reviews {
 }
 
 const Stars = ({ value, label }: { value: number; label: string }) => (
-  <span role="img" aria-label={label} className="text-accent">
+  <span role="img" aria-label={label} style={{ color: 'var(--star-color, var(--accent))', fontSize: 'calc(1em * var(--star-scale, 1))' }}>
     {'★'.repeat(Math.round(value))}
     <span className="text-line">{'★'.repeat(5 - Math.round(value))}</span>
   </span>

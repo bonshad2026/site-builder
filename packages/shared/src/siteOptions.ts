@@ -48,6 +48,10 @@ export const designSchema = z
     customFont: z
       .object({ name: z.string().max(60).default(''), url: z.string().max(1000).refine((v) => v === '' || /^(https?:\/\/|\/(?!\/))/i.test(v)).default('') })
       .default({}),
+    /** Rating stars everywhere on the site (cards, reviews): size and colour; empty colour = the default amber. */
+    stars: z
+      .object({ size: z.enum(['normal', 'large', 'xlarge']).default('normal'), color: z.string().regex(/^(#[0-9a-fA-F]{6})?$/).default('') })
+      .default({}),
   })
   .default({});
 
@@ -439,6 +443,20 @@ export const announcementSchema = z
     textColor: z.string().regex(/^(#[0-9a-fA-F]{6})?$/).default(''),
     /** Visitors can close it (it stays closed for them until the text changes). */
     dismissible: z.boolean().default(true),
+  })
+  .default({});
+
+/** Buttons that stay on screen while visitors scroll (sign up, book, call us). */
+export const stickyActionsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    buttons: z.array(buttonSchema).max(3).default([]),
+    /** A bar along the bottom, or a column at the side on wide screens (a bottom bar on phones). */
+    position: z.enum(['bottom', 'side']).default('bottom'),
+    /** Every page, or the home page only. */
+    pages: z.enum(['all', 'home']).default('all'),
+    /** Shown only once the visitor has scrolled past the first screen. */
+    afterScroll: z.boolean().default(false),
   })
   .default({});
 
