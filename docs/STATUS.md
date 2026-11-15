@@ -10,8 +10,17 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   speaks as that character. Also in the studio: hero photo `live-fire-training`, warm red/yellow
   themes (site accent removed), certificate line, «مراحل سفارش مربی» on trainers / request pages,
   `resume` field + «سوابق کاری» on trainer pages, news-feed on `/news-iran`, sticky buttons, large
-  gold stars. None of this is in a package yet: send it with a design update (and set
-  `GAPGPT_API_KEY` on the client / Liara server).
+  gold stars. **Live on Liara 2026-11-15**: release `6af9fd1a3d452225faee90ae` READY on
+  https://fire.tibasoft.ir (app `firefighter`). Built from install package
+  `exports/firefighter-20261115-1835.tar.gz` (this branch's code) → context
+  `exports/firefighter-liara-20261115/`; `data/design.sql` made from the STUDIO tenant by
+  `var/liara-firefighter-design-20261115.mjs` (same method as 2026-11-08, but the site name is taken
+  from the studio). Uploaded with `var/liara-direct-upload.mjs` + `var/liara-create-release.mjs`.
+  Runtime log: pre-update snapshot saved, design revision applied, business data retained.
+  `GAPGPT_API_KEY` / `GAPGPT_BASE_URL` set on the Liara app. Checked live: /fa, /admin, settings
+  (name آتشیار, assistant on, sticky, stars, red accent), news 10 items, a real assistant answer,
+  mascot file, home sections, trainers `resume` field. Not checked: an authenticated admin session
+  and customer/order counts (no operator login was used).
 - **General site features (2026-11-15, `feature/general-site-features`, from `feature/local-matstack`)** —
   From the FireFighter client's requests, the general ones: sticky buttons, rating star style,
   gallery videos / photo viewer, testimonial stars and photos, a `news-feed` section (RSS or
