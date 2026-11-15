@@ -778,6 +778,8 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
   const upMeta = (patch: Partial<typeof meta>) => set('meta', { ...meta, ...patch });
   const upBar = (patch: Partial<typeof bar>) => set('announcement', { ...bar, ...patch });
   const upPop = (patch: Partial<typeof pop>) => set('popup', { ...pop, ...patch });
+  const bot = s.assistant;
+  const upBot = (patch: Partial<typeof bot>) => set('assistant', { ...bot, ...patch });
   const stick = s.stickyActions;
   const upStick = (patch: Partial<typeof stick>) => set('stickyActions', { ...stick, ...patch });
   return (
@@ -835,6 +837,37 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
           </div>
         </div>
       </Card>
+      {operator && (
+        <Card title={T('AI assistant', 'دستیار هوش مصنوعی')}>
+          <div className="flex flex-col gap-4">
+            <Checkbox label={T('Show an assistant visitors can ask about the site', 'نمایش دستیاری که بازدیدکننده بتواند درباره‌ی سایت از او بپرسد')} checked={bot.enabled} onChange={(enabled) => upBot({ enabled })} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <LocalizedField label={T('Name', 'نام')} value={bot.name} onChange={(name) => upBot({ name })} />
+              <ImagePicker siteId={siteId} label={T('Picture', 'تصویر شخصیت')} value={bot.avatarUrl} onChange={(avatarUrl) => upBot({ avatarUrl })} />
+            </div>
+            <LocalizedField label={T('Greeting', 'پیام خوش‌آمد')} value={bot.greeting} onChange={(greeting) => upBot({ greeting })} multiline rows={2} />
+            <TextField
+              label={T('What the assistant knows (services, prices, steps, rules, FAQs)', 'دانسته‌های دستیار (خدمات، قیمت‌ها، مراحل، قوانین، پرسش‌های رایج)')}
+              multiline
+              rows={10}
+              value={bot.knowledge}
+              onChange={(knowledge) => upBot({ knowledge })}
+            />
+            <ListEditor
+              label={T('Suggested questions (up to 4)', 'سؤال‌های پیشنهادی (حداکثر ۴)')}
+              items={bot.suggestions}
+              max={4}
+              onChange={(suggestions) => upBot({ suggestions })}
+              create={() => ({ en: '', fa: '' })}
+              render={(q, update) => <LocalizedField label={T('Question', 'سؤال')} value={q} onChange={update} />}
+            />
+            <TextField label={T('GapGPT model', 'مدل GapGPT')} dir="ltr" value={bot.model} onChange={(model) => upBot({ model })} />
+            <p className="text-xs text-ink-soft">
+              {T('Answers come from GapGPT with the server key GAPGPT_API_KEY (deploy/.env, or the client server’s .env). The assistant also knows the site name, contact details and page list.', 'پاسخ‌ها از GapGPT با کلید سرور GAPGPT_API_KEY می‌آید (در deploy/.env یا .env سرور مشتری). دستیار نام سایت، اطلاعات تماس و فهرست صفحه‌ها را هم می‌داند.')}
+            </p>
+          </div>
+        </Card>
+      )}
       <Card title={T('Sticky buttons', 'دکمه‌های ثابت')}>
         <div className="flex flex-col gap-4">
           <Checkbox label={T('Keep up to 3 buttons on screen while visitors scroll', 'نمایش حداکثر ۳ دکمه که هنگام اسکرول همیشه روی صفحه بمانند')} checked={stick.enabled} onChange={(enabled) => upStick({ enabled })} />

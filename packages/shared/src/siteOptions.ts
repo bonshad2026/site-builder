@@ -460,6 +460,22 @@ export const stickyActionsSchema = z
   })
   .default({});
 
+/** The site's AI assistant: a named character visitors can ask about the site (answers come from GapGPT). */
+export const assistantSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    name: loc(60),
+    avatarUrl: urlOrPath,
+    greeting: loc(300),
+    /** What the assistant knows: the operator's facts about the business, services, prices and rules. */
+    knowledge: z.string().max(12_000).default(''),
+    /** Questions offered as one-tap chips. */
+    suggestions: z.array(loc(120)).max(4).default([]),
+    /** The GapGPT model id. */
+    model: z.string().trim().max(80).default('gpt-4o-mini'),
+  })
+  .default({});
+
 /** A window that opens once per visitor (or on every visit). */
 export const popupSchema = z
   .object({

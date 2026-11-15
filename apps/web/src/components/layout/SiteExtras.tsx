@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { useSiteId, useSiteSettings } from '../../features/public-site/data';
 import { cn } from '../../lib/cn';
+import { Assistant } from './Assistant';
 import { usePreferences } from '../../lib/preferences';
 import { ButtonLink } from '../ui/Button';
 import { SmartLink } from '../ui/SmartLink';
@@ -64,6 +65,7 @@ export function SiteExtras() {
     <>
       <Popup />
       <StickyActions />
+      <Assistant />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { savedCardSchema } from './collections.js';
 import { hrefSchema, parseSectionProps } from './sections.js';
-import { announcementSchema, stickyActionsSchema, designSchema, exportOptionsSchema, footerSchema, formFieldSchema, formOptionsSchema, headerSchema, pageMetaSchema, popupSchema, shopPageSchema, shopSchema, systemPagesSchema, textsSchema } from './siteOptions.js';
+import { announcementSchema, assistantSchema, stickyActionsSchema, designSchema, exportOptionsSchema, footerSchema, formFieldSchema, formOptionsSchema, headerSchema, pageMetaSchema, popupSchema, shopPageSchema, shopSchema, systemPagesSchema, textsSchema } from './siteOptions.js';
 import { upgradeRequestType } from './forms.js';
 import { accountsSchema, answersSchema, DEFAULT_WORKFLOW, formLayoutSchema, notificationsSchema, type Workflow, REQUEST_ACCESS, requestContactSchema, requestPaymentSchema, workflowSchema } from './interactions.js';
 import { DEFAULT_REQUEST_TYPES, FORM_TYPES, LEAD_TYPES, LOCALES, MODULES, PAYMENT_METHODS, PERMISSIONS, PUBLISH_STATUSES, SOCIAL_ICONS } from './constants.js';
@@ -178,6 +178,7 @@ export const siteSettingsSchema = z.object({
   announcement: announcementSchema,
   popup: popupSchema,
   stickyActions: stickyActionsSchema,
+  assistant: assistantSchema,
 });
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
 
@@ -206,6 +207,7 @@ const optionSchemas = {
   announcement: announcementSchema,
   popup: popupSchema,
   stickyActions: stickyActionsSchema,
+  assistant: assistantSchema,
 };
 
 /**

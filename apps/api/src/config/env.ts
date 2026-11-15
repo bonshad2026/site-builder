@@ -46,6 +46,10 @@ const schema = z
     /** Sender line for request updates (plain SMS); empty = the account's default line. */
     KAVENEGAR_SENDER: z.string().optional(),
 
+    /** The site assistant's AI service (GapGPT, OpenAI-compatible); without a key the assistant is off. */
+    GAPGPT_API_KEY: z.string().optional(),
+    GAPGPT_BASE_URL: z.string().url().default('https://api.gapgpt.app/v1'),
+
     STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
     STORAGE_LOCAL_DIR: z.string().default('./var/uploads'),
     STORAGE_SIGNING_KEY: z.string().min(16).default('dev-only-signing-key-change-me'),

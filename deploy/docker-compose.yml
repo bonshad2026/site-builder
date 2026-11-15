@@ -68,6 +68,8 @@ services:
       CORS_ORIGINS: http://admin.localhost
       EMAIL_PROVIDER: console
       SMS_PROVIDER: console
+      # The site assistant (deploy/.env); empty = off.
+      GAPGPT_API_KEY: ${GAPGPT_API_KEY:-}
     volumes:
       - studio-uploads:/data/uploads
       # Template photos added by hand (when Unsplash cannot be reached): <photo-id>.jpg

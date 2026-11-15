@@ -21,6 +21,7 @@ import { registerInteractionRoutes } from '../interactions/public.routes.js';
 import { registerMemberRoutes } from '../collections/members.routes.js';
 import { createRequest } from '../interactions/requests.service.js';
 import { loadNews } from '../news/news.service.js';
+import { askAssistant } from '../assistant/assistant.service.js';
 
 const slugParam = z.object({ slug: z.string().min(1).max(64) });
 
@@ -66,7 +67,9 @@ export function publicRoutes(ctx: AppContext) {
     // Workflows (internal stage names, message texts) and staff addresses stay private.
     const { notifications: _n, ...settings } = withSettingDefaults(rows[0].settings);
     const { adminHeadCode: _adminCode, ...publicMeta } = settings.meta;
-    return { data: { ...settings, meta: publicMeta, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
+    // The assistant's notes and model are only read by the server (see assistant.service).
+    const { knowledge: _k, model: _m, ...assistant } = settings.assistant;
+    return { data: { ...settings, meta: publicMeta, assistant, requestTypes: settings.requestTypes.map(({ workflow: _w, ...type }: (typeof settings.requestTypes)[number]) => type) } };
   });
 
   r.route({
@@ -117,6 +120,36 @@ export function publicRoutes(ctx: AppContext) {
       const props = sectionDefinitions['news-feed'].safeParse(section.props);
       if (!props.success) return { data: [] };
       return { data: await loadNews(ctx, props.data.sources, props.data.count) };
+    },
+  );
+
+  // Each answer costs the operator money: a short burst per visitor, then a pause.
+  const assistantLimiter = rateLimit({
+    windowMs: 10 * 60_000,
+    limit: ctx.env.NODE_ENV === 'production' ? 20 : 200,
+    keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? '')}:${req.params.siteSlug}:assistant`,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many questions, try again later' } },
+  });
+  r.route(
+    {
+      method: 'post',
+      path: '/assistant',
+      summary: "Ask the site's AI assistant (the last few messages of the conversation)",
+      body: z.object({
+        locale: z.enum(['en', 'fa']).default('fa'),
+        messages: z
+          .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(1500) }))
+          .min(1)
+          .max(12),
+      }),
+      middleware: [assistantLimiter],
+    },
+    async ({ req, body }) => {
+      if (body.messages.at(-1)!.role !== 'user') throw badRequest('The last message must be the visitor’s');
+      const settings = await loadSettings(req.tenant!.db);
+      return { data: { answer: await askAssistant(ctx, req.tenant!.db, settings, body.messages, body.locale) } };
     },
   );
 
