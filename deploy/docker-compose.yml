@@ -70,6 +70,7 @@ services:
       SMS_PROVIDER: console
       # The site assistant (deploy/.env); empty = off.
       GAPGPT_API_KEY: ${GAPGPT_API_KEY:-}
+      GAPGPT_BASE_URL: ${GAPGPT_BASE_URL:-https://api.gapgpt.app/v1}
     volumes:
       - studio-uploads:/data/uploads
       # Template photos added by hand (when Unsplash cannot be reached): <photo-id>.jpg

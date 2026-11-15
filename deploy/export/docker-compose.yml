@@ -60,6 +60,7 @@ services:
       KAVENEGAR_OTP_TEMPLATE: ${KAVENEGAR_OTP_TEMPLATE:-}
       KAVENEGAR_SENDER: ${KAVENEGAR_SENDER:-}
       GAPGPT_API_KEY: ${GAPGPT_API_KEY:-}
+      GAPGPT_BASE_URL: ${GAPGPT_BASE_URL:-https://api.gapgpt.app/v1}
     volumes:
       - uploads:/data/uploads
       - ./data/uploads.tar.gz:/restore/uploads.tar.gz:ro
