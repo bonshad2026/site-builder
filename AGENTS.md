@@ -113,6 +113,8 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 
 ## Environment gotchas
 - npm registry: the lockfile points at a mirror that may be unreachable; set `NPM_REGISTRY=https://registry.npmjs.org/` in `deploy/.env`.
+- The AI assistant needs `GAPGPT_API_KEY` in `deploy/.env` (studio) or the client's `.env`; without it the assistant answers 503.
+- Docker Hub pulls can stall here: pull base images through `docker-mirror.liara.ir/library/<image>` and tag them (e.g. `node:22-alpine`).
 - Unsplash is unreachable from the CLI and Docker here; template photos come from `var/demo-images/<ref>.jpg`, else a gradient placeholder.
 - Windows: PowerShell 5.1 treats docker stderr as errors (scripts use `ErrorActionPreference=Continue`);
   Git Bash `tar` needs `--force-local` for `C:` paths; use `MSYS_NO_PATHCONV=1` for `docker exec` paths.
@@ -132,6 +134,7 @@ On start, studio-api runs `deploy/studio/api-start.sh`: migrations, operator pas
 | Request forms, workflows, customer accounts, tracking, inbox | [interactions.md](docs/features/interactions.md) |
 | Shop: products, variants, discounts, coupons, shipping, payments, reviews | [shop.md](docs/features/shop.md) |
 | Mobile storefront: bottom navigation, category rows, cart, square icon cards | [mobile-storefront.md](docs/features/mobile-storefront.md) |
+| Sticky buttons, star style, gallery videos, news from other sites, AI assistant (GapGPT) | [site-extras.md](docs/features/site-extras.md) |
 | Account-based Instagram orders, sender management and worker | [instagram-orders.md](docs/features/instagram-orders.md) |
 | Starters: packs, groups, previews, ready-made starters, header/footer | [starters.md](docs/features/starters.md) |
 | User guide (Persian, one page + video per task) | [docs/guide/](docs/guide/README.md) |

@@ -4,6 +4,15 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **General site features (2026-11-15, `feature/general-site-features`, from `feature/local-matstack`)** —
+  From the FireFighter client's requests, the general ones: sticky buttons, rating star style,
+  gallery videos / photo viewer, testimonial stars and photos, a `news-feed` section (RSS or
+  news-list pages; Tehran and Mashhad fire departments checked live), and an AI assistant answered by
+  GapGPT (`GAPGPT_API_KEY`). Details: [features/site-extras.md](features/site-extras.md). Typecheck clean;
+  new tests `news.test.ts` (3) and `assistant.test.ts` (3) pass; full suites not rerun. Also brought
+  `tools/firefighter-site/` from `main` (the platform code was already here as migration 015).
+  Not done: checking in the studio preview, the GapGPT key, the site-specific (taste) requests,
+  the Persian dev guide page, and the Liara app's env (`GAPGPT_API_KEY` must be set there too).
 - **iPhone cafe icon (2026-11-10, uncommitted)** — Owner reported generic C after Add to
   Home Screen. Prepared180px PNG of original cafe logo and explicit apple-touch-icon/title
   tags, persisted in production meta.headCode and current static HTML. Main download generator
