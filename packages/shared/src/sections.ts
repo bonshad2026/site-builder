@@ -348,6 +348,27 @@ export const sectionDefinitions = {
     ratio: z.enum(['16:9', '4:3', '1:1', '9:16']).default('16:9'),
     autoplay: z.boolean().default(false),
   }),
+  /**
+   * Latest news from other websites: an RSS / Atom feed, or a news-list page whose links match
+   * `linkPattern`. Titles link back to the source; the server fetches and caches them.
+   */
+  'news-feed': z.object({
+    ...eyebrowHeading,
+    intro: loc(600),
+    sources: z
+      .array(
+        z.object({
+          name: loc(80),
+          feedUrl: z.string().max(500).refine((v) => v === '' || /^https?:\/\//i.test(v), 'Use an http(s) address').default(''),
+          /** For a web page: only links whose address contains this text (e.g. "/news/"); empty = every link that looks like an article. */
+          linkPattern: z.string().max(120).default(''),
+        }),
+      )
+      .max(4)
+      .default([]),
+    count: z.number().int().min(1).max(30).default(8),
+    layout: z.enum(['list', 'cards']).default('list'),
+  }),
   /** Newsletter sign-up (email or mobile), kept under Customers → Newsletter. */
   newsletter: z.object({
     ...eyebrowHeading,
@@ -446,6 +467,9 @@ const STRUCTURE_KEYS = new Set([
   'calendarMode',
   'page',
   'embedUrl',
+  // news feeds: where the news comes from is the operator's choice
+  'feedUrl',
+  'linkPattern',
   'ratio',
   'zoom',
 ]);

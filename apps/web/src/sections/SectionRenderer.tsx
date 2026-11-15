@@ -41,7 +41,7 @@ export function SectionRenderer({ section, editing = false }: { section: Section
   return (
     <SectionBoundary fallback={editing ? <EditorNotice text="This section failed to render." /> : null}>
       <SectionLook look={parsed.data.appearance as SectionAppearance}>
-        <Renderer props={parsed.data} />
+        <Renderer props={parsed.data} sectionId={section.id} />
       </SectionLook>
     </SectionBoundary>
   );

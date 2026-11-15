@@ -365,6 +365,27 @@ export const sectionMeta: Record<SectionType, SectionMeta> = {
       { key: 'height', kind: 'number', label: L('Height (px)', 'ارتفاع (پیکسل)'), min: 200, max: 900 },
     ],
   },
+  'news-feed': {
+    label: L('News from other websites', 'اخبار از سایت‌های دیگر'),
+    description: L('Latest headlines from RSS feeds or news pages, linking to the source', 'آخرین تیترها از فید RSS یا صفحه‌ی اخبار سایت‌های دیگر، با پیوند به منبع'),
+    fields: [
+      eyebrow,
+      heading,
+      intro,
+      {
+        key: 'sources',
+        kind: 'list',
+        label: L('Sources (up to 4)', 'منبع‌ها (حداکثر ۴)'),
+        item: [
+          { key: 'name', kind: 'loc', label: L('Source name', 'نام منبع') },
+          { key: 'feedUrl', kind: 'text', label: L('RSS feed or news page address', 'آدرس فید RSS یا صفحه‌ی اخبار') },
+          { key: 'linkPattern', kind: 'text', label: L('For a news page: news links contain (e.g. /news/)', 'برای صفحه‌ی اخبار: پیوند خبرها شامل این باشد (مثلاً /news/)') },
+        ],
+      },
+      { key: 'count', kind: 'number', label: L('Headlines', 'تعداد تیتر'), min: 1, max: 30 },
+      { key: 'layout', kind: 'select', label: L('Layout', 'چیدمان'), options: [{ value: 'list', label: L('List', 'فهرست') }, { value: 'cards', label: L('Cards', 'کارت') }] },
+    ],
+  },
   video: {
     label: L('Video', 'ویدیو'),
     description: L('An Aparat, YouTube or Vimeo link, or an uploaded video file', 'پیوند آپارات، یوتیوب یا ویمئو، یا فایل ویدیوی بارگذاری‌شده'),

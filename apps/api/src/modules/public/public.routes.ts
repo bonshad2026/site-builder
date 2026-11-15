@@ -1,4 +1,4 @@
-import { leadInputSchema, orderInputSchema, paymentProviderSchema, withSettingDefaults } from '@site-builder/shared';
+import { leadInputSchema, orderInputSchema, paymentProviderSchema, sectionDefinitions, withSettingDefaults } from '@site-builder/shared';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -20,8 +20,28 @@ import { notifyStaff } from '../interactions/notify.js';
 import { registerInteractionRoutes } from '../interactions/public.routes.js';
 import { registerMemberRoutes } from '../collections/members.routes.js';
 import { createRequest } from '../interactions/requests.service.js';
+import { loadNews } from '../news/news.service.js';
 
 const slugParam = z.object({ slug: z.string().min(1).max(64) });
+
+/** A section of a page document by id, wherever it sits (sections may hold slots of sections). */
+function findSection(node: unknown, id: string): { type: string; props: unknown } | null {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      const hit = findSection(n, id);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  const o = node as Record<string, unknown>;
+  if (o.id === id && typeof o.type === 'string' && 'props' in o) return { type: o.type, props: o.props };
+  for (const v of Object.values(o)) {
+    const hit = findSection(v, id);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 /**
  * Read-only, published-only data for site visitors, plus lead and order submission.
@@ -82,6 +102,23 @@ export function publicRoutes(ctx: AppContext) {
     if (!rows[0]) throw notFound('Page');
     return { data: rows[0] };
   });
+
+  r.route(
+    {
+      method: 'get',
+      path: '/news',
+      summary: 'Headlines for a news-feed section of a published page (only the sources set in that section are fetched)',
+      query: z.object({ section: z.string().min(1).max(64) }),
+    },
+    async ({ req, query }) => {
+      const { rows } = await req.tenant!.db.query<{ document: unknown }>('SELECT published AS document FROM pages WHERE published IS NOT NULL');
+      const section = findSection(rows.map((r) => r.document), query.section);
+      if (!section || section.type !== 'news-feed') throw notFound('Section');
+      const props = sectionDefinitions['news-feed'].safeParse(section.props);
+      if (!props.success) return { data: [] };
+      return { data: await loadNews(ctx, props.data.sources, props.data.count) };
+    },
+  );
 
   registerPublicCollectionRoutes(r, ctx.storage);
 

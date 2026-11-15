@@ -1,5 +1,5 @@
 import type { SectionProps } from '@site-builder/shared';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { TextInput } from '../components/ui/Field';
@@ -11,7 +11,7 @@ import { cn } from '../lib/cn';
 import { errorLine } from '../lib/errorText';
 import { usePreferences } from '../lib/preferences';
 
-type Props<T extends 'map' | 'video' | 'newsletter'> = { props: SectionProps<T> };
+type Props<T extends 'map' | 'video' | 'newsletter' | 'news-feed'> = { props: SectionProps<T> };
 
 /* ---------- map ---------- */
 
@@ -122,6 +122,56 @@ export function NewsletterSection({ props }: Props<'newsletter'>) {
           </form>
         )}
         {join.error && <p className="text-sm text-danger">{errorLine(join.error, errorLang)}</p>}
+      </Container>
+    </Section>
+  );
+}
+
+/* ---------- news from other websites ---------- */
+
+interface NewsItem {
+  title: string;
+  url: string;
+  date: string | null;
+  source: { en: string; fa: string };
+}
+
+/** Headlines from the sources set in the section (fetched and cached by the server); each opens the source site. */
+export function NewsFeedSection({ props, sectionId }: Props<'news-feed'> & { sectionId?: string }) {
+  const { l, formatDate } = usePreferences();
+  const site = useSiteId();
+  const news = useQuery({
+    queryKey: ['news', site, sectionId],
+    queryFn: () => api.get<NewsItem[]>(`/public/sites/${site}/news?section=${encodeURIComponent(sectionId!)}`),
+    enabled: apiAvailable() && !!sectionId && props.sources.some((s) => s.feedUrl),
+    staleTime: 10 * 60_000,
+  });
+  const items = news.data ?? [];
+  if (!news.isLoading && !items.length) return null;
+  return (
+    <Section>
+      <Container>
+        {(l(props.heading) || l(props.eyebrow)) && <SectionHeading eyebrow={l(props.eyebrow)} title={l(props.heading)} intro={l(props.intro)} />}
+        {news.isLoading ? (
+          <div role="status" aria-label="Loading" className="flex flex-col gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded bg-surface-2" />
+            ))}
+          </div>
+        ) : (
+          <ul className={cn(props.layout === 'cards' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' : 'flex flex-col divide-y divide-line border-y border-line')}>
+            {items.map((n) => (
+              <li key={n.url} className={cn(props.layout === 'cards' && 'rounded-lg border border-line bg-surface')}>
+                <a href={n.url} target="_blank" rel="noopener noreferrer" className={cn('group flex flex-col gap-1', props.layout === 'cards' ? 'h-full p-5' : 'py-4')}>
+                  <span className="font-medium leading-snug text-ink group-hover:text-accent">{n.title}</span>
+                  <span className="text-xs text-ink-soft">
+                    {[l(n.source), n.date ? formatDate(n.date) : ''].filter(Boolean).join(' · ')}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </Container>
     </Section>
   );

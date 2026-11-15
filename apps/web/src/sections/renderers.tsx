@@ -21,7 +21,7 @@ import { Stars } from '../features/collections/CardView';
 import { CollectionItemSection, CollectionListSection } from './collectionSections';
 import { ItemReviewsSection } from './ItemReviewsSection';
 import { usePreferences } from '../lib/preferences';
-import { MapSection, NewsletterSection, VideoSection } from './mediaSections';
+import { MapSection, NewsFeedSection, NewsletterSection, VideoSection } from './mediaSections';
 
 type Props<T extends SectionType> = { props: SectionProps<T> };
 
@@ -663,7 +663,7 @@ function LoadingGrid() {
 }
 
 // Renderers have different prop types; props are validated by parseSectionProps before rendering, so the registry is untyped here.
-type AnyRenderer = ComponentType<{ props: any }>;
+type AnyRenderer = ComponentType<{ props: any; sectionId?: string }>;
 
 export const sectionRenderers: Record<SectionType, AnyRenderer> = {
   'page-header': PageHeaderSection,
@@ -685,6 +685,7 @@ export const sectionRenderers: Record<SectionType, AnyRenderer> = {
   'system-page': SystemPageSection,
   map: MapSection,
   video: VideoSection,
+  'news-feed': NewsFeedSection,
   newsletter: NewsletterSection,
   'contact-form': ContactFormSection,
 };
