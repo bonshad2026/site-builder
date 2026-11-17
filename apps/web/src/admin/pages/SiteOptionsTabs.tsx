@@ -789,6 +789,9 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
         <p className="mt-3 text-sm text-ink-soft">{T('Enter the numeric code and save. The empty verification file becomes available immediately at /CODE.txt on your site domain. Clear and save to disable it. No deployment is required on installations that support live verification.', 'کد عددی را وارد کنید و تنظیمات را ذخیره کنید. فایل خالی همان لحظه در مسیر /کد.txt روی دامنهٔ سایت در دسترس قرار می‌گیرد. برای غیرفعال‌کردن، کد را پاک و ذخیره کنید. در نصب‌های دارای این قابلیت به استقرار مجدد نیاز نیست.')}</p>
         {meta.enamadCode && <p className="mt-2 text-sm" dir="ltr">/{meta.enamadCode}.txt</p>}
       </Card>
+      <Card title={T('Enamad trust seal in the footer', 'نماد اعتماد (اینماد) در پانویس')}>
+        <EnamadSealField value={meta.enamadSeal} onChange={(enamadSeal) => upMeta({ enamadSeal })} T={T} />
+      </Card>
       {operator && (
         <Card title={T('Icon, share image and page code', 'آیکون، تصویر اشتراک‌گذاری و کد صفحه')}>
           <div className="flex flex-col gap-4">
@@ -901,5 +904,43 @@ export function ExtrasTab({ s, set, siteId, operator }: TabProps & { operator: b
         </div>
       </Card>
     </>
+  );
+}
+
+/** Takes Enamad's HTML snippet (or just its address) and keeps only the seal's id and code. */
+function EnamadSealField({ value, onChange, T }: { value: { id: string; code: string }; onChange: (v: { id: string; code: string }) => void; T: (en: string, fa: string) => string }) {
+  const [pasted, setPasted] = useState('');
+  const id = /[?&]id=(\d{1,20})/i.exec(pasted)?.[1] ?? '';
+  const code = /[?&]Code=([A-Za-z0-9]{1,64})/.exec(pasted)?.[1] ?? '';
+  const on = !!(value.id && value.code);
+  return (
+    <div className="flex flex-col gap-3">
+      <TextField
+        label={T('Paste the HTML code Enamad gave you', 'کد HTML که اینماد داده را اینجا بچسبانید')}
+        dir="ltr"
+        multiline
+        rows={3}
+        value={pasted}
+        onChange={(v) => {
+          setPasted(v);
+          const i = /[?&]id=(\d{1,20})/i.exec(v)?.[1];
+          const c = /[?&]Code=([A-Za-z0-9]{1,64})/.exec(v)?.[1];
+          if (i && c) onChange({ id: i, code: c });
+        }}
+      />
+      {pasted && !(id && code) && <p className="text-sm text-danger">{T('No Enamad id and code found in this text.', 'شناسه و کد اینماد در این متن پیدا نشد.')}</p>}
+      {on ? (
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <span>
+            {T('Shown in every footer', 'در پانویس همه‌ی صفحه‌ها نمایش داده می‌شود')} — <span dir="ltr">id {value.id}</span>
+          </span>
+          <button type="button" className="text-ink-soft underline" onClick={() => onChange({ id: '', code: '' })}>
+            {T('Remove the seal', 'حذف نماد')}
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm text-ink-soft">{T('Only the seal id and code are kept; the seal appears after you save.', 'فقط شناسه و کد نماد ذخیره می‌شود؛ پس از ذخیره در پانویس سایت نمایش داده می‌شود.')}</p>
+      )}
+    </div>
   );
 }

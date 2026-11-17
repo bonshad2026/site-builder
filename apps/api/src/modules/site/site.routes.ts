@@ -58,7 +58,7 @@ export function siteRoutes(clientLocked = false) {
         // Owners can change a numeric ownership code, but arbitrary page code stays operator-only.
         const { name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, formOptions, footer, shop, exportOptions, notifications, announcement, popup, stickyActions } = body;
         const requestTypes = clientRequestTypes(current.rows[0].settings.requestTypes, body.requestTypes);
-        body = { ...current.rows[0].settings, meta: { ...current.rows[0].settings.meta, enamadCode: body.meta.enamadCode }, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, footer, shop, exportOptions, notifications, announcement, popup, stickyActions };
+        body = { ...current.rows[0].settings, meta: { ...current.rows[0].settings.meta, enamadCode: body.meta.enamadCode, enamadSeal: body.meta.enamadSeal }, name, tagline, logoAssetId, logoUrl, contact, social, socialDisplay, productCategories, requestTypes, formOptions, footer, shop, exportOptions, notifications, announcement, popup, stickyActions };
       }
       const { rows } = await req.tenant!.db.query(
         `INSERT INTO site_settings (id, settings, updated_by, updated_at) VALUES (1, $1, $2, now())

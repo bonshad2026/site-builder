@@ -178,6 +178,7 @@ export function Footer() {
     ? l(f?.copyright).replaceAll('{year}', year).replaceAll('{name}', l(settings.name))
     : `© ${year} ${l(settings.name)}. ${m.footer.rights}`;
   const showCopyright = f?.showCopyright !== false;
+  const seal = settings.meta?.enamadSeal?.id && settings.meta.enamadSeal.code ? settings.meta.enamadSeal : null;
 
   return (
     <footer className="border-t border-line bg-surface">
@@ -198,14 +199,41 @@ export function Footer() {
           </div>
         )}
       </Container>
-      {(showCopyright || !apiAvailable()) && (
+      {(showCopyright || !apiAvailable() || seal) && (
         <div className="border-t border-line">
-          <Container className="flex flex-col gap-2 py-6 text-xs text-ink-soft sm:flex-row sm:justify-between">
-            {showCopyright && <p>{copyright}</p>}
-            {!apiAvailable() && <p>{m.footer.demo}</p>}
+          <Container className="flex flex-col items-center gap-4 py-6 text-xs text-ink-soft sm:flex-row sm:justify-between">
+            <div className="flex flex-col gap-2 text-center sm:text-start">
+              {showCopyright && <p>{copyright}</p>}
+              {!apiAvailable() && <p>{m.footer.demo}</p>}
+            </div>
+            {seal && <EnamadSeal id={seal.id} code={seal.code} />}
           </Container>
         </div>
       )}
     </footer>
+  );
+}
+
+/**
+ * Enamad's trust seal. Enamad checks the page's address through the referrer, so both the link
+ * and the image keep `referrerPolicy="origin"`, as in the snippet Enamad gives.
+ */
+function EnamadSeal({ id, code }: { id: string; code: string }) {
+  const { locale } = usePreferences();
+  const query = `id=${encodeURIComponent(id)}&Code=${encodeURIComponent(code)}`;
+  return (
+    <a
+      href={`https://trustseal.enamad.ir/?${query}`}
+      target="_blank"
+      rel="noopener"
+      referrerPolicy="origin"
+      className="group flex items-center gap-3 rounded-xl border border-line bg-bg px-3 py-2 shadow-sm transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md"
+    >
+      <img referrerPolicy="origin" src={`https://trustseal.enamad.ir/logo.aspx?${query}`} alt={locale === 'fa' ? 'نماد اعتماد الکترونیکی' : 'Enamad trust seal'} width={72} height={78} loading="lazy" className="h-[78px] w-auto" />
+      <span className="flex flex-col leading-snug">
+        <span className="text-sm font-medium text-ink">{locale === 'fa' ? 'نماد اعتماد الکترونیکی' : 'Electronic trust seal'}</span>
+        <span className="text-xs text-ink-soft group-hover:text-accent">{locale === 'fa' ? 'برای بررسی کلیک کنید' : 'Click to verify'}</span>
+      </span>
+    </a>
   );
 }

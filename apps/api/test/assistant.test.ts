@@ -18,7 +18,7 @@ let owner: Client, base: string, pub: string, settings: any;
 beforeAll(async () => {
   const admin = await createAdmin(ctx);
   const tenant = await createTenant(ctx, admin.id);
-  owner = await signIn(app, admin.email);
+  owner = await signIn(app, admin.email!);
   base = `/api/v1/sites/${tenant.slug}`;
   pub = `/api/v1/public/sites/${tenant.slug}`;
   settings = (await owner.get(`${base}/settings`)).body.data;

@@ -421,6 +421,10 @@ export const pageMetaSchema = z
   .object({
     /** Empty disables the live root ownership file; no arbitrary paths or content. */
     enamadCode: z.string().trim().regex(/^(?:[0-9]{1,30})?$/).default(''),
+    /** The Enamad trust seal shown in every footer: only its id and code (from Enamad's HTML snippet), never the HTML itself. */
+    enamadSeal: z
+      .object({ id: z.string().trim().regex(/^(?:[0-9]{1,20})?$/).default(''), code: z.string().trim().regex(/^(?:[A-Za-z0-9]{1,64})?$/).default('') })
+      .default({}),
     faviconUrl: urlOrPath,
     /** Shown when a page is shared and has no image of its own. */
     shareImageUrl: urlOrPath,

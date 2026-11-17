@@ -35,3 +35,14 @@ it('rejects arbitrary filenames and unauthenticated changes',async()=>{
   expect((await request(app).get(pub+'robots.txt')).status).toBe(400);
   expect((await request(app).put(base+'/settings').send(settings)).status).toBe(401);
 });
+it('lets a locked-site owner set and clear the Enamad trust seal (id and code only)',async()=>{
+  const seal={id:'8621565',code:'WCh63IhpRzUlgIfMtyXxIs4zdMKl1Mfj'};
+  const save=await owner.put(base+'/settings',{...settings,meta:{...settings.meta,enamadSeal:seal}});
+  expect(save.status,JSON.stringify(save.body)).toBe(200);
+  expect(save.body.data.meta.enamadSeal).toEqual(seal);
+  const pubSettings=(await request(app).get('/api/v1/public/sites/'+base.split('/').pop()+'/settings')).body.data;
+  expect(pubSettings.meta.enamadSeal).toEqual(seal);
+  for(const bad of [{id:'86x',code:'abc'},{id:'1',code:'<script>'},{id:'1',code:'a b'}]) expect((await owner.put(base+'/settings',{...settings,meta:{...settings.meta,enamadSeal:bad}})).status).toBe(400);
+  await owner.put(base+'/settings',{...settings,meta:{...settings.meta,enamadSeal:{id:'',code:''}}});
+  expect((await owner.get(base+'/settings')).body.data.meta.enamadSeal).toEqual({id:'',code:''});
+});
