@@ -20,7 +20,9 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   web-only release `6afc378f…`). In the Android app the seal link opened in the phone browser without
   a referrer and Enamad answered 404: app 1.0.2 (code 7, same signing key) opens trustseal.enamad.ir
   inside the WebView with the site as Referer (`611ff77`); published on /downloads/app/ (release
-  `6afc3c3d…`, APK served 200, 658286 bytes). Not yet tested on a phone.
+  `6afc3c3d…`, APK served 200, 658286 bytes). Then app 1.0.3 (code 8, `f1f6526`): a branded loading
+  overlay for outside links, and a failed Enamad page returns to the cafe; published on /downloads/app/
+  (APK served 200, 660958 bytes = local build). Neither app version tested on a phone yet.
 - **Docker Desktop was reset by the owner (2026-11-17)**: the studio containers and volumes are gone
   (studio DB, uploads, local cafe/firefighter installs). Only backup: `backups/studio-backup-20261029-1005.tar.gz`
   (older than the FireFighter/Atashyar work, which is live on Liara). Rebuild the studio before preview work.
