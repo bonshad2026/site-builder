@@ -14,7 +14,13 @@ update it at the end of every session (see "End of every session" in [`AGENTS.md
   `var/cafe-context-20261117.sh`); no design.sql, so live pages/catalogue/orders untouched; cafe's own
   Caddyfile, downloads/, apple-touch-icon and kvn-push-sw.js carried over. Checked /fa, /admin, icon,
   downloads, push worker, products API, new bundle and settings fields. The owner pastes the seal code
-  in the live admin (Claude does not sign in to production).
+  in the live admin (Claude does not sign in to production). The owner saved it (id 8621565).
+  Follow-ups the same day: `logo.aspx` did not load (NS_BINDING_ABORTED), so the footer falls back to
+  Enamad's static `reg2.enamad.ir/.../logopng/110.png` after an error or 4 s, link unchanged (`aa5c3ed`,
+  web-only release `6afc378f…`). In the Android app the seal link opened in the phone browser without
+  a referrer and Enamad answered 404: app 1.0.2 (code 7, same signing key) opens trustseal.enamad.ir
+  inside the WebView with the site as Referer (`611ff77`); published on /downloads/app/ (release
+  `6afc3c3d…`, APK served 200, 658286 bytes). Not yet tested on a phone.
 - **Docker Desktop was reset by the owner (2026-11-17)**: the studio containers and volumes are gone
   (studio DB, uploads, local cafe/firefighter installs). Only backup: `backups/studio-backup-20261029-1005.tar.gz`
   (older than the FireFighter/Atashyar work, which is live on Liara). Rebuild the studio before preview work.
