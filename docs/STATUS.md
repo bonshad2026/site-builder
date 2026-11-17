@@ -4,6 +4,20 @@ Where the work stands, for whoever (person or agent) continues it. Newest first.
 update it at the end of every session (see "End of every session" in [`AGENTS.md`](../AGENTS.md)).
 
 ## Now
+- **Enamad trust seal (2026-11-17, commit `ffd70fd`)** — `settings.meta.enamadSeal {id, code}`: the
+  operator or owner pastes Enamad's HTML in Settings → Extras («نماد اعتماد (اینماد) در پانویس»), only
+  the id and code are kept, and every footer shows the seal (link + logo with `referrerPolicy=origin`).
+  Owners may change it on locked sites. Test added to `domain-verification.test.ts` (not run: Docker was
+  reset). **Cafe deployed code-only to Liara**: release `6afc3449e914826bf2488f76` READY; built from this
+  branch without the studio (web prerendered against the live cafe API; context
+  `exports/cafe-mohammad-liara-20261117/`, scripts `var/cafe-build-20261117.sh`,
+  `var/cafe-context-20261117.sh`); no design.sql, so live pages/catalogue/orders untouched; cafe's own
+  Caddyfile, downloads/, apple-touch-icon and kvn-push-sw.js carried over. Checked /fa, /admin, icon,
+  downloads, push worker, products API, new bundle and settings fields. The owner pastes the seal code
+  in the live admin (Claude does not sign in to production).
+- **Docker Desktop was reset by the owner (2026-11-17)**: the studio containers and volumes are gone
+  (studio DB, uploads, local cafe/firefighter installs). Only backup: `backups/studio-backup-20261029-1005.tar.gz`
+  (older than the FireFighter/Atashyar work, which is live on Liara). Rebuild the studio before preview work.
 - **FireFighter site → «آتشیار» (2026-11-15, studio content only)** — Renamed the site and its pages; mascot is
   a salamander firefighter made with GapGPT `gpt-image-2` (`tools/firefighter-site/atashyar-mascot.png`,
   `make-mascot.mjs`); its face crop is the favicon and the assistant picture, and the assistant
