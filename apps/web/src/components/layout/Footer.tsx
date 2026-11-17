@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useSiteSettings } from '../../features/public-site/data';
 import { apiAvailable } from '../../lib/api';
@@ -214,13 +214,27 @@ export function Footer() {
   );
 }
 
+/** Enamad's own seal picture, used when its per-site logo address does not answer. */
+const ENAMAD_STATIC_LOGO = 'https://reg2.enamad.ir/rc/outResource/dist/img/logopng/110.png';
+
 /**
  * Enamad's trust seal. Enamad checks the page's address through the referrer, so both the link
- * and the image keep `referrerPolicy="origin"`, as in the snippet Enamad gives.
+ * and the image keep `referrerPolicy="origin"`, as in the snippet Enamad gives. The link always
+ * stays Enamad's verification address; only the picture falls back to Enamad's static seal when
+ * `logo.aspx` fails or has not arrived after a few seconds (browsers often abort it).
  */
 function EnamadSeal({ id, code }: { id: string; code: string }) {
   const { locale } = usePreferences();
   const query = `id=${encodeURIComponent(id)}&Code=${encodeURIComponent(code)}`;
+  const [fallback, setFallback] = useState(false);
+  const img = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    if (fallback) return;
+    const timer = setTimeout(() => {
+      if (!img.current?.complete || !img.current.naturalWidth) setFallback(true);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [fallback]);
   return (
     <a
       href={`https://trustseal.enamad.ir/?${query}`}
@@ -229,7 +243,16 @@ function EnamadSeal({ id, code }: { id: string; code: string }) {
       referrerPolicy="origin"
       className="group flex items-center gap-3 rounded-xl border border-line bg-bg px-3 py-2 shadow-sm transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md"
     >
-      <img referrerPolicy="origin" src={`https://trustseal.enamad.ir/logo.aspx?${query}`} alt={locale === 'fa' ? 'نماد اعتماد الکترونیکی' : 'Enamad trust seal'} width={72} height={78} loading="lazy" className="h-[78px] w-auto" />
+      <img
+        ref={img}
+        referrerPolicy="origin"
+        src={fallback ? ENAMAD_STATIC_LOGO : `https://trustseal.enamad.ir/logo.aspx?${query}`}
+        onError={() => setFallback(true)}
+        alt={locale === 'fa' ? 'نماد اعتماد الکترونیکی' : 'Enamad trust seal'}
+        width={72}
+        height={78}
+        className="h-[78px] w-auto"
+      />
       <span className="flex flex-col leading-snug">
         <span className="text-sm font-medium text-ink">{locale === 'fa' ? 'نماد اعتماد الکترونیکی' : 'Electronic trust seal'}</span>
         <span className="text-xs text-ink-soft group-hover:text-accent">{locale === 'fa' ? 'برای بررسی کلیک کنید' : 'Click to verify'}</span>
