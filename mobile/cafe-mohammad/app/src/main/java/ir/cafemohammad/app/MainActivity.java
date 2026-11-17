@@ -22,6 +22,8 @@ public class MainActivity extends Activity {
     private long started;
     private boolean failed;
     private final Runnable timeout = () -> showError();
+    private LinkLoader linkLoader;
+    private final Runnable linkTimeout = () -> externalFailed();
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -76,25 +78,37 @@ public class MainActivity extends Activity {
                 // Enamad shows its verification page only to visits from the registered domain, and the
                 // phone browser would get no referrer: open it here with the cafe's address instead.
                 if (req.isForMainFrame() && "https".equals(url.getScheme()) && ENAMAD_HOST.equals(url.getHost())) {
+                    showLinkLoader("در حال باز کردن نماد اعتماد", "trustseal.enamad.ir");
+                    handler.removeCallbacks(linkTimeout);handler.postDelayed(linkTimeout,20000);
                     view.loadUrl(url.toString(), java.util.Collections.singletonMap("Referer", "https://" + HOST + "/"));
                     return true;
                 }
                 if (!req.isForMainFrame()) return true;
                 String scheme = url.getScheme();
-                if ("https".equals(scheme) || "http".equals(scheme) || "tel".equals(scheme) || "mailto".equals(scheme)) {
+                if ("https".equals(scheme) || "http".equals(scheme)) {
+                    // The phone takes a moment to switch apps: show that something is happening.
+                    showLinkLoader("در حال باز کردن پیوند", url.getHost());
+                    handler.postDelayed(() -> {
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, url)); }
+                        catch (android.content.ActivityNotFoundException ignored) { hideLinkLoader(); Toast.makeText(MainActivity.this,"برنامهٔ مناسب برای بازکردن لینک پیدا نشد",Toast.LENGTH_SHORT).show(); }
+                    }, 180);
+                    handler.postDelayed(() -> hideLinkLoader(), 4000);
+                } else if ("tel".equals(scheme) || "mailto".equals(scheme)) {
                     try { startActivity(new Intent("tel".equals(scheme) ? Intent.ACTION_DIAL : Intent.ACTION_VIEW, url)); }
                     catch (android.content.ActivityNotFoundException ignored) { Toast.makeText(MainActivity.this,"برنامهٔ مناسب برای بازکردن لینک پیدا نشد",Toast.LENGTH_SHORT).show(); }
                 }
                 return true;
             }
             @Override public void onPageCommitVisible(WebView view, String url) {
+                if (ENAMAD_HOST.equals(Uri.parse(url).getHost())) { handler.removeCallbacks(linkTimeout); hideLinkLoader(); }
                 if (!failed && Uri.parse(url).getHost().equals(HOST)) {
                     handler.removeCallbacks(timeout);
                     handler.postDelayed(() -> hideSplash(), Math.max(0, 1600 - (SystemClock.uptimeMillis()-started)));
                 }
             }
-            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) { if(r.isForMainFrame()) showError(); }
-            @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) { if(r.isForMainFrame() && e.getStatusCode()>=400) showError(); }
+            // An outside page (Enamad) that fails returns to the cafe; only the cafe's own failure shows the error screen.
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) { if(!r.isForMainFrame()) return; if(HOST.equals(r.getUrl().getHost())) showError(); else externalFailed(); }
+            @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) { if(!r.isForMainFrame() || e.getStatusCode()<400) return; if(HOST.equals(r.getUrl().getHost())) showError(); else externalFailed(); }
             @Override public void onReceivedSslError(WebView v, SslErrorHandler h, android.net.http.SslError e) { h.cancel(); showError(); }
         });
         load();
@@ -122,6 +136,27 @@ public class MainActivity extends Activity {
         TextView note=new TextView(this);note.setText("اینترنت را بررسی کنید و دوباره تلاش کنید.\nممکن است سرور کافه موقتاً در دسترس نباشد.");note.setTextSize(16);note.setGravity(Gravity.CENTER);note.setPadding(0,24,0,32);error.addView(note);
         Button retry=new Button(this);retry.setText("تلاش مجدد");retry.setOnClickListener(v->load());error.addView(retry);root.addView(error,new FrameLayout.LayoutParams(-1,-1));
     }
+    private void showLinkLoader(String title, String host) {
+        if (linkLoader != null) { linkLoader.set(title, host); return; }
+        linkLoader = new LinkLoader(title, host);
+        linkLoader.setAlpha(0f);
+        root.addView(linkLoader, new FrameLayout.LayoutParams(-1,-1));
+        linkLoader.animate().alpha(1f).setDuration(150).start();
+    }
+    private void hideLinkLoader() {
+        if (linkLoader == null) return;
+        final LinkLoader old = linkLoader; linkLoader = null;
+        old.animate().alpha(0f).setDuration(220).withEndAction(() -> { old.stop(); root.removeView(old); }).start();
+    }
+    /** An outside page did not open: back to the cafe with a short note, not the cafe's error screen. */
+    private void externalFailed() {
+        handler.removeCallbacks(linkTimeout);
+        hideLinkLoader();
+        String current = web.getUrl() == null ? "" : web.getUrl();
+        if (!HOST.equals(Uri.parse(current).getHost()) && web.canGoBack()) web.goBack();
+        Toast.makeText(this, "صفحهٔ مورد نظر باز نشد؛ کمی بعد دوباره امتحان کنید", Toast.LENGTH_LONG).show();
+    }
+    @Override protected void onResume() { super.onResume(); String u = web == null || web.getUrl() == null ? "" : web.getUrl(); if (HOST.equals(Uri.parse(u).getHost())) hideLinkLoader(); }
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private long lastBackAt;
     /** Back walks the site's history like a browser; at its first page a second press within 2 s exits. */
@@ -133,7 +168,38 @@ public class MainActivity extends Activity {
         Toast.makeText(this,"برای خروج، دوباره دکمهٔ بازگشت را بزنید",Toast.LENGTH_SHORT).show();
     }
     @Override public void onBackPressed(){handleBack();}
-    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(splash!=null)splash.stop();if(web!=null)web.destroy();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(splash!=null)splash.stop();if(linkLoader!=null)linkLoader.stop();if(web!=null)web.destroy();super.onDestroy();}
+    /** Shown while an outside page opens: a spinning ring around the logo, what is opening, and its address. */
+    private class LinkLoader extends View {
+        private final Paint p=new Paint(3);
+        private final Bitmap logo=BitmapFactory.decodeResource(getResources(),R.drawable.cafe_logo);
+        private final ValueAnimator motion=ValueAnimator.ofFloat(0,1);
+        private float phase;
+        private String title, host;
+        LinkLoader(String title, String host){super(MainActivity.this);set(title,host);setClickable(true);motion.setDuration(1100);motion.setRepeatCount(ValueAnimator.INFINITE);motion.setInterpolator(new android.view.animation.LinearInterpolator());motion.addUpdateListener(a->{phase=(float)a.getAnimatedValue();invalidate();});motion.start();}
+        void set(String title, String host){this.title=title;this.host=host==null?"":host;setContentDescription(title);invalidate();}
+        void stop(){motion.cancel();}
+        @Override protected void onDraw(Canvas c){
+            float w=getWidth(),h=getHeight(),cx=w/2,cy=h*.42f,r=dp(44);
+            p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(238,36,24,15));c.drawRect(0,0,w,h,p);
+            // soft glow
+            p.setShader(new RadialGradient(cx,cy,r*3,new int[]{Color.argb(90,245,158,36),Color.argb(0,245,158,36)},null,Shader.TileMode.CLAMP));c.drawCircle(cx,cy,r*3,p);p.setShader(null);
+            // track and spinning arc
+            p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(dp(4));
+            RectF ring=new RectF(cx-r-dp(14),cy-r-dp(14),cx+r+dp(14),cy+r+dp(14));
+            p.setColor(Color.argb(60,255,224,178));c.drawOval(ring,p);
+            p.setColor(Color.rgb(245,158,36));c.drawArc(ring,phase*360f-90f,110f+60f*(float)Math.sin(phase*Math.PI*2),false,p);
+            p.setStyle(Paint.Style.FILL);
+            // logo
+            c.save();Path clip=new Path();clip.addCircle(cx,cy,r,Path.Direction.CW);c.clipPath(clip);c.drawBitmap(logo,null,new RectF(cx-r,cy-r,cx+r,cy+r),p);c.restore();
+            // texts and dots
+            p.setTextAlign(Paint.Align.CENTER);p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));p.setTextSize(dp(19));p.setColor(Color.rgb(255,247,230));
+            c.drawText(title,cx,cy+r+dp(60),p);
+            p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));p.setTextSize(dp(13));p.setColor(Color.rgb(238,202,151));
+            c.drawText(host,cx,cy+r+dp(86),p);
+            for(int j=0;j<3;j++){float t=(phase*3+j)%3;p.setColor(Color.argb((int)(70+185*(1-Math.abs(t-1.5f)/1.5f)),245,158,36));c.drawCircle(cx+(j-1)*dp(14),cy+r+dp(116),dp(3.5f),p);}
+        }
+    }
     private class Splash extends View {
         private final Paint p=new Paint(3);
         private final Bitmap logo=BitmapFactory.decodeResource(getResources(),R.drawable.cafe_logo);

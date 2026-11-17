@@ -87,3 +87,11 @@ opens that one host inside the WebView with `Referer: https://cafemohammad.tibas
 returns to the site. Other external links still open outside. Signed release
 `exports/cafe-mohammad-1.0.2-release.apk`, same certificate as 1.0.1 (in-place update). Not yet
 tested on a device.
+
+## Loading screen for outside links — 1.0.3/code8 (2026-11-17)
+Tapping an outside link shows a branded overlay at once (logo in a spinning orange ring, what is
+opening and its host, animated dots). Enamad, opened inside the app, keeps it until its page is
+visible; after 20 s or a failure the app returns to the cafe with a toast instead of the cafe's
+"connection failed" screen (only the cafe's own main-frame errors show that screen). Links handed
+to other apps show it briefly and it hides on return. Phone/mail links open at once. Signed
+release `exports/cafe-mohammad-1.0.3-release.apk`, same certificate. Not yet tested on a device.

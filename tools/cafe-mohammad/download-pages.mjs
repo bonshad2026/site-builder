@@ -7,7 +7,7 @@ import path from 'node:path';
 const site = process.argv[2] ?? 'exports/cafe-mohammad-liara-20261108/site';
 const origin = 'https://cafemohammad.tibasoft.ir';
 const apps = [
-  { dir: 'app', title: 'اپلیکیشن کافه محمد', text: 'منوی کافه، سفارش آنلاین و پیگیری سفارش‌ها', apk: 'cafe-mohammad-1.0.2-release.apk', version: '1.0.2', icon: 'exports/cafe-mohammad-bazaar-assets/icon-512.png', color: '#e8762b' },
+  { dir: 'app', title: 'اپلیکیشن کافه محمد', text: 'منوی کافه، سفارش آنلاین و پیگیری سفارش‌ها', apk: 'cafe-mohammad-1.0.3-release.apk', version: '1.0.3', icon: 'exports/cafe-mohammad-bazaar-assets/icon-512.png', color: '#e8762b' },
   { dir: 'admin', title: 'مدیریت کافه محمد', text: 'پنل مدیریت سفارش‌ها و اعلان سفارش جدید', apk: 'cafe-mohammad-admin-1.1.1-release.apk', version: '1.1.1', icon: 'exports/cafe-mohammad-admin-icon-512.png', color: '#2a1d14' },
 ];
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
