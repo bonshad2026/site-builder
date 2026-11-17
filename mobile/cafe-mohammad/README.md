@@ -79,3 +79,11 @@ Back walks the WebView history (site pages and in-app navigation). Only at the f
 show a toast and exit on a second press within 2 seconds. Registered through OnBackInvokedDispatcher
 on Android 13+ (targetSdk 36 no longer calls onBackPressed there) and onBackPressed on older versions.
 Release build and signature verified; not yet tested on a device.
+
+## Enamad seal inside the app — 1.0.2/code7 (2026-11-17)
+Enamad's verification page (trustseal.enamad.ir) answers 404 unless the visit comes from the
+registered domain; the phone browser that external links open in sends no referrer. The app now
+opens that one host inside the WebView with `Referer: https://cafemohammad.tibasoft.ir/`; Back
+returns to the site. Other external links still open outside. Signed release
+`exports/cafe-mohammad-1.0.2-release.apk`, same certificate as 1.0.1 (in-place update). Not yet
+tested on a device.

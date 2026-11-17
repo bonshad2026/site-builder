@@ -13,6 +13,7 @@ import android.widget.*;
 public class MainActivity extends Activity {
     private static final String HOST = "cafemohammad.tibasoft.ir";
     private static final String SITE = "https://" + HOST + "/fa";
+    private static final String ENAMAD_HOST = "trustseal.enamad.ir";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WebView web;
     private FrameLayout root;
@@ -72,6 +73,12 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 if ("https".equals(url.getScheme()) && HOST.equals(url.getHost())) return false;
+                // Enamad shows its verification page only to visits from the registered domain, and the
+                // phone browser would get no referrer: open it here with the cafe's address instead.
+                if (req.isForMainFrame() && "https".equals(url.getScheme()) && ENAMAD_HOST.equals(url.getHost())) {
+                    view.loadUrl(url.toString(), java.util.Collections.singletonMap("Referer", "https://" + HOST + "/"));
+                    return true;
+                }
                 if (!req.isForMainFrame()) return true;
                 String scheme = url.getScheme();
                 if ("https".equals(scheme) || "http".equals(scheme) || "tel".equals(scheme) || "mailto".equals(scheme)) {
